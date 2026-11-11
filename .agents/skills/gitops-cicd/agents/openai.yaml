@@ -1,0 +1,4 @@
+interface:
+  display_name: 'GitOps and CI/CD'
+  short_description: 'GitHub Actions, GHCR, Argo CD, rollbacks'
+  default_prompt: 'Use $gitops-cicd for this task in the developer portfolio.'

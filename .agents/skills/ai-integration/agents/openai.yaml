@@ -1,0 +1,4 @@
+interface:
+  display_name: 'AI Integration'
+  short_description: 'Provider-agnostic, isolated, rate-limited chat'
+  default_prompt: 'Use $ai-integration for this task in the developer portfolio.'

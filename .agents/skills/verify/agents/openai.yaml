@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Verify'
+  short_description: 'Run all quality gates and the privacy scan'
+  default_prompt: 'Use $verify to run the full pre-handoff verification and report the results.'

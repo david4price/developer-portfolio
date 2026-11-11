@@ -1,0 +1,56 @@
+import {
+  type ArgumentsHost,
+  Catch,
+  type ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import type { ApiErrorCode, ApiErrorResponse } from '@portfolio/shared-types';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ApiException } from './api-exception.js';
+
+const codeByStatus: Readonly<Record<number, ApiErrorCode>> = {
+  [HttpStatus.BAD_REQUEST]: 'bad_request',
+  [HttpStatus.NOT_FOUND]: 'not_found',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'rate_limited',
+  [HttpStatus.SERVICE_UNAVAILABLE]: 'not_ready',
+};
+
+/**
+ * Renders every error as an `ApiErrorResponse`. Unexpected errors are logged with the request id
+ * and returned as a generic 500 so internal details never reach clients.
+ */
+@Catch()
+export class ApiExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('ApiExceptionFilter');
+
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const http = host.switchToHttp();
+    const request = http.getRequest<FastifyRequest>();
+    const reply = http.getResponse<FastifyReply>();
+
+    let status: number = HttpStatus.INTERNAL_SERVER_ERROR;
+    let code: ApiErrorCode = 'internal_error';
+    let message = 'Internal server error';
+
+    if (exception instanceof ApiException) {
+      status = exception.getStatus();
+      code = exception.code;
+      message = exception.message;
+    } else if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      code = codeByStatus[status] ?? (status < 500 ? 'bad_request' : 'internal_error');
+      message = status < 500 ? exception.message : message;
+    } else {
+      this.logger.error({
+        message: 'Unhandled error',
+        requestId: request.id,
+        error: exception instanceof Error ? exception.stack : String(exception),
+      });
+    }
+
+    const body: ApiErrorResponse = { error: { code, message, requestId: request.id ?? null } };
+    void reply.status(status).send(body);
+  }
+}

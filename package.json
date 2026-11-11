@@ -1,0 +1,36 @@
+{
+  "name": "developer-portfolio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Modular developer portfolio: static Next.js site, NestJS API, BullMQ worker",
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "tsc -b --pretty false && pnpm --filter @portfolio/web build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "dev:api": "pnpm --filter @portfolio/api dev",
+    "dev:web": "tsc -b --pretty false && pnpm --filter @portfolio/web dev",
+    "dev:worker": "pnpm --filter @portfolio/worker dev",
+    "db:migrate": "tsc -b --pretty false && pnpm --filter @portfolio/api db:migrate",
+    "db:seed": "tsc -b --pretty false && pnpm --filter @portfolio/api db:seed",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "test": "tsc -b --pretty false && pnpm -r --if-present test",
+    "test:integration": "tsc -b --pretty false && pnpm --filter @portfolio/api test:integration",
+    "typecheck": "tsc -b --pretty false && pnpm --filter @portfolio/web typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@next/eslint-plugin-next": "^16.4.6",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Observability'
+  short_description: 'Logs, health checks, metrics, status views'
+  default_prompt: 'Use $observability for this task in the developer portfolio.'

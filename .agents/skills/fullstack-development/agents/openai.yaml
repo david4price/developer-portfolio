@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Full-Stack Development'
+  short_description: 'Features across Next.js, NestJS, PostgreSQL, Redis'
+  default_prompt: 'Use $fullstack-development for this task in the developer portfolio.'

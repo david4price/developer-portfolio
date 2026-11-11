@@ -1,0 +1,25 @@
+{
+  "name": "@portfolio/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Statically exported portfolio site",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@portfolio/project-registry": "workspace:*",
+    "@portfolio/shared-types": "workspace:*",
+    "@portfolio/ui": "workspace:*",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "~6.0.3"
+  }
+}

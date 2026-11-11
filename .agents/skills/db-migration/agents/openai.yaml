@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Database Migration'
+  short_description: 'Rollback-safe Drizzle schema changes'
+  default_prompt: 'Use $db-migration to make a backward-compatible schema change and verify it.'

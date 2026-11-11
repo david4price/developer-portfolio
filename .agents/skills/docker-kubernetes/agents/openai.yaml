@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Docker and Kubernetes'
+  short_description: 'Images, Compose, Helm, and K3s manifests'
+  default_prompt: 'Use $docker-kubernetes for this task in the developer portfolio.'
