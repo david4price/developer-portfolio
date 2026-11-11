@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nestjs:
+        patterns: ['@nestjs/*']
+      next-react:
+        patterns: ['next', 'react', 'react-dom', '@types/react*', '@next/*']
+      tooling:
+        patterns: ['eslint*', '@eslint/*', 'typescript*', 'prettier', '@types/node']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /infrastructure/docker
+    schedule:
+      interval: weekly

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.nest.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "outDir": ".test-dist",
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

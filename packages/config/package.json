@@ -1,0 +1,22 @@
+{
+  "name": "@portfolio/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Environment parsing helpers shared by server processes",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "test": "tsc -p tsconfig.spec.json && node --test .test-dist/test/*.test.js"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@portfolio/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HTTP contracts shared by the web app and the API",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  }
+}

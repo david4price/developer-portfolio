@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.nest.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../packages/config" },
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/project-registry" }
+  ]
+}
