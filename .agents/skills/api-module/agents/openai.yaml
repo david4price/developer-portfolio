@@ -1,0 +1,4 @@
+interface:
+  display_name: 'API Module'
+  short_description: 'Add NestJS modules with ports, adapters, and tests'
+  default_prompt: 'Use $api-module to add an API endpoint following the repository pattern.'

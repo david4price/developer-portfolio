@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Add Project'
+  short_description: 'Add or update portfolio registry entries'
+  default_prompt: 'Use $add-project to add a project to the portfolio registry and verify its routes.'

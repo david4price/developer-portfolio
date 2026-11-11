@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Application Security'
+  short_description: 'Secure APIs, edge, sessions, least privilege'
+  default_prompt: 'Use $application-security for this task in the developer portfolio.'
