@@ -8,7 +8,7 @@ or an external account.
 | Phase | Goal                                                                | Status                                                                                               |
 | ----- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | 1     | Read-only inventory of the reference host                           | ✅ Done (open questions listed in the [register](architecture/validation-register.md#still-unknown)) |
-| 2     | Application foundation: monorepo, web, API, worker, local stack, CI | ✅ Scaffold done and run end to end. P2-11, P2-12, P2-14, P2-15 still open                           |
+| 2     | Application foundation: monorepo, web, API, worker, local stack, CI | ✅ Scaffold done and run end to end. P2-12, P2-14, P2-15 still open                                  |
 | 3     | K3s, Helm, Argo CD, GHCR releases, HPA                              | ⏳                                                                                                   |
 | 4     | Public frontend, DNS, tunnel, TLS/CORS                              | ⏳                                                                                                   |
 | 5     | AI chatbot                                                          | ⏳                                                                                                   |
@@ -40,7 +40,7 @@ or an external account.
 | P2-08 ✅ | AI provider port with `disabled` adapter                                                                                                                                           | P2-04   | Starts with AI off; enabling an unimplemented provider fails startup                                                                                    | —                               |
 | P2-09 ✅ | Local Compose (deps) and full Compose stack                                                                                                                                        | P2-05   | `docker compose config` passes; ports bound to loopback                                                                                                 | —                               |
 | P2-10 ✅ | Dockerfiles (api, worker, web)                                                                                                                                                     | P2-09   | Build steps reproduced outside Docker; CI builds images                                                                                                 | —                               |
-| P2-11 🔜 | CI: check, integration, secret scan, signatures, image builds (written; every step verified locally, workflow not yet run)                                                         | P2-01   | Workflow green on first push                                                                                                                            | —                               |
+| P2-11 ✅ | CI: check, integration, secret scan, signatures, image builds (first run green on PR #1, 2026-11-11)                                                                               | P2-01   | Workflow green on first push                                                                                                                            | —                               |
 | P2-12 🔜 | Replace placeholder profile and experience content                                                                                                                                 | —       | No placeholder text on About/Experience                                                                                                                 | Owner content                   |
 | P2-13 ✅ | Run the full local stack once on a development machine (2026-11-11: all routes, API, CORS, CSP, worker job, outage recovery verified over HTTP; browser rendering not yet checked) | P2-09   | `compose.full.yaml` up; site at :8080 shows "API online"                                                                                                | 🔒 if run on the reference host |
 | P2-14 ⏳ | Map the API's dependency-outage errors to 503 `not_ready` instead of 500                                                                                                           | P2-04   | `/projects` with DB down returns 503 with a typed code                                                                                                  | —                               |
@@ -98,6 +98,5 @@ or an external account.
 
 ## Recommended Next Task
 
-**P2-11, then P2-12:** push to get the first CI run green, then replace the placeholder profile
-content. P2-14 and P2-15 are small API follow-ups. Phase 3 can start after the open Phase 1 items
+**P2-12:** replace the placeholder profile content. P2-14 and P2-15 are small API follow-ups. Phase 3 can start after the open Phase 1 items
 (P1-02 to P1-04) are answered.
