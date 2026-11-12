@@ -10,21 +10,20 @@ _Last updated: 2026-11-12_
 
 **Recently done**
 
+- P1-03: domain is an active Cloudflare zone; no hostname collisions with the existing tunnel.
+- P2-14: PostgreSQL outages return `503 not_ready` instead of 500.
 - Foundation merged to `main` (PR #1); first CI run green on all jobs.
 - Full Compose stack verified end to end, including outage recovery.
 - Agent rules (`AGENTS.md`, `.claude/rules/`) and ten project skills (`.agents/skills/`).
-- Cloudflare account connected to the `cf` CLI; no domain on it yet.
 
 **Next up, in order**
 
-1. **P2-12:** replace the placeholder profile and experience content (needs the owner's text).
-2. **P2-14:** return 503 `not_ready` instead of 500 when the database is down.
-3. **P2-15:** paginate `GET /api/v1/projects` and select only summary columns.
+1. **P2-15:** paginate `GET /api/v1/projects` and select only summary columns.
+2. **P2-12:** replace the placeholder profile and experience content (needs the owner's text).
+3. **P3-01:** Helm chart (no cluster needed; validated with `helm lint` / `helm template` in CI).
 
-**Waiting on the owner** (these unblock Phases 3 and 4)
+**Waiting on the owner** (these unblock Phase 3; the domain for Phase 4 is ready)
 
-- [ ] Choose a domain and add it to Cloudflare (P1-03).
-- [ ] List the public hostnames on the existing Cloudflare tunnel (P1-03).
 - [ ] Share the host firewall rules (P1-02).
 - [ ] Pick an off-host backup destination (P1-04).
 
@@ -40,7 +39,7 @@ reference host.
 - 🔒 means the task changes a running server or an external account and needs explicit approval
   first (see `AGENTS.md`, Operational Safety).
 
-## Phase 1: Inventory (1/4)
+## Phase 1: Inventory (2/4)
 
 Read-only inventory of the reference host. Findings:
 [validation register](architecture/validation-register.md).
@@ -49,13 +48,13 @@ Read-only inventory of the reference host. Findings:
       written, no host changes.
 - [ ] **P1-02** Host firewall rules. _Done when:_ rules recorded in the private register and a K3s
       allow-list drafted. _Owner:_ needs an elevated read.
-- [ ] **P1-03** Domain and existing tunnel hostnames. _Done when:_ domain chosen and on Cloudflare,
-      with no hostname collision with existing tunnel routes. _Status:_ Cloudflare account
-      connected; no domain yet.
+- [x] **P1-03** Domain and existing tunnel hostnames. _Done when:_ domain chosen and on Cloudflare,
+      with no hostname collision with existing tunnel routes. Verified 2026-11-12: zone active with
+      no DNS records; the existing tunnel publishes no hostnames. Name kept in the private register.
 - [ ] **P1-04** Off-host backup destination. _Done when:_ destination, credential owner, and cost
       recorded.
 
-## Phase 2: Foundation (12/15)
+## Phase 2: Foundation (13/15)
 
 - [x] **P2-01** pnpm workspace, strict TS, ESM, ESLint, Prettier. _Done when:_ `pnpm check` passes.
 - [x] **P2-02** Shared packages: config, shared-types, project-registry, ui. _Needs:_ P2-01.
@@ -83,8 +82,9 @@ Read-only inventory of the reference host. Findings:
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker
       job, outage recovery); browser rendering not yet checked.
-- [ ] **P2-14** Return 503 `not_ready` instead of 500 when a dependency is down. _Needs:_ P2-04.
-      _Done when:_ `/projects` with the database down returns 503 with a typed code.
+- [x] **P2-14** Return 503 `not_ready` instead of 500 when a dependency is down. _Needs:_ P2-04.
+      _Done when:_ `/projects` with the database down returns 503 with a typed code. Unit test runs
+      the real Drizzle adapter against a refused port; query errors stay 500.
 - [ ] **P2-15** Bring `GET /api/v1/projects` in line with Project Rule 8. _Needs:_ P2-04. _Done
       when:_ query selects summary columns only; response has `items` + `nextCursor`; `limit` (≤ 50)
       validated by zod; contract updated in `shared-types`; tests cover paging.
