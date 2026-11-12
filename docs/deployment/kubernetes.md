@@ -53,8 +53,11 @@ pnpm helm:check   # helm lint --strict, helm template | kubeconform -strict, gua
 
 Requires `helm` and `kubeconform` on `PATH`; CI installs pinned versions.
 
-Adopt SOPS or Sealed Secrets before secrets need to live in Git. That decision is tracked in the
-roadmap.
+On the reference deployment, these Secrets live in Git as `SealedSecret` resources under
+`infrastructure/environments/production/secrets/`, sealed offline with the committed public
+certificate. The controller install, certificate, key backup, and rotation are in
+[ADR 0001](../architecture/adr-0001-secrets-management.md). The `kubectl create secret` commands
+above remain the way to run the chart without the owner's controller.
 
 ## 4. Argo CD (private)
 
