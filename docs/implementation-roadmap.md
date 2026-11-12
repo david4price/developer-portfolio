@@ -143,7 +143,7 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
 
-## Phase 7: Hardening (0/4)
+## Phase 7: Hardening (0/5)
 
 - [ ] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -153,3 +153,8 @@ Read-only inventory of the reference host. Findings:
       works from [local.md](deployment/local.md) alone.
 - [ ] **P7-04** Cost review against current Cloudflare and GitHub limits. _Needs:_ Phase 4. _Done
       when:_ monthly estimate is within $0–10.
+- [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. _Done when:_
+      typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
+      Nest dependency injection still works (decorator metadata); the TypeScript major-version
+      ignore is removed from `.github/dependabot.yml`. Dependabot PR #2 was the first attempt
+      (failed lint).
