@@ -1,0 +1,117 @@
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "api" }}
+{{- with .Values.api }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  replicas: {{ .replicaCount }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "portfolio.podSecurityContext" (include "portfolio.nodeUid" $) | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "portfolio.image" .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .port }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: LOG_LEVEL
+              value: {{ .logLevel | quote }}
+            - name: API_HOST
+              value: 0.0.0.0
+            - name: API_PORT
+              value: {{ .port | quote }}
+            {{- include "portfolio.databaseEnv" $ | nindent 12 }}
+            - name: REDIS_URL
+              value: {{ include "portfolio.redisUrl" $ | quote }}
+            - name: CORS_ORIGINS
+              value: {{ .corsOrigins | quote }}
+            - name: AI_ENABLED
+              value: {{ .ai.enabled | quote }}
+            {{- if .ai.enabled }}
+            - name: AI_PROVIDER
+              value: {{ required "api.ai.provider is required when AI is enabled" .ai.provider | quote }}
+            - name: AI_MODEL
+              value: {{ required "api.ai.model is required when AI is enabled" .ai.model | quote }}
+            {{- with .ai.baseUrl }}
+            - name: AI_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+          # Liveness and startup check only the process; readiness checks PostgreSQL and Redis,
+          # so a dependency outage takes the pod out of rotation without restarting it.
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "portfolio.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .port }}
+      targetPort: http
+{{- end }}

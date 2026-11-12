@@ -1,0 +1,111 @@
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "postgres" }}
+{{- with .Values.postgres }}
+# Headless Service: `<fullname>-postgres` resolves straight to the single StatefulSet pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-postgres
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "portfolio.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fullname }}-postgres
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  serviceName: {{ $fullname }}-postgres
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      # UID 70 is the `postgres` user in the Alpine image; the entrypoint supports running as it.
+      securityContext:
+        {{- include "portfolio.podSecurityContext" 70 | nindent 8 }}
+      containers:
+        - name: postgres
+          image: {{ include "portfolio.image" .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "postgres.auth.existingSecret is required" .auth.existingSecret }}
+                  key: {{ .auth.passwordKey }}
+            # A subdirectory keeps initdb away from the volume root (lost+found on some disks).
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          startupProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, {{ .user | quote }}, -d, {{ .database | quote }}]
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, {{ .user | quote }}, -d, {{ .database | quote }}]
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, {{ .user | quote }}, -d, {{ .database | quote }}]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "portfolio.selectorLabels" $component | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .storage.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .storage.size }}
+{{- end }}

@@ -52,12 +52,18 @@ Nothing in the design needs an inbound port on the home router.
 Namespaces do not isolate network traffic on their own. The `portfolio` namespace gets a
 default-deny NetworkPolicy and explicit allow rules:
 
-- `cloudflared` → `api`
-- `api` → `postgres`, `redis`, `ai-adapter`
-- `worker` → `postgres`, `redis`
-- `ai-adapter` → inference endpoint
-- `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount
-- all pods → kube-dns
+- `cloudflared` → `api` (**Confirmed** in the chart; `cloudflared` itself arrives in Phase 4)
+- `api` → `postgres`, `redis` (**Confirmed** in the chart)
+- `worker` → `redis` (**Confirmed**; the worker has no database access today)
+- `migrate` Job → `postgres` (**Confirmed**)
+- all pods → kube-dns (**Confirmed**)
+- `api` (AI adapter) → inference endpoint (Proposed, P5-06)
+- `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount (Proposed,
+  P6-01)
+
+"Confirmed" here means rendered by `infrastructure/helm/portfolio/templates/networkpolicies.yaml`;
+enforcement on the reference cluster is verified after the K3s install (P3-03), including that
+kubelet health probes still reach the pods.
 
 ## Host Firewall
 

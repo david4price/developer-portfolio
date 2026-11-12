@@ -1,0 +1,93 @@
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "redis" }}
+{{- with .Values.redis }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "portfolio.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+  annotations:
+    # Keep queued jobs if the release is uninstalled; delete the claim by hand when intended.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .storage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # The ReadWriteOnce volume can't be shared by an old and a new pod during a rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # UID 999 is the `redis` user in the official image.
+      securityContext:
+        {{- include "portfolio.podSecurityContext" 999 | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ include "portfolio.image" .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          # AOF persistence keeps queued BullMQ jobs across restarts.
+          args: [redis-server, --appendonly, 'yes', --dir, /data]
+          ports:
+            - name: redis
+              containerPort: 6379
+          livenessProbe:
+            exec:
+              command: [redis-cli, ping]
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command: [redis-cli, ping]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $fullname }}-redis
+{{- end }}

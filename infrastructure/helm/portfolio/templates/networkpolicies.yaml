@@ -1,0 +1,167 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $api := dict "root" $ "component" "api" }}
+{{- $worker := dict "root" $ "component" "worker" }}
+{{- $migrate := dict "root" $ "component" "migrate" }}
+{{- $postgres := dict "root" $ "component" "postgres" }}
+{{- $redis := dict "root" $ "component" "redis" }}
+# Everything in the namespace is denied unless a policy below allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-default-deny
+  labels:
+    {{- include "portfolio.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-allow-dns
+  labels:
+    {{- include "portfolio.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.dns.podLabels | nindent 14 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# api: reached only by the in-namespace cloudflared (Phase 4); talks to PostgreSQL and Redis.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "portfolio.componentLabels" $api | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $api | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" (dict "root" $ "component" "cloudflared") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $postgres | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $redis | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# worker: Redis only (BullMQ). No ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-worker
+  labels:
+    {{- include "portfolio.componentLabels" $worker | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $worker | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $redis | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# migrate Job: PostgreSQL only. No ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-migrate
+  labels:
+    {{- include "portfolio.componentLabels" $migrate | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $migrate | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $postgres | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# postgres: accepts the API and the migrate Job. No egress beyond DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-postgres
+  labels:
+    {{- include "portfolio.componentLabels" $postgres | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $postgres | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $api | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $migrate | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# redis: accepts the API and the worker. No egress beyond DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-redis
+  labels:
+    {{- include "portfolio.componentLabels" $redis | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $redis | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $api | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $worker | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}

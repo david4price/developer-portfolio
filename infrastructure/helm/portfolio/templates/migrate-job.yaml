@@ -1,0 +1,57 @@
+{{- if .Values.migrations.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "migrate" }}
+# Applies migrations, then reconciles the projects table with the registry (idempotent).
+# Argo CD runs it as a Sync hook in wave 1: after PostgreSQL, before the API and worker. With plain
+# Helm the revision suffix gives each upgrade a fresh Job, since Job specs are immutable.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  # Retries cover PostgreSQL still starting on a first install.
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "portfolio.podSecurityContext" (include "portfolio.nodeUid" $) | nindent 8 }}
+      initContainers:
+        - name: migrate
+          image: {{ include "portfolio.image" .Values.api.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [node, dist/database/migrate.js]
+          env:
+            {{- include "portfolio.databaseEnv" $ | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+      containers:
+        - name: seed
+          image: {{ include "portfolio.image" .Values.api.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [node, dist/database/seed.js]
+          env:
+            {{- include "portfolio.databaseEnv" $ | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+{{- end }}

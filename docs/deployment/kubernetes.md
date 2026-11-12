@@ -37,9 +37,21 @@ Create secrets out of band; they never go in Git:
 
 ```bash
 kubectl create namespace portfolio
-kubectl -n portfolio create secret generic portfolio-database --from-literal=url='postgres://…'
-kubectl -n portfolio create secret generic portfolio-tunnel --from-file=credentials.json
+# URL-safe characters only: the chart embeds the password in DATABASE_URL.
+kubectl -n portfolio create secret generic portfolio-postgres --from-literal=password='<password>'
+kubectl -n portfolio create secret generic portfolio-tunnel --from-file=credentials.json  # Phase 4
 ```
+
+The chart reads `portfolio-postgres` (key `password`) for both PostgreSQL and the API; override
+the name with `postgres.auth.existingSecret`. It never creates or renders a Secret.
+
+## Chart Validation (no cluster needed)
+
+```bash
+pnpm helm:check   # helm lint --strict, helm template | kubeconform -strict, guardrail tests
+```
+
+Requires `helm` and `kubeconform` on `PATH`; CI installs pinned versions.
 
 Adopt SOPS or Sealed Secrets before secrets need to live in Git. That decision is tracked in the
 roadmap.
@@ -63,7 +75,8 @@ roadmap.
 ## 6. Public Exposure (Phase 4)
 
 - Create a dedicated Cloudflare Tunnel and run `cloudflared` in the `portfolio` namespace.
-- Tunnel ingress has only `api.<domain>` mapped to `http://api.portfolio.svc:3001`, plus a catch-all 404.
+- Tunnel ingress has only `api.<domain>` mapped to `http://portfolio-api.portfolio.svc:3001`
+  (release `portfolio`), plus a catch-all 404.
 - Set `CORS_ORIGINS` to the public site origin.
 
 ## Rollback

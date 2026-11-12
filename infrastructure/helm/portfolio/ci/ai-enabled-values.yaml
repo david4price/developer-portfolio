@@ -1,0 +1,14 @@
+# CI rendering only: tags instead of digests, AI enabled, NetworkPolicies off.
+api:
+  image:
+    tag: ci
+  ai:
+    enabled: true
+    provider: openai-compatible
+    model: example-model
+    baseUrl: http://inference.example.internal:8080/v1
+worker:
+  image:
+    tag: ci
+networkPolicy:
+  enabled: false
