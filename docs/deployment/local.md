@@ -44,6 +44,10 @@ Useful endpoints:
 | `GET /api/v1/projects`       | Project summaries from PostgreSQL                              |
 | `GET /api/v1/projects/:slug` | Project detail                                                 |
 
+Errors use the `ApiErrorResponse` shape (`error.code`, `error.message`, `error.requestId`). When
+PostgreSQL is unreachable, data endpoints return `503` with code `not_ready` so clients can retry;
+query bugs and other unexpected failures stay a generic `500 internal_error`.
+
 ## Quality Checks
 
 ```bash

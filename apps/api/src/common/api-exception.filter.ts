@@ -9,6 +9,7 @@ import {
 import type { ApiErrorCode, ApiErrorResponse } from '@portfolio/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiException } from './api-exception.js';
+import { DependencyUnavailableError } from './dependency-unavailable.error.js';
 
 const codeByStatus: Readonly<Record<number, ApiErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: 'bad_request',
@@ -18,8 +19,9 @@ const codeByStatus: Readonly<Record<number, ApiErrorCode>> = {
 };
 
 /**
- * Renders every error as an `ApiErrorResponse`. Unexpected errors are logged with the request id
- * and returned as a generic 500 so internal details never reach clients.
+ * Renders every error as an `ApiErrorResponse`. Dependency outages become a retryable
+ * `503 not_ready`; unexpected errors are logged with the request id and returned as a generic 500
+ * so internal details never reach clients.
  */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
@@ -34,7 +36,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
     let code: ApiErrorCode = 'internal_error';
     let message = 'Internal server error';
 
-    if (exception instanceof ApiException) {
+    if (exception instanceof DependencyUnavailableError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      code = 'not_ready';
+      message = 'Service temporarily unavailable';
+      this.logger.warn({
+        message: 'Dependency unavailable',
+        requestId: request.id,
+        dependency: exception.dependency,
+      });
+    } else if (exception instanceof ApiException) {
       status = exception.getStatus();
       code = exception.code;
       message = exception.message;
