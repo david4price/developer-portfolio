@@ -10,6 +10,8 @@ _Last updated: 2026-11-12_
 
 **Recently done**
 
+- P2-15: `GET /api/v1/projects` is keyset-paginated (`limit` ≤ 50, `nextCursor`) and selects
+  summary columns only.
 - P1-03: domain is an active Cloudflare zone; no hostname collisions with the existing tunnel.
 - P2-14: PostgreSQL outages return `503 not_ready` instead of 500.
 - Foundation merged to `main` (PR #1); first CI run green on all jobs.
@@ -18,9 +20,9 @@ _Last updated: 2026-11-12_
 
 **Next up, in order**
 
-1. **P2-15:** paginate `GET /api/v1/projects` and select only summary columns.
-2. **P2-12:** replace the placeholder profile and experience content (needs the owner's text).
-3. **P3-01:** Helm chart (no cluster needed; validated with `helm lint` / `helm template` in CI).
+1. **P3-01:** Helm chart (no cluster needed; validated with `helm lint` / `helm template` in CI).
+2. **P3-07:** secrets management ADR (SOPS vs Sealed Secrets); feeds the chart's secret handling.
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
 **Waiting on the owner** (these unblock Phase 3; the domain for Phase 4 is ready)
 
@@ -54,7 +56,7 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P1-04** Off-host backup destination. _Done when:_ destination, credential owner, and cost
       recorded.
 
-## Phase 2: Foundation (13/15)
+## Phase 2: Foundation (14/15)
 
 - [x] **P2-01** pnpm workspace, strict TS, ESM, ESLint, Prettier. _Done when:_ `pnpm check` passes.
 - [x] **P2-02** Shared packages: config, shared-types, project-registry, ui. _Needs:_ P2-01.
@@ -85,9 +87,10 @@ Read-only inventory of the reference host. Findings:
 - [x] **P2-14** Return 503 `not_ready` instead of 500 when a dependency is down. _Needs:_ P2-04.
       _Done when:_ `/projects` with the database down returns 503 with a typed code. Unit test runs
       the real Drizzle adapter against a refused port; query errors stay 500.
-- [ ] **P2-15** Bring `GET /api/v1/projects` in line with Project Rule 8. _Needs:_ P2-04. _Done
+- [x] **P2-15** Bring `GET /api/v1/projects` in line with Project Rule 8. _Needs:_ P2-04. _Done
       when:_ query selects summary columns only; response has `items` + `nextCursor`; `limit` (≤ 50)
-      validated by zod; contract updated in `shared-types`; tests cover paging.
+      validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
+      (featured, title, slug); no index added, since the table holds only a few rows.
 
 ## Phase 3: Kubernetes and GitOps (0/7)
 

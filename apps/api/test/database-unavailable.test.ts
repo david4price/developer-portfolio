@@ -132,7 +132,7 @@ describe('projects endpoints with an unexpected repository error', () => {
   let app: NestFastifyApplication;
 
   const failing: ProjectsRepository = {
-    list: () => Promise.reject(withCode('syntax error at or near "SELEC"', '42601')),
+    listSummaries: () => Promise.reject(withCode('syntax error at or near "SELEC"', '42601')),
     findBySlug: () => Promise.reject(new Error('boom')),
   };
 
