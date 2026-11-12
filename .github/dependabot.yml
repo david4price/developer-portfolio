@@ -11,6 +11,13 @@ updates:
         patterns: ['next', 'react', 'react-dom', '@types/react*', '@next/*']
       tooling:
         patterns: ['eslint*', '@eslint/*', 'typescript*', 'prettier', '@types/node']
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1; TS 7 is roadmap task P7-05.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Types must match the runtime: Node 24 (.node-version, engines).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
