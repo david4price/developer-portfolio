@@ -7,6 +7,9 @@ with GitOps.
 The site is fully static and stays online even when the API host is down. AI features are optional
 and provider-agnostic, and they are off by default.
 
+**Progress and next steps:** [docs/implementation-roadmap.md](docs/implementation-roadmap.md)
+(start at "Resume Here").
+
 ## Stack
 
 | Area      | Choice                                         |
@@ -55,7 +58,7 @@ docs/                       Architecture, deployment, operations
 - [Validation register](docs/architecture/validation-register.md)
 - [Local deployment](docs/deployment/local.md) · [Kubernetes deployment](docs/deployment/kubernetes.md)
 - [Runbooks](docs/operations/runbooks.md)
-- [Roadmap and backlog](docs/implementation-roadmap.md)
+- [Roadmap checklist](docs/implementation-roadmap.md)
 
 ## Quality Gates
 
