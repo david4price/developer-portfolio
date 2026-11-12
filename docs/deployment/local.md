@@ -41,8 +41,13 @@ Useful endpoints:
 | ---------------------------- | -------------------------------------------------------------- |
 | `GET /api/v1/health`         | Liveness, which never touches dependencies                     |
 | `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503 |
-| `GET /api/v1/projects`       | Project summaries from PostgreSQL                              |
+| `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)            |
 | `GET /api/v1/projects/:slug` | Project detail                                                 |
+
+`GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
+`limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
+`?cursor=`; it is `null` on the last page. Cursors are opaque, and a malformed `limit` or `cursor`
+returns `400 bad_request`.
 
 Errors use the `ApiErrorResponse` shape (`error.code`, `error.message`, `error.requestId`). When
 PostgreSQL is unreachable, data endpoints return `503` with code `not_ready` so clients can retry;

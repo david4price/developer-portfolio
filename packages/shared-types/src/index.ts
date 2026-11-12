@@ -29,8 +29,14 @@ export interface MiniAppSummary {
   readonly status: MiniAppStatus;
 }
 
+/** Page size bounds for `GET /api/v1/projects?limit=`. */
+export const PROJECT_PAGE_DEFAULT_LIMIT = 20;
+export const PROJECT_PAGE_MAX_LIMIT = 50;
+
 export interface ProjectListResponse {
   readonly items: readonly ProjectSummary[];
+  /** Opaque token for the next page (`?cursor=`), or `null` on the last page. */
+  readonly nextCursor: string | null;
 }
 
 export interface HealthResponse {
