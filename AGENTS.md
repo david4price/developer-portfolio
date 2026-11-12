@@ -7,7 +7,9 @@ A **public** monorepo: static Next.js site (`apps/web`), NestJS REST API (`apps/
 the original author's infrastructure, AI model, or Cloudflare account.
 
 Architecture, decisions, and status live in `docs/`. Read `docs/architecture/overview.md` before
-structural changes and `docs/implementation-roadmap.md` before starting backlog work.
+structural changes. **Start every session at `docs/implementation-roadmap.md`**: its "Resume Here"
+section says where work stands and what comes next. Tick checkboxes and refresh that section in
+the same change that completes a task.
 
 ## Project Rules
 

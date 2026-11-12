@@ -10,8 +10,10 @@ paths:
   **Unknown**. Don't upgrade a label without evidence.
 - Describe the reference deployment with placeholders. Real addresses, hostnames, container names,
   and hardware identifiers belong only in the private register outside this repo.
-- Keep `docs/implementation-roadmap.md` in sync: mark backlog items done in the same change that
-  completes them, and add new items with dependencies, acceptance criteria, and approval flags.
+- `docs/implementation-roadmap.md` is the project checklist. In the same change that completes a
+  task, tick its box, update the phase count, and refresh **Resume Here** (date, recently done,
+  next up, waiting on the owner). New tasks get a stable ID, `_Needs:_`, `_Done when:_`, and 🔒
+  when they touch a running server or external account.
 - Commands in docs must match the scripts in `package.json`; run them before documenting them.
 - Record significant decisions as short ADRs under `docs/architecture/` (context, decision,
   consequences).
