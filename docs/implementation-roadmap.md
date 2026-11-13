@@ -12,6 +12,9 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Recently done**
 
+- P4-03: the API is public at `api.<domain>/api/v1/*` only, through a dedicated tunnel with
+  in-cluster `cloudflared`; everything else on that host is a 404, and Argo CD has no public
+  hostname. Chat quotas use the real client IP from Cloudflare.
 - P5-03: chat quotas (per session, per IP) and a Redis-backed global AI semaphore with a bounded
   FIFO queue; overload is `429`/`503` with `Retry-After`, never a hung request.
 - P5-02: chat sessions (`POST /api/v1/chat/sessions`, `/messages`) with a 256-bit `HttpOnly` cookie,
@@ -55,12 +58,13 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **P4-03:** 🔒 Cloudflare tunnel for `api.<domain>` (approved 2026-11-13).
-2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
-3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+1. **P4-04:** 🔒 offline drill: stop the cluster and confirm the site loads and shows
+   "unavailable" (needs a short API outage window).
+2. **P5-05:** registry-grounded retrieval and validated navigation links (repository-only).
+3. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
+4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #20 (P5-03 quotas and capacity). Open every PR against `main`: #9 once merged
-into an already-merged base branch and never reached `main`.
+**Open pull requests:** #22 (P4-03 record). Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -169,7 +173,7 @@ Read-only inventory of the reference host. Findings:
       automatic key renewal off; `sealed-secrets.pem` committed; key backup restored once into a
       throwaway cluster and a test `SealedSecret` unseals there.
 
-## Phase 4: Public Edge (2/4)
+## Phase 4: Public Edge (3/4)
 
 - [x] **P4-01** 🔒 Cloudflare Pages deployment of `apps/web/out`. _Needs:_ P1-03. _Done when:_
       site live; PR previews build without secrets. Live on `pages.dev` 2026-11-13 via Git
@@ -183,10 +187,12 @@ Read-only inventory of the reference host. Findings:
       violations on every page and client-side navigation. Edge script injection (Bot Fight Mode)
       turned off; Web Analytics allowed by exact host. External graders (securityheaders.com, SSL
       Labs) weren't run from here.
-- [ ] **P4-03** 🔒 Dedicated tunnel with in-cluster cloudflared, API-only ingress. _Needs:_ P3-04,
+- [x] **P4-03** 🔒 Dedicated tunnel with in-cluster cloudflared, API-only ingress. _Needs:_ P3-04,
       P1-03. _Done when:_ only `/api/v1/*` reachable publicly; Argo CD unreachable.
-      In review (#21): tunnel `portfolio-api` created with API-only rules; token Secret and CORS
-      ConfigMap created out of band. Tick after the public checks.
+      Done 2026-11-13 (#21): dedicated tunnel `portfolio-api` (4 edge connections); publicly,
+      `/api/v1/health`, `/health/ready`, and `/projects` answer 200 while `/`, `/metrics`, `/api`,
+      `/api/v2/*`, `/.env`, and an Argo-style path get the tunnel's 404; CORS admits only the site
+      origin; the zone has no hostname for Argo CD. The live site's badge shows "API online".
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
       loads and shows "unavailable".
 

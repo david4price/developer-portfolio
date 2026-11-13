@@ -4,10 +4,12 @@
  */
 export const profile = {
   name: 'Portfolio Owner',
-  headline: 'Full-stack and platform engineer',
+  headline: 'Full stack developer',
   intro:
-    'I build TypeScript applications end to end — from React interfaces to NestJS services — and ' +
-    'run them on infrastructure I can explain, measure, and reproduce.',
+    "Hey, I'm a full stack developer. I like owning the whole thing: the page you're looking at, " +
+    "the API behind it, and the server it runs on. This site is a good example. It's a Next.js " +
+    'front end talking to a NestJS API on a small Kubernetes cluster in my home. If the status ' +
+    "below says the API is online, my server's awake. Have a look around.",
   about: [
     'Replace this paragraph with a short professional summary: what you build, the problems you ' +
       'like solving, and how you work.',
