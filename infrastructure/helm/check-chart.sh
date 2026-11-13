@@ -30,6 +30,16 @@ for values in "$chart"/ci/*-values.yaml; do
   fi
 done
 
+# Production values on top of CI placeholders; images.yaml exists after the first release.
+echo "== environments/production"
+production="$(cd "$chart/../../environments/production" && pwd)"
+production_args=(-f "$chart/ci/digests-values.yaml" -f "$production/values.yaml")
+if [[ -f "$production/images.yaml" ]]; then
+  production_args+=(-f "$production/images.yaml")
+fi
+helm lint --strict "$chart" "${production_args[@]}"
+kubeconform -strict -summary -output text <<<"$(render "${production_args[@]}")"
+
 # expect_failure <expected error text> <render args…>: rendering must fail with that message.
 expect_failure() {
   local expected="$1"
