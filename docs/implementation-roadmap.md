@@ -7,11 +7,15 @@ The single checklist for this project. Start here when you pick the work back up
 _Last updated: 2026-11-13_
 
 **Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-All remaining Phase 3 tasks need approval (🔒), so repository-only work continues in Phase 5; the
-K3s install (P3-03) is unblocked and waits only for approval.
+The owner approved P3-02, P3-03, and P4-01 on 2026-11-13. The release workflow is in review, and
+the K3s install is ready for the owner to run.
 
 **Recently done**
 
+- P3-02 (in review): release workflow builds api and worker after CI passes on `main`, pushes them
+  to GHCR, and commits their digests to `environments/production/images.yaml`. Done after the
+  first release run.
+- P1-04: backups stay on the reference host for now (owner's call: not a production service).
 - P5-01: `openai-compatible` adapter (`fetch`, 30 s timeout combined with the caller's abort,
   `max_tokens` on every call, no redirects, capped reply size). Failures become typed
   `ai_unavailable` / `ai_overloaded` errors without upstream text. Not yet reachable: no chat
@@ -32,23 +36,23 @@ K3s install (P3-03) is unblocked and waits only for approval.
 
 **Next up, in order**
 
-1. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
-2. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
-   GitHub package and workflow permissions.
-3. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
-4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+1. **P3-03:** 🔒 approved. The owner runs the install script (port guard, then K3s); then validate
+   from a LAN machine and test rollback.
+2. **P3-02:** 🔒 approved. Merge the release workflow, then make the two GHCR packages public.
+3. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
+   8080), then it's deployed to Cloudflare Pages.
+4. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
+5. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #10 (lands P1-02 on `main`), then #11 (P5-01). Both target `main`; #11
-contains #10's commits, so merge #10 first. #9 had merged into #8's branch instead of `main`, so
-retarget stacked PRs to `main` before merging them.
+**Open pull requests:** #12 (P3-02 release workflow). Open every PR against `main`: #9 once merged
+into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
-- [ ] Pick an off-host backup destination (P1-04); unblocks P3-05 and P3-08. Suggested: an R2
-      bucket in the existing Cloudflare account for encrypted database dumps, and the owner's
-      password manager for the Sealed Secrets key. Alternatives: Backblaze B2, a NAS or second
-      machine, Google Drive via `rclone`.
-- [ ] Confirm the router forwards no ports to the reference host (the guard in P3-03 assumes so).
+- [x] Backup destination (P1-04): local for now.
+- [x] Router forwards no ports to the reference host (confirmed 2026-11-13).
+- [ ] After the first release run, make the `portfolio-api` and `portfolio-worker` GHCR packages
+      public so K3s can pull them without credentials.
 - [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
@@ -63,7 +67,7 @@ reference host.
 - 🔒 means the task changes a running server or an external account and needs explicit approval
   first (see `AGENTS.md`, Operational Safety).
 
-## Phase 1: Inventory (3/4)
+## Phase 1: Inventory (4/4)
 
 Read-only inventory of the reference host. Findings:
 [validation register](architecture/validation-register.md).
@@ -76,8 +80,11 @@ Read-only inventory of the reference host. Findings:
 - [x] **P1-03** Domain and existing tunnel hostnames. _Done when:_ domain chosen and on Cloudflare,
       with no hostname collision with existing tunnel routes. Verified 2026-11-12: zone active with
       no DNS records; the existing tunnel publishes no hostnames. Name kept in the private register.
-- [ ] **P1-04** Off-host backup destination. _Done when:_ destination, credential owner, and cost
-      recorded.
+- [x] **P1-04** Off-host backup destination. _Done when:_ destination, credential owner, and cost
+      recorded. Owner's decision, 2026-11-13: backups stay on the reference host (owner holds
+      access, $0) because this is not a production service. P3-05 and P3-08 back up to a local
+      directory outside the cluster; a disk failure loses both data and backups. Pick an
+      off-host destination before treating the site as production.
 
 ## Phase 2: Foundation (14/15)
 
@@ -123,6 +130,8 @@ Read-only inventory of the reference host. Findings:
       waits for a heartbeat; NetworkPolicy enforcement is verified after P3-03.
 - [ ] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
       when:_ digest-pinned values committed only from `main`. Changes GitHub settings.
+      `release.yml` (in review): runs after CI succeeds on a `main` push; per-job token permissions,
+      so no repository setting changes; never pins an older build over a newer one.
 - [ ] **P3-03** 🔒 Install K3s with Traefik and ServiceLB disabled. _Needs:_ P1-02. _Done when:_
       node Ready, existing services unaffected, rollback tested, K3s ports (6443, 10250,
       8472/udp) unreachable from the LAN.

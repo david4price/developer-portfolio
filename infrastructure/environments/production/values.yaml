@@ -1,0 +1,14 @@
+# Production overrides for the portfolio chart (owned by people; edit through pull requests).
+# The api and worker image digests live in images.yaml, which the release workflow rewrites on
+# every release from main. Don't edit images.yaml by hand.
+api:
+  # Set to the public site origin when the site goes live (P4-01).
+  corsOrigins: ''
+postgres:
+  image:
+    # postgres:17-alpine, multi-arch index digest
+    digest: sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
+redis:
+  image:
+    # redis:7-alpine, multi-arch index digest
+    digest: sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe

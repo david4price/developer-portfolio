@@ -129,8 +129,15 @@ above remain the way to run the chart without the owner's controller.
 ## 5. Release Flow
 
 1. Merge to `main`. CI passes.
-2. The release workflow builds and pushes images to GHCR and commits their digests to
-   `infrastructure/environments/production/values.yaml`.
+2. The release workflow (`.github/workflows/release.yml`) starts only after CI succeeds on a push
+   to `main`. It builds the api and worker images, pushes them to GHCR tagged with the commit SHA,
+   and commits their digests to `infrastructure/environments/production/images.yaml`. People
+   edit `values.yaml` next to it, which pins PostgreSQL and Redis by digest. The workflow refuses
+   to replace a newer pin with an older build, and its commits don't trigger CI, so it can't
+   loop. Its token permissions are set per job (`packages: write` to push, `contents: write` to
+   commit), so the repository's default read-only setting stays as is. New GHCR packages start
+   private: make `portfolio-api` and `portfolio-worker` public once, after the first release, so
+   the cluster can pull them without a pull secret.
 3. Argo CD syncs. The rolling update uses `maxUnavailable: 0`, and readiness gates traffic.
 4. Run migrations as a pre-sync Job, only for backward-compatible migrations (see runbooks).
 
