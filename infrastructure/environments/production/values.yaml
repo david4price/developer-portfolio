@@ -9,6 +9,10 @@ api:
   # Every request arrives through the tunnel (only cloudflared may reach the API).
   trustCloudflareClientIp: true
 postgres:
+  backup:
+    enabled: true
+    # Created once by the owner: install -d -o 70 -g 70 -m 700 /srv/portfolio-backups/postgres
+    hostPath: /srv/portfolio-backups/postgres
   image:
     # postgres:17-alpine, multi-arch index digest
     digest: sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065

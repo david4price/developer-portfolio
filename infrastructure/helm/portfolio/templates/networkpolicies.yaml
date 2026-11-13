@@ -6,6 +6,7 @@
 {{- $postgres := dict "root" $ "component" "postgres" }}
 {{- $redis := dict "root" $ "component" "redis" }}
 {{- $cloudflared := dict "root" $ "component" "cloudflared" }}
+{{- $backup := dict "root" $ "component" "postgres-backup" }}
 # Everything in the namespace is denied unless a policy below allows it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -118,7 +119,7 @@ spec:
         - protocol: TCP
           port: 5432
 ---
-# postgres: accepts the API and the migrate Job. No egress beyond DNS.
+# postgres: accepts the API, the migrate Job, and the backup Job. No egress beyond DNS.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -138,6 +139,9 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "portfolio.selectorLabels" $migrate | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $backup | nindent 14 }}
       ports:
         - protocol: TCP
           port: 5432
@@ -206,5 +210,28 @@ spec:
           port: 7844
         - protocol: TCP
           port: 443
+{{- end }}
+{{- if .Values.postgres.backup.enabled }}
+---
+# postgres backup Job: PostgreSQL only. No ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-postgres-backup
+  labels:
+    {{- include "portfolio.componentLabels" $backup | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $backup | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" (dict "root" $ "component" "postgres") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
 {{- end }}
 {{- end }}

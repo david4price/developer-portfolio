@@ -1,0 +1,88 @@
+{{- if .Values.postgres.backup.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "postgres-backup" }}
+{{- with .Values.postgres }}
+# Nightly logical backup (docs/operations/runbooks.md#backups). Dumps go to a host directory
+# outside the cluster's data directory, so removing K3s doesn't remove the backups.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $fullname }}-postgres-backup
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+spec:
+  schedule: {{ .backup.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            {{- include "portfolio.componentLabels" $component | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            # The postgres image's own user; the host directory must belong to it.
+            {{- include "portfolio.podSecurityContext" 70 | nindent 12 }}
+          containers:
+            - name: backup
+              image: {{ include "portfolio.image" .image | quote }}
+              imagePullPolicy: {{ $.Values.imagePullPolicy }}
+              command: [/bin/sh, -c]
+              args:
+                - |
+                  set -eu
+                  umask 077
+                  ts=$(date -u +%Y%m%dT%H%M%SZ)
+                  daily=/backups/daily; weekly=/backups/weekly
+                  mkdir -p "$daily" "$weekly"
+                  partial="$daily/.portfolio-$ts.dump.partial"
+                  trap 'rm -f "$partial"' EXIT
+                  pg_dump --format=custom --no-owner --no-privileges --file "$partial"
+                  # Keep only dumps that pg_restore can read.
+                  pg_restore --list "$partial" > /dev/null
+                  mv "$partial" "$daily/portfolio-$ts.dump"
+                  if [ "$(date -u +%u)" = 7 ]; then cp "$daily/portfolio-$ts.dump" "$weekly/"; fi
+                  ls -1t "$daily"/portfolio-*.dump | tail -n +{{ add .backup.keepDaily 1 }} | xargs -r rm -f --
+                  ls -1t "$weekly"/portfolio-*.dump 2>/dev/null | tail -n +{{ add .backup.keepWeekly 1 }} | xargs -r rm -f --
+                  echo "backup ok: portfolio-$ts.dump, $(wc -c < "$daily/portfolio-$ts.dump") bytes"
+              env:
+                - name: PGHOST
+                  value: {{ include "portfolio.postgresHost" $ }}
+                - name: PGDATABASE
+                  value: {{ .database | quote }}
+                - name: PGUSER
+                  value: {{ .user | quote }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .auth.existingSecret }}
+                      key: {{ .auth.passwordKey }}
+              resources:
+                {{- toYaml .backup.resources | nindent 16 }}
+              securityContext:
+                {{- include "portfolio.containerSecurityContext" $ | nindent 16 }}
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backups
+              hostPath:
+                path: {{ required "postgres.backup.hostPath is required when backups are enabled" .backup.hostPath }}
+                # Must already exist with the right owner; never created silently somewhere else.
+                type: Directory
+            - name: tmp
+              emptyDir:
+                sizeLimit: 16Mi
+{{- end }}
+{{- end }}

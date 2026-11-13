@@ -8,6 +8,9 @@ worker:
   image:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 postgres:
+  backup:
+    enabled: true
+    hostPath: /srv/portfolio-backups/postgres
   image:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 redis:

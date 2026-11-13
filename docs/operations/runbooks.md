@@ -23,18 +23,34 @@ Procedures marked **Proposed** apply once the corresponding phase is deployed.
 - Never roll back the database by hand. If a migration itself is broken, write a new forward
   migration.
 
-## Backups (Proposed, Phase 3)
+## Backups (P3-05)
 
-- A CronJob runs `pg_dump --format=custom` nightly into a PVC, then copies the dump to an off-host
-  destination (to be chosen).
-- Retention: 7 daily and 4 weekly copies.
-- Restore drill, monthly:
-  1. Start a scratch PostgreSQL instance.
-  2. `pg_restore --clean --if-exists` into it.
-  3. Run `pnpm db:migrate`, which must be a no-op.
-  4. Compare row counts with production.
-  5. Record the result.
-- Storage capacity alone doesn't prove recoverability. Only a successful restore counts.
+- **What:** the CronJob `portfolio-postgres-backup` runs `pg_dump --format=custom` every night
+  at 03:17 UTC. Each dump is written to a temporary name, checked with `pg_restore --list`, then
+  renamed, so a half-written dump is never kept.
+- **Where:** a host directory outside the cluster's data directory (production:
+  `/srv/portfolio-backups/postgres`), so `k3s-uninstall.sh` can't remove it. It must exist,
+  owned by uid/gid 70 (the postgres image user) with mode `0700`:
+  `sudo install -d -o 70 -g 70 -m 700 /srv/portfolio-backups/postgres`. The CronJob refuses to
+  run if the directory is missing (`hostPath` type `Directory`).
+- **Retention:** 7 daily dumps (`daily/`) and 4 weekly copies taken on Sundays (`weekly/`).
+- **Locked down:** the Job runs as uid 70, non-root, with a read-only root filesystem and no
+  capabilities. Its NetworkPolicy allows only PostgreSQL, and PostgreSQL admits it explicitly.
+- **Local only** (P1-04): the backups share the host's disk. Copy them off the machine before
+  treating the site as production.
+- **Run one now:** `kubectl -n portfolio create job --from=cronjob/portfolio-postgres-backup backup-manual-$(date +%s)`
+
+### Restore Drill
+
+Monthly, and after any schema or backup change. It never touches the live database:
+
+1. Start a scratch PostgreSQL 17 with the backup directory mounted read-only.
+2. `pg_restore --clean --if-exists --no-owner` the newest dump into it.
+3. Run the API image's migrations against the scratch database; they must apply nothing.
+4. Compare row counts per table with production.
+5. Record the result here.
+
+Storage capacity alone doesn't prove recoverability. Only a successful restore counts.
 
 ## Home Server Offline
 
