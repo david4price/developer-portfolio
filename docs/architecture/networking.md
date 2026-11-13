@@ -67,9 +67,16 @@ kubelet health probes still reach the pods.
 
 ## Host Firewall
 
-**Unknown.** The reference host's firewall rules have not been reviewed yet. Before installing K3s,
-read the rules and add only what flannel and the pod/service CIDRs need. Docker, the firewall, and
-K3s all write iptables rules, so test the existing services after each change.
+**Confirmed (reviewed 2026-11-13):** the reference host has no firewall rules that K3s's flannel
+or pod/service CIDRs would conflict with, so K3s needs no allow rules. Without a filter, though,
+the K3s API (`6443/tcp`), kubelet (`10250/tcp`), and VXLAN (`8472/udp`) ports would be reachable
+from the LAN.
+
+**Proposed:** a dedicated nftables table, loaded before K3s, accepts those three ports only from
+loopback, the tailnet, and pods (`cni0`), and leaves every other port and existing rule alone. The
+rules, systemd unit, validation, and rollback are in the
+[deployment guide](../deployment/kubernetes.md#k3s-port-guard-allow-list). Docker, Tailscale, and
+K3s all write their own rules, so test the existing services after applying it.
 
 ## Failure Behavior
 

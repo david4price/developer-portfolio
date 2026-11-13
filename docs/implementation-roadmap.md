@@ -4,13 +4,16 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-12_
+_Last updated: 2026-11-13_
 
 **Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-Repository-only Phase 3 work can continue; installing K3s waits on the firewall rules (P1-02).
+Repository-only Phase 3 work can continue; the K3s install (P3-03) is unblocked and waits only for
+approval.
 
 **Recently done**
 
+- P1-02: host firewall reviewed (no conflicting rules); K3s ports get a dedicated nftables guard
+  ([deployment guide](deployment/kubernetes.md#k3s-port-guard-allow-list)).
 - P3-07: secrets go in Git as Sealed Secrets
   ([ADR 0001](architecture/adr-0001-secrets-management.md)); controller install is P3-08.
 - P3-01: Helm chart (api, worker, PostgreSQL, Redis, migrate Job, default-deny NetworkPolicies),
@@ -27,12 +30,20 @@ Repository-only Phase 3 work can continue; installing K3s waits on the firewall 
 
 1. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
    GitHub package and workflow permissions.
-2. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+2. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Waiting on the owner** (these unblock Phase 3; the domain for Phase 4 is ready)
+**Open pull requests:** none. #7 to #9 are merged. #9 merged into #8's branch, not `main`, so its
+changes reached `main` through a follow-up PR. Retarget stacked PRs to `main` before merging them.
 
-- [ ] Share the host firewall rules (P1-02).
-- [ ] Pick an off-host backup destination (P1-04).
+**Waiting on the owner** (the domain for Phase 4 is ready)
+
+- [ ] Pick an off-host backup destination (P1-04); unblocks P3-05 and P3-08. Suggested: an R2
+      bucket in the existing Cloudflare account for encrypted database dumps, and the owner's
+      password manager for the Sealed Secrets key. Alternatives: Backblaze B2, a NAS or second
+      machine, Google Drive via `rclone`.
+- [ ] Confirm the router forwards no ports to the reference host (the guard in P3-03 assumes so).
+- [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -46,15 +57,16 @@ reference host.
 - 🔒 means the task changes a running server or an external account and needs explicit approval
   first (see `AGENTS.md`, Operational Safety).
 
-## Phase 1: Inventory (2/4)
+## Phase 1: Inventory (3/4)
 
 Read-only inventory of the reference host. Findings:
 [validation register](architecture/validation-register.md).
 
 - [x] **P1-01** Hardware, GPU, Docker, network, database, and AI inventory. _Done when:_ register
       written, no host changes.
-- [ ] **P1-02** Host firewall rules. _Done when:_ rules recorded in the private register and a K3s
-      allow-list drafted. _Owner:_ needs an elevated read.
+- [x] **P1-02** Host firewall rules. _Done when:_ rules recorded in the private register and a K3s
+      allow-list drafted. Reviewed 2026-11-13: no rules conflict with K3s; the allow-list is a
+      dedicated nftables table limiting 6443, 10250, and 8472/udp to loopback, tailnet, and pods.
 - [x] **P1-03** Domain and existing tunnel hostnames. _Done when:_ domain chosen and on Cloudflare,
       with no hostname collision with existing tunnel routes. Verified 2026-11-12: zone active with
       no DNS records; the existing tunnel publishes no hostnames. Name kept in the private register.
@@ -106,7 +118,8 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
       when:_ digest-pinned values committed only from `main`. Changes GitHub settings.
 - [ ] **P3-03** 🔒 Install K3s with Traefik and ServiceLB disabled. _Needs:_ P1-02. _Done when:_
-      node Ready, existing services unaffected, rollback tested.
+      node Ready, existing services unaffected, rollback tested, K3s ports (6443, 10250,
+      8472/udp) unreachable from the LAN.
 - [ ] **P3-04** 🔒 Install Argo CD, private over Tailscale. _Needs:_ P3-03. _Done when:_ UI
       reachable only via the tailnet; Application synced.
 - [ ] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
