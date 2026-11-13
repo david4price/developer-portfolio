@@ -31,3 +31,5 @@ spec:
       kind: NetworkPolicy
     - group: bitnami.com
       kind: SealedSecret
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler

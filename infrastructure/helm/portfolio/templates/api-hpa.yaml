@@ -1,0 +1,41 @@
+{{- if .Values.api.autoscaling.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- with .Values.api.autoscaling }}
+# Scales the API on CPU (P3-06). The Deployment omits `replicas` while this exists, so only the
+# HPA sets the count; the Argo CD Application also ignores /spec/replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "portfolio.componentLabels" (dict "root" $ "component" "api") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $fullname }}-api
+  minReplicas: {{ .minReplicas }}
+  maxReplicas: {{ .maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .targetCPUUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30
+    scaleDown:
+      # Wait before removing a replica so short lulls don't cause churn.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+{{- end }}
+{{- end }}

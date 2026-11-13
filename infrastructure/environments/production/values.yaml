@@ -6,6 +6,9 @@ api:
   # so the domain stays out of plain Git.
   corsOrigins: ''
   envSecret: portfolio-api-env
+  # 1-3 replicas on one node; chat limits live in Redis, so they hold across replicas.
+  autoscaling:
+    enabled: true
   # Every request arrives through the tunnel (only cloudflared may reach the API).
   trustCloudflareClientIp: true
 postgres:

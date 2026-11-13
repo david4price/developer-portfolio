@@ -169,6 +169,8 @@ Read-only inventory of the reference host. Findings:
       weekly. Tick after the first backup is restored in the drill.
 - [ ] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
       observed under synthetic load with no sync flapping.
+      In review (#26): CPU HPA (1–3 replicas, 70%), Deployment omits `replicas` when enabled.
+      Tick after scale-out under synthetic load with Argo CD staying Synced.
 - [x] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
       when:_ ADR in `docs/architecture/`. Owner chose Sealed Secrets, 2026-11-12:
       [ADR 0001](architecture/adr-0001-secrets-management.md).
