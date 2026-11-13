@@ -31,12 +31,27 @@ The public surface is a static site and a small REST API. The main risks:
 | Body size limits                                                                        | Confirmed (Fastify `bodyLimit`) |
 | Trust `CF-Connecting-IP` only when running behind the tunnel                            | Proposed                        |
 
-## Frontend (Proposed, Phase 4)
+## Frontend (Confirmed, P4-02)
 
-- Content Security Policy via Cloudflare Pages `_headers`: `default-src 'self'`; `connect-src`
-  limited to the API origin and Turnstile; `frame-src` limited to Turnstile; no `unsafe-eval`.
-- `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
-  `Permissions-Policy` set to deny unused features, and HSTS.
+- Headers come from `apps/web/out/_headers`, which `apps/web/scripts/write-headers.ts` writes after
+  every `next build`. Cloudflare Pages applies them to every response.
+- Content Security Policy, with no `unsafe-inline` and no `unsafe-eval`:
+  - `script-src 'self'` plus the SHA-256 hash of every inline script in every exported page. The
+    build fails if a script is left uncovered or the policy outgrows a `_headers` line.
+  - `style-src 'self'` (the export has no inline styles), `img-src 'self' data:`,
+    `font-src 'self'`.
+  - `connect-src 'self'` plus the API origin from `NEXT_PUBLIC_API_BASE_URL`. Previews have none, so
+    they can't call the production API. Turnstile is added with P5-04.
+  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`,
+    `upgrade-insecure-requests`.
+- `Strict-Transport-Security: max-age=31536000` (no `includeSubDomains`: not every host under the
+  domain is guaranteed to serve HTTPS), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` denying camera,
+  microphone, geolocation, payment, and USB, and `Cross-Origin-Opener-Policy: same-origin`.
+- Plain-HTTP requests to the custom domain are redirected by the zone's **Always Use HTTPS**
+  setting; HSTS then keeps browsers on HTTPS.
+- The local nginx image (`compose.full.yaml`) still uses a looser policy with `unsafe-inline`; it
+  only serves loopback.
 - No `dangerouslySetInnerHTML` on API or model output. Model output is rendered as text or a
   sanitized markdown subset.
 
