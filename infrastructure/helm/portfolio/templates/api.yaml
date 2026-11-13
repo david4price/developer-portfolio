@@ -1,5 +1,8 @@
 {{- $fullname := include "portfolio.fullname" . }}
 {{- $component := dict "root" $ "component" "api" }}
+{{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
+{{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
+{{- end }}
 {{- with .Values.api }}
 apiVersion: apps/v1
 kind: Deployment
@@ -52,8 +55,12 @@ spec:
             {{- include "portfolio.databaseEnv" $ | nindent 12 }}
             - name: REDIS_URL
               value: {{ include "portfolio.redisUrl" $ | quote }}
+            {{- with .corsOrigins }}
             - name: CORS_ORIGINS
-              value: {{ .corsOrigins | quote }}
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CHAT_TRUST_CF_CONNECTING_IP
+              value: {{ .trustCloudflareClientIp | quote }}
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}
             {{- if .ai.enabled }}
@@ -66,6 +73,12 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+          {{- with .envConfigMap }}
+          # Out-of-band settings that don't belong in Git (e.g. CORS_ORIGINS with the real domain).
+          envFrom:
+            - configMapRef:
+                name: {{ . }}
+          {{- end }}
           # Liveness and startup check only the process; readiness checks PostgreSQL and Redis,
           # so a dependency outage takes the pod out of rotation without restarting it.
           startupProbe:

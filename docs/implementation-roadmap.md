@@ -185,6 +185,8 @@ Read-only inventory of the reference host. Findings:
       Labs) weren't run from here.
 - [ ] **P4-03** 🔒 Dedicated tunnel with in-cluster cloudflared, API-only ingress. _Needs:_ P3-04,
       P1-03. _Done when:_ only `/api/v1/*` reachable publicly; Argo CD unreachable.
+      In review (#21): tunnel `portfolio-api` created with API-only rules; token Secret and CORS
+      ConfigMap created out of band. Tick after the public checks.
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
       loads and shows "unavailable".
 

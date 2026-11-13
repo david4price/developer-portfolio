@@ -20,8 +20,15 @@ api:
   replicaCount: 1
   port: 3001
   logLevel: log
-  # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com.
+  # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com. Leave
+  # empty to supply CORS_ORIGINS through `envConfigMap` instead.
   corsOrigins: ''
+  # Optional ConfigMap, created out of band, whose keys become environment variables. For values
+  # that shouldn't live in Git, such as the real domain in CORS_ORIGINS.
+  envConfigMap: ''
+  # Use CF-Connecting-IP as the client address for chat quotas. Requires cloudflared.enabled and
+  # networkPolicy.enabled, so the API is reachable only through the tunnel.
+  trustCloudflareClientIp: false
   ai:
     enabled: false
     provider: ''
@@ -97,6 +104,24 @@ redis:
   resources:
     requests:
       cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+cloudflared:
+  # In-cluster connector for the dedicated Cloudflare Tunnel (P4-03). Its routes (the API hostname,
+  # `^/api/v1/`, and a catch-all 404) live in the remotely managed tunnel configuration.
+  enabled: false
+  image:
+    repository: docker.io/cloudflare/cloudflared
+    tag: ''
+    digest: ''
+  replicaCount: 1
+  # Secret created out of band holding the tunnel token under the key `token`.
+  tokenSecret: portfolio-tunnel
+  resources:
+    requests:
+      cpu: 20m
       memory: 32Mi
     limits:
       memory: 128Mi
