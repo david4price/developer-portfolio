@@ -1,0 +1,29 @@
+# Least-privilege project: one repository, one namespace, no cluster-scoped resources, and only
+# the kinds the chart renders. Secrets are deliberately absent: they're created out of band (later
+# as SealedSecrets, P3-08, which must be added here when introduced).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: portfolio
+  namespace: argocd
+spec:
+  description: Developer portfolio (api, worker, PostgreSQL, Redis)
+  sourceRepos:
+    - https://github.com/david4price/developer-portfolio.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: portfolio
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: batch
+      kind: Job
+    - group: networking.k8s.io
+      kind: NetworkPolicy

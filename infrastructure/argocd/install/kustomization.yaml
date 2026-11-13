@@ -1,0 +1,10 @@
+# Argo CD v3.6.1 (non-HA), pinned to the release commit rather than the tag so the manifest can't
+# change underneath us. Apply server-side (the CRDs exceed the client-side annotation limit):
+#   kubectl apply --server-side --force-conflicts -k infrastructure/argocd/install
+# Upgrade: change the commit (resolve with `gh api repos/argoproj/argo-cd/git/ref/tags/<tag>`).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - namespace.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/94037c4d4e1af4bd0651d37a179fbd9e347e668c/manifests/install.yaml

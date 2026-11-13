@@ -7,11 +7,16 @@ The single checklist for this project. Start here when you pick the work back up
 _Last updated: 2026-11-13_
 
 **Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-K3s runs on the reference host and `main` publishes digest-pinned images, so the next step is Argo
-CD (P3-04), which needs approval.
+Argo CD deploys every digest pin on `main` to K3s automatically. Phase 3 has only the 🔒 tasks
+that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P4-01).
 
 **Recently done**
 
+- P3-04: Argo CD v3.6.1 syncs the `portfolio` Application from `main` (Synced/Healthy); the UI is
+  tailnet-only via `tailscale serve`. NetworkPolicies verified enforced: another namespace can't
+  reach PostgreSQL, Redis, or the API, and the API has no internet egress.
+- P6-04 design: [Infrastructure Explorer visual design](architecture/infrastructure-explorer.md)
+  (flux-capacitor-inspired animated map).
 - P3-03: K3s v1.37.2 installed with Traefik and ServiceLB off, behind the `kube-port-guard`
   nftables table. The LAN can't reach 6443/10250. The rollback drill found two uninstaller
   pitfalls, now in the [deployment guide](deployment/kubernetes.md#2-install-k3s-approval-required).
@@ -39,13 +44,12 @@ CD (P3-04), which needs approval.
 
 **Next up, in order**
 
-1. **P3-04:** 🔒 Argo CD, reachable only over Tailscale, tracking `environments/production`.
-2. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
+1. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
    8080), then it's deployed to Cloudflare Pages.
-3. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
-4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+2. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #13 (P3-03 install record). Open every PR against `main`: #9 once merged
+**Open pull requests:** #14 (P3-04 Argo CD and the P6-04 design). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -122,12 +126,12 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (4/8)
+## Phase 3: Kubernetes and GitOps (5/8)
 
 - [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
       Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
       job `helm` runs `pnpm helm:check` (also kubeconform and guardrail tests). Worker liveness
-      waits for a heartbeat; NetworkPolicy enforcement is verified after P3-03.
+      waits for a heartbeat. NetworkPolicy enforcement verified on K3s 2026-11-13 (P3-04).
 - [x] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
       when:_ digest-pinned values committed only from `main`. First run 2026-11-13 committed
       `images.yaml` to `main`. `release.yml` runs after CI succeeds on a `main` push, uses per-job
@@ -139,8 +143,10 @@ Read-only inventory of the reference host. Findings:
       and their health unchanged through install, uninstall, and reinstall; LAN check by the
       owner. The first uninstall left the binary and data behind because the guard unit was named
       `k3s-guard.service`; renamed to `kube-port-guard` and drilled again cleanly.
-- [ ] **P3-04** 🔒 Install Argo CD, private over Tailscale. _Needs:_ P3-03. _Done when:_ UI
-      reachable only via the tailnet; Application synced.
+- [x] **P3-04** 🔒 Install Argo CD, private over Tailscale. _Needs:_ P3-03. _Done when:_ UI
+      reachable only via the tailnet; Application synced. Done 2026-11-13: pinned to the v3.6.1
+      release commit; least-privilege `portfolio` AppProject; deployed revision and image digests
+      match `main`; UI is a ClusterIP Service published only by `tailscale serve` (HTTPS 8443).
 - [ ] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
       when:_ one successful restore recorded.
 - [ ] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
@@ -192,6 +198,9 @@ Read-only inventory of the reference host. Findings:
       scoped to one Application.
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
+      Design: animated infrastructure map in a flux-capacitor-inspired style
+      ([visual design](architecture/infrastructure-explorer.md)). A prototype with fake data can come
+      first.
 
 ## Phase 7: Hardening (0/5)
 

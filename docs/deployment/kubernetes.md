@@ -1,7 +1,8 @@
 # Kubernetes Deployment
 
 **Status:** K3s and its port guard run on the reference host (P3-03, 2026-11-13; rollback
-drilled). Argo CD and everything after it are Proposed. Each step that changes a running server
+drilled). Argo CD v3.6.1 deploys the portfolio from `main` (P3-04, 2026-11-13). Everything after
+that is Proposed. Each step that changes a running server
 needs explicit approval and must have a rollback ready before it starts.
 
 ## 1. Preconditions
@@ -138,11 +139,38 @@ above remain the way to run the chart without the owner's controller.
 
 ## 4. Argo CD (private)
 
-- Install into the `argocd` namespace. Don't expose it with an Ingress, LoadBalancer, or tunnel.
-- Reach it over Tailscale: `kubectl -n argocd port-forward svc/argocd-server 8443:443` from an SSH
-  session, or a tailnet-only proxy.
-- The Application tracks `infrastructure/environments/production` on `main` and ignores
-  `/spec/replicas` on HPA-managed Deployments.
+Manifests live in `infrastructure/argocd/`:
+
+| File                         | Purpose                                                                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install/kustomization.yaml` | Upstream non-HA install, pinned to the release **commit** (not the tag)                                                                                          |
+| `project.yaml`               | `portfolio` AppProject: this repository, the `portfolio` namespace, no cluster-scoped resources, only the kinds the chart renders (no Secrets)                   |
+| `application.yaml`           | Chart + `environments/production/{values,images}.yaml` from `main`; automated sync with prune and self-heal; ignores `portfolio-api` replicas for the future HPA |
+
+Install, in order:
+
+```bash
+kubectl apply --server-side --force-conflicts -k infrastructure/argocd/install
+kubectl -n argocd rollout status deploy --timeout=300s
+kubectl create namespace portfolio
+# Secret from section 3 (random, URL-safe; never echo it)
+kubectl apply -f infrastructure/argocd/project.yaml -f infrastructure/argocd/application.yaml
+kubectl -n argocd get application portfolio   # Synced / Healthy
+```
+
+- **Private access:** `argocd-server` stays a ClusterIP Service: no Ingress, LoadBalancer,
+  NodePort, or tunnel. The host can reach ClusterIPs, so `tailscale serve` publishes it on the
+  tailnet only, with a valid certificate for the machine's tailnet name:
+  `sudo tailscale serve --bg --https=8443 https+insecure://<argocd-server ClusterIP>:443`. Re-run
+  it if the Service is ever recreated (its ClusterIP changes). Remove with
+  `sudo tailscale serve --https=8443 off`.
+- **Admin login:** user `admin`; the first password is in the `argocd-initial-admin-secret`
+  Secret. Change it in the UI (User Info → Update password), then delete that Secret.
+- **Pruning is safe for data:** PostgreSQL's volume comes from the StatefulSet's
+  `volumeClaimTemplates`, which Argo CD doesn't own, so no sync can delete it.
+- **Rollback:** `kubectl -n argocd delete application portfolio` stops management and leaves the
+  workloads running (no resources finalizer). Remove Argo CD with
+  `kubectl delete -k infrastructure/argocd/install`.
 
 ## 5. Release Flow
 

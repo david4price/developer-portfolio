@@ -1,0 +1,35 @@
+# Deploys the chart with the production values and the digests the release workflow pins.
+# Argo CD polls GitHub; nothing on GitHub can reach the cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: portfolio
+  namespace: argocd
+  # No resources-finalizer: deleting the Application leaves the workloads (and data) in place.
+spec:
+  project: portfolio
+  source:
+    repoURL: https://github.com/david4price/developer-portfolio.git
+    targetRevision: main
+    path: infrastructure/helm/portfolio
+    helm:
+      releaseName: portfolio
+      valueFiles:
+        - ../../environments/production/values.yaml
+        - ../../environments/production/images.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: portfolio
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  # The api will get an HPA (P3-06); Argo CD must not fight it over the replica count.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: portfolio-api
+      jsonPointers:
+        - /spec/replicas
