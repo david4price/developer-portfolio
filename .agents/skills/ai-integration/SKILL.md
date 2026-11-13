@@ -5,7 +5,8 @@ description: Implement or review the portfolio chatbot and AI provider layer —
 
 # AI Integration
 
-Status: the `AiProvider` port, the `disabled` adapter, and the `openai-compatible` adapter exist (`apps/api/src/modules/ai/`). Everything
+Status: the `AiProvider` port, the `disabled` and `openai-compatible` adapters, and chat sessions
+with the per-session lock (`apps/api/src/modules/chat/`, P5-02) exist (`apps/api/src/modules/ai/`). Everything
 else is **Proposed** (Phase 5). Design reference: `docs/architecture/ai-integration.md`.
 
 ## Provider Adapters

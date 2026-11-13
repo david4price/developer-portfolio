@@ -68,7 +68,15 @@ These numbers set the resource-protection defaults below. They are not general g
 | Overload response            | `429` / `503` with a typed error code                               | API                                                                                                                   |
 | Bot challenge                | Cloudflare Turnstile token verified server-side on session creation | API                                                                                                                   |
 
-## Chat Design (Proposed, Phase 5)
+## Chat Design (Phase 5)
+
+Implemented so far (P5-02): `POST /api/v1/chat/sessions` (201, sets the session cookie; `503
+ai_disabled` while AI is off) and `POST /api/v1/chat/messages` (`{ "message": string }` →
+`{ "reply": string }`) with the per-session lock, a fixed system prompt, and trimmed history (at
+most 8 turns or 4,000 characters per prompt, 20 turns stored). Errors: `401 chat_session_required`,
+`409 chat_busy`, `503 ai_disabled | ai_overloaded | ai_unavailable`. Session details are in
+[security](security.md#sessions-confirmed-p5-02). Still Proposed: Turnstile (P5-04), quotas (P5-03),
+retrieval and links (P5-05).
 
 1. **Session:** `POST /api/v1/chat/sessions` verifies Turnstile and sets an opaque, random session
    cookie (`HttpOnly; Secure; SameSite=Lax`). State lives in Redis under a namespaced key with a
