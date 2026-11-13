@@ -33,8 +33,8 @@ approval.
 2. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests** (stacked; merge in this order with a normal merge): #7 (P3-01 Helm chart),
-#8 (P3-07 ADR), #9 (P1-02 firewall review).
+**Open pull requests:** none. #7 to #9 are merged. #9 merged into #8's branch, not `main`, so its
+changes reached `main` through a follow-up PR. Retarget stacked PRs to `main` before merging them.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
