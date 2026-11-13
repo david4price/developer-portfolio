@@ -56,8 +56,24 @@ nothing is configured in the dashboard. Check a deployment with
 Attach the apex domain to the project (dashboard: the project → **Custom domains**, or
 `cf pages projects domains create <project> --name <domain>`). Pages then needs a proxied `CNAME`
 from the apex to `<project>.pages.dev` in the zone; the dashboard creates it, the API does not.
-Check that the domain's status becomes `active` and that `https://<domain>/` serves the site. Turn on
-**Always Use HTTPS** for the zone (SSL/TLS → Edge Certificates) so plain-HTTP requests redirect.
+Check that the domain's status becomes `active` and that `https://<domain>/` serves the **same HTML**
+as `<project>.pages.dev`, not just a 200. A Worker can claim the hostname too: a read-only
+`AAAA <domain> → 100::` record means the domain belongs to a Worker, not to Pages.
+
+## Zone Settings
+
+Set on the reference zone on 2026-11-13 (dashboard search finds each by name):
+
+| Setting                         | Value | Why                                                           |
+| ------------------------------- | ----- | ------------------------------------------------------------- |
+| Always Use HTTPS                | On    | `http://` gets a 301 to `https://`; HSTS keeps browsers there |
+| Minimum TLS Version             | 1.2   | TLS 1.0/1.1 are deprecated; only very old clients lack 1.2    |
+| Bot Fight Mode                  | Off   | Injects an inline script the CSP can't hash; static site      |
+| JavaScript Detections           | Off   | Same script; on the free plan it follows Bot Fight Mode       |
+| Web Analytics (beacon injected) | On    | Allowed in the CSP by its two exact hosts                     |
+
+Keep Rocket Loader and email obfuscation off for the same reason as JavaScript Detections. The API
+gets its own abuse controls (Turnstile, Redis rate limits) in Phase 5.
 
 ## Rollback
 
