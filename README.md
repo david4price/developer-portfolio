@@ -56,7 +56,8 @@ docs/                       Architecture, deployment, operations
 - [Networking](docs/architecture/networking.md) · [Kubernetes](docs/architecture/kubernetes.md) ·
   [AI integration](docs/architecture/ai-integration.md) · [Security](docs/architecture/security.md)
 - [Validation register](docs/architecture/validation-register.md)
-- [Local deployment](docs/deployment/local.md) · [Kubernetes deployment](docs/deployment/kubernetes.md)
+- [Local deployment](docs/deployment/local.md) · [Kubernetes deployment](docs/deployment/kubernetes.md) ·
+  [Cloudflare Pages](docs/deployment/cloudflare-pages.md)
 - [Runbooks](docs/operations/runbooks.md)
 - [Roadmap checklist](docs/implementation-roadmap.md)
 
