@@ -88,6 +88,20 @@ postgres:
     size: 2Gi
     # Empty uses the cluster default (K3s: local-path).
     storageClassName: ''
+  # Nightly pg_dump CronJob (P3-05). Dumps go to an existing host directory owned by uid/gid 70
+  # (the postgres image user), mode 0700, outside the cluster's data directory.
+  backup:
+    enabled: false
+    schedule: '17 3 * * *'
+    hostPath: ''
+    keepDaily: 7
+    keepWeekly: 4
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
   resources:
     requests:
       cpu: 50m

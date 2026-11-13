@@ -165,6 +165,8 @@ Read-only inventory of the reference host. Findings:
       match `main`; UI is a ClusterIP Service published only by `tailscale serve` (HTTPS 8443).
 - [ ] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
       when:_ one successful restore recorded.
+      In review (#25): nightly CronJob to a host directory outside K3s's data, 7 daily + 4
+      weekly. Tick after the first backup is restored in the drill.
 - [ ] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
       observed under synthetic load with no sync flapping.
 - [x] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
