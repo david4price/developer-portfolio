@@ -33,9 +33,17 @@ approval.
 2. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
+**Open pull requests** (stacked; merge in this order with a normal merge): #7 (P3-01 Helm chart),
+#8 (P3-07 ADR), #9 (P1-02 firewall review).
+
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
-- [ ] Pick an off-host backup destination (P1-04); unblocks P3-05 and P3-08.
+- [ ] Pick an off-host backup destination (P1-04); unblocks P3-05 and P3-08. Suggested: an R2
+      bucket in the existing Cloudflare account for encrypted database dumps, and the owner's
+      password manager for the Sealed Secrets key. Alternatives: Backblaze B2, a NAS or second
+      machine, Google Drive via `rclone`.
+- [ ] Confirm the router forwards no ports to the reference host (the guard in P3-03 assumes so).
+- [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
