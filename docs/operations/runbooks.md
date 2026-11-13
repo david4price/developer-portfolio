@@ -38,11 +38,37 @@ Procedures marked **Proposed** apply once the corresponding phase is deployed.
 
 ## Home Server Offline
 
-- Expected: the static site stays up, and API-backed widgets show "unavailable".
+- Expected: the static site stays up, and API-backed widgets show "unavailable". Verified by the
+  offline drill below.
+- Publicly, `api.<domain>` answers `502` while pods stop, then Cloudflare's `530` (tunnel has no
+  connector). Those error pages carry no CORS headers, so browsers log a CORS error for the health
+  check; the badge treats it as "unavailable", which is correct.
 - Nothing to fail over; the deployment is single-node by design. After the host returns:
   1. Confirm `kubectl get pods -n portfolio` is all Ready.
-  2. Confirm the tunnel is connected.
-  3. Confirm readiness returns 200.
+  2. Confirm the tunnel is connected (`cf tunnels get <id>`: `healthy`).
+  3. Confirm readiness returns 200 and Argo CD is `Synced/Healthy`.
+
+### Offline Drill (P4-04)
+
+Repeat after changes to the site's API handling, the tunnel, or K3s. Needs `sudo` and a few
+minutes of API downtime.
+
+1. Record the baseline: Docker containers and health, portfolio pods, a PostgreSQL row count, and
+   site/API status codes.
+2. Watch from outside: poll `https://<domain>/` and `https://api.<domain>/api/v1/health` every few
+   seconds, and load the site in a browser once the API is down.
+3. Stop the whole cluster: `sudo /usr/local/bin/k3s-killall.sh`. (`systemctl stop k3s` is not
+   enough: K3s leaves pods running.) The `kube-port-guard` unit isn't a `k3s*` unit, so it stays up.
+4. After a few minutes: `sudo systemctl start k3s`.
+5. Check: the site returned 200 throughout and its badge read "API unavailable — the site still
+   works"; afterwards pods are Ready, the tunnel is healthy, Argo CD is synced, the row count is
+   unchanged, and the Docker services are unchanged.
+
+Last run, 2026-11-13: about 3 min 16 s of API downtime (`502`, then `530`). The site served 200
+throughout; the badge read "API unavailable — the site still works", then "API online" again.
+Pods restarted once each and came back Ready, the tunnel reconnected with 4 connections, Argo CD
+returned to `Synced/Healthy`, the PostgreSQL data was intact, and the 14 Docker containers were
+unaffected.
 
 ## Inference Overload (Proposed, Phase 5)
 
