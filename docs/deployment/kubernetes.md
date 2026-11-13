@@ -1,8 +1,8 @@
 # Kubernetes Deployment
 
-**Status: Proposed (Phase 3).** Nothing here has been applied to the reference host yet. Each step
-that changes a running server needs explicit approval and must have a rollback ready before it
-starts.
+**Status:** K3s and its port guard run on the reference host (P3-03, 2026-11-13; rollback
+drilled). Argo CD and everything after it are Proposed. Each step that changes a running server
+needs explicit approval and must have a rollback ready before it starts.
 
 ## 1. Preconditions
 
@@ -17,7 +17,7 @@ starts.
 Install the port guard (below) first, then K3s:
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.37.2+k3s1 INSTALL_K3S_EXEC="server \
   --disable traefik \
   --disable servicelb \
   --write-kubeconfig-mode 0600 \
@@ -31,9 +31,23 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
   Tailscale being up. The port guard limits who can connect instead.
 - Default CIDRs (`10.42.0.0/16` pods, `10.43.0.0/16` services) must not overlap Docker, LAN, or VPN
   ranges.
-- **Validate:** `kubectl get nodes` is Ready, `kubectl top nodes` works (metrics-server), and every
-  pre-existing service still responds.
-- **Rollback:** `/usr/local/bin/k3s-uninstall.sh`, then re-check the existing services.
+- Pin the version (`INSTALL_K3S_VERSION`) so a reinstall restores exactly what ran before.
+- `--write-kubeconfig-mode 0600` keeps `/etc/rancher/k3s/k3s.yaml` root-only. Copy it to the
+  operator's `~/.kube/config` (mode 0600) and set `KUBECONFIG=$HOME/.kube/config`: the `kubectl`
+  symlink K3s installs reads the root-only file unless `KUBECONFIG` is set.
+- When scripting the install, wait for objects to exist before `kubectl wait`: the node registers a
+  few seconds after `k3s` starts, and the add-on Deployments a few seconds after that.
+  `kubectl wait --all` on zero objects fails with "no matching resources found".
+- **Validate:** `kubectl get nodes` is Ready, `kubectl top nodes` works (metrics-server),
+  `kubectl logs` and `kubectl exec` work, and every pre-existing service still responds.
+- **Rollback:** `sudo /usr/local/bin/k3s-uninstall.sh`, then
+  `sudo systemctl disable --now kube-port-guard`, then re-check the existing services. Drilled on
+  2026-11-13. Two side effects to know:
+  - The uninstaller treats every `/etc/systemd/system/k3s*.service` unit as another K3s service.
+    If more than one exists, it removes the service but **keeps the binary and data directories**.
+    Never name your own units `k3s*` (the guard was renamed from `k3s-guard` for this reason).
+  - It runs `tailscale set --advertise-routes=`, which clears any subnet routes this host
+    advertises over Tailscale. Re-advertise them afterwards if the host is a subnet router.
 
 ### K3s port guard (allow-list)
 
@@ -47,13 +61,13 @@ every other LAN service on the host unless each one is allowed (and Docker-publi
 ufw anyway), and the stock `/etc/nftables.conf` usually starts with `flush ruleset`, which deletes
 Docker's and Tailscale's rules. A separate table is a smaller change with a one-line rollback.
 
-`/etc/k3s-guard.nft`:
+`/etc/kube-port-guard.nft`:
 
 ```text
-table inet k3s_guard {}
-delete table inet k3s_guard
+table inet kube_port_guard {}
+delete table inet kube_port_guard
 
-table inet k3s_guard {
+table inet kube_port_guard {
   chain input {
     type filter hook input priority filter - 1; policy accept;
     iifname { "lo", "tailscale0", "cni0" } accept
@@ -65,7 +79,7 @@ table inet k3s_guard {
 
 The first two lines make the file safe to load repeatedly. Only the `input` hook is used, so traffic
 Docker forwards to containers is untouched. Load it at boot, before K3s, with
-`/etc/systemd/system/k3s-guard.service`:
+`/etc/systemd/system/kube-port-guard.service`:
 
 ```ini
 [Unit]
@@ -76,19 +90,23 @@ After=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/nft -f /etc/k3s-guard.nft
-ExecStop=/usr/sbin/nft delete table inet k3s_guard
+ExecStart=/usr/sbin/nft -f /etc/kube-port-guard.nft
+ExecStop=/usr/sbin/nft delete table inet kube_port_guard
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-- **Apply:** `sudo nft -c -f /etc/k3s-guard.nft` (dry run), then
-  `sudo systemctl enable --now k3s-guard`.
-- **Validate:** `sudo nft list table inet k3s_guard`; `nc -vz <lan-address> 6443` from another
+- **Apply:** `sudo nft -c -f /etc/kube-port-guard.nft` (dry run), then
+  `sudo systemctl enable --now kube-port-guard`. Don't name the unit `k3s*.service` (see the
+  install rollback above).
+- **Validate:** `sudo nft list table inet kube_port_guard`; `nc -vz <lan-address> 6443` from another
   LAN machine times out; `kubectl get nodes` works over the tailnet; `kubectl top nodes` and
   `kubectl logs` still work; every pre-existing service still responds.
-- **Rollback:** `sudo systemctl disable --now k3s-guard` (its stop command deletes the table).
+- **Rollback:** `sudo systemctl disable --now kube-port-guard` (its stop command deletes the
+  table).
+- Verified 2026-11-13: from a LAN device, `6443` and `10250` hang (dropped) while port 80 on the
+  same host connects.
 
 ## 3. Secrets
 

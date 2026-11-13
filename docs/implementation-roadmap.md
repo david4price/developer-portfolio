@@ -7,14 +7,17 @@ The single checklist for this project. Start here when you pick the work back up
 _Last updated: 2026-11-13_
 
 **Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-The owner approved P3-02, P3-03, and P4-01 on 2026-11-13. The release workflow is in review, and
-the K3s install is ready for the owner to run.
+K3s runs on the reference host and `main` publishes digest-pinned images, so the next step is Argo
+CD (P3-04), which needs approval.
 
 **Recently done**
 
-- P3-02 (in review): release workflow builds api and worker after CI passes on `main`, pushes them
-  to GHCR, and commits their digests to `environments/production/images.yaml`. Done after the
-  first release run.
+- P3-03: K3s v1.37.2 installed with Traefik and ServiceLB off, behind the `kube-port-guard`
+  nftables table. The LAN can't reach 6443/10250. The rollback drill found two uninstaller
+  pitfalls, now in the [deployment guide](deployment/kubernetes.md#2-install-k3s-approval-required).
+- P3-02: release workflow builds api and worker after CI passes on `main`, pushes them to GHCR
+  (public packages), and commits their digests to `environments/production/images.yaml`. First
+  run succeeded on 2026-11-13.
 - P1-04: backups stay on the reference host for now (owner's call: not a production service).
 - P5-01: `openai-compatible` adapter (`fetch`, 30 s timeout combined with the caller's abort,
   `max_tokens` on every call, no redirects, capped reply size). Failures become typed
@@ -36,23 +39,20 @@ the K3s install is ready for the owner to run.
 
 **Next up, in order**
 
-1. **P3-03:** 🔒 approved. The owner runs the install script (port guard, then K3s); then validate
-   from a LAN machine and test rollback.
-2. **P3-02:** 🔒 approved. Merge the release workflow, then make the two GHCR packages public.
-3. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
+1. **P3-04:** 🔒 Argo CD, reachable only over Tailscale, tracking `environments/production`.
+2. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
    8080), then it's deployed to Cloudflare Pages.
-4. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
-5. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+3. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
+4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #12 (P3-02 release workflow). Open every PR against `main`: #9 once merged
+**Open pull requests:** #13 (P3-03 install record). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
 - [x] Backup destination (P1-04): local for now.
 - [x] Router forwards no ports to the reference host (confirmed 2026-11-13).
-- [ ] After the first release run, make the `portfolio-api` and `portfolio-worker` GHCR packages
-      public so K3s can pull them without credentials.
+- [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
 - [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
@@ -122,19 +122,23 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (2/8)
+## Phase 3: Kubernetes and GitOps (4/8)
 
 - [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
       Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
       job `helm` runs `pnpm helm:check` (also kubeconform and guardrail tests). Worker liveness
       waits for a heartbeat; NetworkPolicy enforcement is verified after P3-03.
-- [ ] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
-      when:_ digest-pinned values committed only from `main`. Changes GitHub settings.
-      `release.yml` (in review): runs after CI succeeds on a `main` push; per-job token permissions,
-      so no repository setting changes; never pins an older build over a newer one.
-- [ ] **P3-03** 🔒 Install K3s with Traefik and ServiceLB disabled. _Needs:_ P1-02. _Done when:_
+- [x] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
+      when:_ digest-pinned values committed only from `main`. First run 2026-11-13 committed
+      `images.yaml` to `main`. `release.yml` runs after CI succeeds on a `main` push, uses per-job
+      token permissions (no repository setting changed), and never pins an older build over a
+      newer one.
+- [x] **P3-03** 🔒 Install K3s with Traefik and ServiceLB disabled. _Needs:_ P1-02. _Done when:_
       node Ready, existing services unaffected, rollback tested, K3s ports (6443, 10250,
-      8472/udp) unreachable from the LAN.
+      8472/udp) unreachable from the LAN. Done 2026-11-13: v1.37.2+k3s1; all existing containers
+      and their health unchanged through install, uninstall, and reinstall; LAN check by the
+      owner. The first uninstall left the binary and data behind because the guard unit was named
+      `k3s-guard.service`; renamed to `kube-port-guard` and drilled again cleanly.
 - [ ] **P3-04** 🔒 Install Argo CD, private over Tailscale. _Needs:_ P3-03. _Done when:_ UI
       reachable only via the tailnet; Application synced.
 - [ ] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
