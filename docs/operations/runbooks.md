@@ -38,6 +38,9 @@ Procedures marked **Proposed** apply once the corresponding phase is deployed.
   capabilities. Its NetworkPolicy allows only PostgreSQL, and PostgreSQL admits it explicitly.
 - **Local only** (P1-04): the backups share the host's disk. Copy them off the machine before
   treating the site as production.
+- **Waits for PostgreSQL:** a new pod's connections are refused for about two seconds until
+  K3s's network policy controller admits its IP, so the script polls `pg_isready` for up to a
+  minute before dumping.
 - **Run one now:** `kubectl -n portfolio create job --from=cronjob/portfolio-postgres-backup backup-manual-$(date +%s)`
 
 ### Restore Drill
@@ -51,6 +54,10 @@ Monthly, and after any schema or backup change. It never touches the live databa
 5. Record the result here.
 
 Storage capacity alone doesn't prove recoverability. Only a successful restore counts.
+
+| Date       | Dump                  | Result                                                                                                                  |
+| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-13 | first backup (4.8 KB) | Passed: production PostgreSQL image on an isolated network; restore clean; migrations applied nothing; row counts match |
 
 ## Home Server Offline
 
