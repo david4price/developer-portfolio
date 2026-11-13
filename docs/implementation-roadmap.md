@@ -12,6 +12,8 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Recently done**
 
+- P5-03: chat quotas (per session, per IP) and a Redis-backed global AI semaphore with a bounded
+  FIFO queue; overload is `429`/`503` with `Retry-After`, never a hung request.
 - P5-02: chat sessions (`POST /api/v1/chat/sessions`, `/messages`) with a 256-bit `HttpOnly` cookie,
   Redis state with a 24-hour TTL, and a per-session lock (`409 chat_busy`). Off while
   `AI_ENABLED=false`.
@@ -53,12 +55,11 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **P5-03:** per-session and per-IP quotas, a Redis-backed global concurrency semaphore, and a
-   bounded wait queue (repository-only).
-2. **P4-03:** 🔒 Cloudflare tunnel for `api.<domain>` (needs approval).
+1. **P4-03:** 🔒 Cloudflare tunnel for `api.<domain>` (approved 2026-11-13).
+2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #19 (P5-02 chat sessions). Open every PR against `main`: #9 once merged
+**Open pull requests:** #20 (P5-03 quotas and capacity). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -187,7 +188,7 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
       loads and shows "unavailable".
 
-## Phase 5: AI Chatbot (2/6)
+## Phase 5: AI Chatbot (3/6)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -198,8 +199,11 @@ Read-only inventory of the reference host. Findings:
       unit tests (concurrent message → one `409 chat_busy`, a busy session doesn't block another,
       no cross-session history) and Redis integration tests (one lock winner of 20, owner-only
       release, no TTL extension or resurrection). Chat stays off publicly until P5-03 and P5-04.
-- [ ] **P5-03** Quotas, global concurrency semaphore, bounded queue. _Needs:_ P5-01. _Done when:_
-      load test shows 429/503 instead of timeouts.
+- [x] **P5-03** Quotas, global concurrency semaphore, bounded queue. _Needs:_ P5-01. _Done when:_
+      load test shows 429/503 instead of timeouts. Done 2026-11-13: Redis-backed FIFO semaphore
+      with expiring leases and a bounded queue, per-session and per-IP quotas with `Retry-After`.
+      Load test (real Redis): 12 concurrent visitors, capacity 1 + queue 2 → 3 answered, 9
+      immediate `503 ai_overloaded`, none hung.
 - [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
       rejected server-side. Creates a Cloudflare widget.
 - [ ] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done

@@ -7,6 +7,8 @@ export class ApiException extends HttpException {
     status: number,
     readonly code: ApiErrorCode,
     message: string,
+    /** Sent as `Retry-After` (seconds) on rate-limit and overload responses. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message, status);
   }

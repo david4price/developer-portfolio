@@ -23,6 +23,25 @@ export type AiConfig =
       readonly baseUrl: string | null;
     };
 
+/** Abuse and capacity limits for the public chat (defaults follow docs/architecture/ai-integration.md). */
+export interface ChatConfig {
+  /** AI calls in flight across all API replicas. */
+  readonly maxConcurrency: number;
+  /** Requests allowed to wait for a slot; more are rejected at once. */
+  readonly queueMax: number;
+  /** Longest a request waits for a slot before `503 ai_overloaded`. */
+  readonly queueWaitMs: number;
+  readonly sessionMessageLimit: number;
+  readonly ipMessagesPerHour: number;
+  readonly ipSessionsPerHour: number;
+  /**
+   * Use `CF-Connecting-IP` as the client address. Only safe when every request provably comes
+   * through the Cloudflare tunnel (a NetworkPolicy admits only cloudflared); otherwise anyone
+   * could pick their own quota bucket.
+   */
+  readonly trustCfConnectingIp: boolean;
+}
+
 export interface ApiConfig {
   readonly environment: 'development' | 'test' | 'production';
   readonly host: string;
@@ -32,7 +51,10 @@ export interface ApiConfig {
   readonly redisUrl: string;
   readonly corsOrigins: readonly string[];
   readonly ai: AiConfig;
+  readonly chat: ChatConfig;
 }
+
+const count = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
 
 const apiEnvironmentSchema = z
   .object({
@@ -47,6 +69,13 @@ const apiEnvironmentSchema = z
     AI_PROVIDER: z.enum(aiProviderNames).optional(),
     AI_MODEL: z.string().min(1).optional(),
     AI_BASE_URL: z.url().optional(),
+    CHAT_AI_MAX_CONCURRENCY: count(1, 4).default(1),
+    CHAT_AI_QUEUE_MAX: count(0, 20).default(4),
+    CHAT_AI_QUEUE_WAIT_MS: count(0, 30_000).default(10_000),
+    CHAT_SESSION_MESSAGE_LIMIT: count(1, 500).default(30),
+    CHAT_IP_MESSAGES_PER_HOUR: count(1, 1_000).default(60),
+    CHAT_IP_SESSIONS_PER_HOUR: count(1, 1_000).default(10),
+    CHAT_TRUST_CF_CONNECTING_IP: booleanFromEnv.default(false),
   })
   .superRefine((environment, context) => {
     if (!environment.AI_ENABLED) return;
@@ -100,5 +129,14 @@ export function loadApiConfig(
             baseUrl: parsed.AI_BASE_URL ?? null,
           }
         : { enabled: false },
+    chat: {
+      maxConcurrency: parsed.CHAT_AI_MAX_CONCURRENCY,
+      queueMax: parsed.CHAT_AI_QUEUE_MAX,
+      queueWaitMs: parsed.CHAT_AI_QUEUE_WAIT_MS,
+      sessionMessageLimit: parsed.CHAT_SESSION_MESSAGE_LIMIT,
+      ipMessagesPerHour: parsed.CHAT_IP_MESSAGES_PER_HOUR,
+      ipSessionsPerHour: parsed.CHAT_IP_SESSIONS_PER_HOUR,
+      trustCfConnectingIp: parsed.CHAT_TRUST_CF_CONNECTING_IP,
+    },
   };
 }

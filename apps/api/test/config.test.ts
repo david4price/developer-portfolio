@@ -73,6 +73,28 @@ describe('loadApiConfig', () => {
     );
   });
 
+  it('applies the documented chat limits by default', () => {
+    assert.deepEqual(loadApiConfig(required).chat, {
+      maxConcurrency: 1,
+      queueMax: 4,
+      queueWaitMs: 10_000,
+      sessionMessageLimit: 30,
+      ipMessagesPerHour: 60,
+      ipSessionsPerHour: 10,
+      trustCfConnectingIp: false,
+    });
+  });
+
+  it('bounds the chat capacity settings', () => {
+    assert.throws(() => loadApiConfig({ ...required, CHAT_AI_MAX_CONCURRENCY: '0' }), /CHAT_AI/);
+    assert.throws(() => loadApiConfig({ ...required, CHAT_AI_MAX_CONCURRENCY: '5' }), /CHAT_AI/);
+    assert.throws(() => loadApiConfig({ ...required, CHAT_AI_QUEUE_WAIT_MS: '60000' }), /CHAT_AI/);
+    assert.equal(
+      loadApiConfig({ ...required, CHAT_TRUST_CF_CONNECTING_IP: 'true' }).chat.trustCfConnectingIp,
+      true,
+    );
+  });
+
   it('rejects ambiguous boolean values', () => {
     assert.throws(() => loadApiConfig({ ...required, AI_ENABLED: 'yes' }), /AI_ENABLED/);
   });

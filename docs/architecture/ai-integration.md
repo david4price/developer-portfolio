@@ -53,20 +53,27 @@ API keys stay server-side.
 
 These numbers set the resource-protection defaults below. They are not general guarantees.
 
-## Resource Protection (Proposed defaults)
+## Resource Protection (implemented in P5-03 unless noted)
 
-| Control                      | Default                                                             | Where                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Global inference concurrency | 1 (max 2 on the reference host)                                     | In-process semaphore per API replica × replica count, or a Redis-backed semaphore once there is more than one replica |
-| Bounded wait queue           | 4 requests, 10 s max wait                                           | API                                                                                                                   |
-| Per-session quota            | 20 messages / hour                                                  | Redis                                                                                                                 |
-| Per-IP quota                 | 60 requests / hour across sessions                                  | Redis (client IP from `CF-Connecting-IP`, trusted only behind the tunnel)                                             |
-| Max input                    | 1,000 characters per message                                        | DTO validation                                                                                                        |
-| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)               | Prompt builder                                                                                                        |
-| Output limit                 | 400 tokens                                                          | Provider call                                                                                                         |
-| Response timeout             | 30 s                                                                | Provider call with abort                                                                                              |
-| Overload response            | `429` / `503` with a typed error code                               | API                                                                                                                   |
-| Bot challenge                | Cloudflare Turnstile token verified server-side on session creation | API                                                                                                                   |
+All limits live in Redis, so they hold across API replicas. Each is configurable through the
+environment (`CHAT_*`); the defaults below apply when unset.
+
+| Control                      | Default                                                       | Where / setting                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Global inference concurrency | 1 (the reference host allows at most 2)                       | Redis semaphore with expiring leases, so a crashed replica can't keep a slot (`CHAT_AI_MAX_CONCURRENCY`, 1–4)                                   |
+| Bounded wait queue           | 4 requests, FIFO, 10 s max wait                               | Redis; newcomers never jump waiters; full queue or timeout → `503 ai_overloaded` + `Retry-After` (`CHAT_AI_QUEUE_MAX`, `CHAT_AI_QUEUE_WAIT_MS`) |
+| Per-session quota            | 30 messages per session (24 h lifetime)                       | Redis fixed window (`CHAT_SESSION_MESSAGE_LIMIT`)                                                                                               |
+| Per-IP quotas                | 60 messages / hour and 10 new sessions / hour                 | Redis fixed window; IPv6 counted per /64 (`CHAT_IP_MESSAGES_PER_HOUR`, `CHAT_IP_SESSIONS_PER_HOUR`); `429 rate_limited` + `Retry-After`         |
+| Client IP                    | Socket address; `CF-Connecting-IP` only when trusted          | `CHAT_TRUST_CF_CONNECTING_IP=true` only where a NetworkPolicy admits nothing but `cloudflared` (P4-03)                                          |
+| Max input                    | 1,000 characters per message                                  | Request validation                                                                                                                              |
+| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)         | Prompt builder: history capped at 8 turns / 4,000 characters                                                                                    |
+| Output limit                 | 400 tokens                                                    | Provider call                                                                                                                                   |
+| Response timeout             | 30 s                                                          | Provider call with abort                                                                                                                        |
+| Bot challenge                | Turnstile verified server-side on session creation (Proposed) | P5-04                                                                                                                                           |
+
+Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing.
+The integration suite includes a load test: 12 visitors at once against concurrency 1 and a queue
+of 2 get 3 answers and 9 immediate `503 ai_overloaded` responses; none hang.
 
 ## Chat Design (Phase 5)
 

@@ -49,6 +49,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       code = exception.code;
       message = exception.message;
+      if (exception.retryAfterSeconds !== undefined) {
+        void reply.header(
+          'retry-after',
+          String(Math.max(1, Math.ceil(exception.retryAfterSeconds))),
+        );
+      }
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       code = codeByStatus[status] ?? (status < 500 ? 'bad_request' : 'internal_error');

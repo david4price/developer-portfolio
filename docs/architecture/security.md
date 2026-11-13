@@ -76,9 +76,11 @@ The public surface is a static site and a small REST API. The main risks:
   one.
 - No user accounts and no personal data. Visitors can't choose the model, prompt, or provider: the
   message body is `{ "message": string }` (≤ 1,000 characters) and nothing else.
-- While `AI_ENABLED=false`, no sessions are issued (`503 ai_disabled`). **Don't enable chat
-  publicly before P5-03 (quotas) and P5-04 (Turnstile)**: until then nothing limits how many
-  sessions one client creates.
+- While `AI_ENABLED=false`, no sessions are issued (`503 ai_disabled`). Per-IP and per-session
+  quotas plus a global AI semaphore apply (P5-03, see
+  [AI integration](ai-integration.md#resource-protection-implemented-in-p5-03-unless-noted)).
+  **Don't enable chat publicly before Turnstile (P5-04)**: per-IP quotas alone don't stop a client
+  with many addresses.
 
 ## Infrastructure Explorer (Proposed, Phase 6)
 
