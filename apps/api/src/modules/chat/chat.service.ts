@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import type { ChatMessageResponse } from '@portfolio/shared-types';
 import { ApiException } from '../../common/api-exception.js';
+import { API_CONFIG, type ApiConfig, type ChatConfig } from '../../config/api-config.js';
 import {
   AI_PROVIDER,
   AiDisabledError,
@@ -18,11 +19,19 @@ import {
   type ChatTurn,
 } from './chat-session.store.js';
 import { newSessionId } from './chat-cookie.js';
+import {
+  AI_CONCURRENCY,
+  AiCapacityError,
+  type AiConcurrencyLimiter,
+  RATE_LIMITER,
+  type RateLimiter,
+} from './limits.js';
 
 /** Conversations live for 24 hours (security.md). */
 export const CHAT_SESSION_TTL_SECONDS = 24 * 60 * 60;
-/** Outlives the AI call (timeout plus margin) so the lock can't lapse while a reply is pending. */
-export const CHAT_LOCK_TTL_MS = DEFAULT_AI_TIMEOUT_MS + 15_000;
+/** A global AI slot outlives one AI call (timeout plus margin), so a live holder never loses it. */
+export const AI_LEASE_MS = DEFAULT_AI_TIMEOUT_MS + 15_000;
+const HOUR_SECONDS = 60 * 60;
 const MAX_OUTPUT_TOKENS = 400;
 /** History sent to the model: newest turns that fit both limits (about 1,000 tokens). */
 const PROMPT_HISTORY_MAX_TURNS = 8;
@@ -57,6 +66,14 @@ const sessionRequired = () =>
     'Start a chat session first; the previous one may have expired.',
   );
 
+const rateLimited = (retryAfterSeconds: number) =>
+  new ApiException(
+    HttpStatus.TOO_MANY_REQUESTS,
+    'rate_limited',
+    'Too many chat requests. Try again later.',
+    retryAfterSeconds,
+  );
+
 const aiDisabled = () =>
   new ApiException(
     HttpStatus.SERVICE_UNAVAILABLE,
@@ -83,14 +100,31 @@ export function promptHistory(history: readonly ChatTurn[]): ChatTurn[] {
 
 @Injectable()
 export class ChatService {
+  private readonly limits: ChatConfig;
+  /** The session lock must outlast queueing for a slot plus the AI call itself. */
+  private readonly lockTtlMs: number;
+
   constructor(
     @Inject(CHAT_SESSION_STORE) private readonly store: ChatSessionStore,
     @Inject(AI_PROVIDER) private readonly ai: AiProvider,
-  ) {}
+    @Inject(RATE_LIMITER) private readonly rateLimiter: RateLimiter,
+    @Inject(AI_CONCURRENCY) private readonly concurrency: AiConcurrencyLimiter,
+    @Inject(API_CONFIG) config: ApiConfig,
+  ) {
+    this.limits = config.chat;
+    this.lockTtlMs = config.chat.queueWaitMs + AI_LEASE_MS;
+  }
 
-  async createSession(): Promise<{ sessionId: string; session: ChatSession }> {
+  /** Counts a hit and throws `429 rate_limited` once the window's limit is passed. */
+  private async enforce(key: string, limit: number, windowSeconds: number): Promise<void> {
+    const result = await this.rateLimiter.hit(key, limit, windowSeconds);
+    if (!result.allowed) throw rateLimited(result.retryAfterSeconds);
+  }
+
+  async createSession(clientBucket: string): Promise<{ sessionId: string; session: ChatSession }> {
     // Don't hand out sessions for a chat that can't answer.
     if (!this.ai.enabled) throw aiDisabled();
+    await this.enforce(`ip:${clientBucket}:sessions`, this.limits.ipSessionsPerHour, HOUR_SECONDS);
     const sessionId = newSessionId();
     const session = await this.store.create(sessionId, CHAT_SESSION_TTL_SECONDS);
     return { sessionId, session };
@@ -99,6 +133,7 @@ export class ChatService {
   async sendMessage(
     sessionId: string | undefined,
     message: string,
+    clientBucket: string,
     signal: AbortSignal,
   ): Promise<ChatMessageResponse> {
     if (sessionId === undefined) throw sessionRequired();
@@ -107,19 +142,31 @@ export class ChatService {
     if ((await this.store.load(sessionId)) === undefined) throw sessionRequired();
 
     const lockToken = randomUUID();
-    if (!(await this.store.acquireLock(sessionId, lockToken, CHAT_LOCK_TTL_MS))) throw busy();
+    if (!(await this.store.acquireLock(sessionId, lockToken, this.lockTtlMs))) throw busy();
 
     try {
       // Re-read under the lock: the history may have changed since the first read.
       const session = await this.store.load(sessionId);
       if (session === undefined) throw sessionRequired();
 
+      // Quotas count only messages that would actually reach the model (not 409s or 401s).
+      await this.enforce(
+        `ip:${clientBucket}:messages`,
+        this.limits.ipMessagesPerHour,
+        HOUR_SECONDS,
+      );
+      await this.enforce(
+        `session:${sessionId}:messages`,
+        this.limits.sessionMessageLimit,
+        CHAT_SESSION_TTL_SECONDS,
+      );
+
       const messages: AiMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...promptHistory(session.history),
         { role: 'user', content: message },
       ];
-      const reply = (await this.complete(messages, signal)).trim();
+      const reply = (await this.completeWithinCapacity(messages, signal)).trim();
 
       const history = [
         ...session.history,
@@ -133,6 +180,26 @@ export class ChatService {
       return { reply };
     } finally {
       await this.store.releaseLock(sessionId, lockToken);
+    }
+  }
+
+  /** Waits (boundedly) for a global AI slot; overload becomes `503 ai_overloaded`, never a hang. */
+  private async completeWithinCapacity(
+    messages: AiMessage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    try {
+      return await this.concurrency.run(() => this.complete(messages, signal), signal);
+    } catch (error) {
+      if (error instanceof AiCapacityError) {
+        throw new ApiException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          'ai_overloaded',
+          'The assistant is busy. Try again shortly.',
+          error.retryAfterSeconds,
+        );
+      }
+      throw error;
     }
   }
 

@@ -18,7 +18,67 @@ import {
 import { sessionIdFromCookieHeader } from '../src/modules/chat/chat-cookie.js';
 import { ChatController } from '../src/modules/chat/chat.controller.js';
 import { ChatService, promptHistory } from '../src/modules/chat/chat.service.js';
+import { API_CONFIG, type ApiConfig, type ChatConfig } from '../src/config/api-config.js';
+import { clientAddress, clientBucket } from '../src/modules/chat/client-address.js';
+import {
+  AI_CONCURRENCY,
+  AiCapacityError,
+  type AiConcurrencyLimiter,
+  RATE_LIMITER,
+  type RateLimiter,
+} from '../src/modules/chat/limits.js';
 import { createTestApp } from './support/test-app.js';
+
+class InMemoryRateLimiter implements RateLimiter {
+  readonly counts = new Map<string, number>();
+  async hit(key: string, limit: number) {
+    const count = (this.counts.get(key) ?? 0) + 1;
+    this.counts.set(key, count);
+    return { allowed: count <= limit, retryAfterSeconds: 1_234 };
+  }
+}
+
+/** No queue: rejects once `limit` tasks are running (queueing is covered against real Redis). */
+class InMemoryConcurrency implements AiConcurrencyLimiter {
+  active = 0;
+  constructor(public limit = 1_000) {}
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active >= this.limit) throw new AiCapacityError(10);
+    this.active += 1;
+    try {
+      return await task();
+    } finally {
+      this.active -= 1;
+    }
+  }
+}
+
+const generousLimits: ChatConfig = {
+  maxConcurrency: 1_000,
+  queueMax: 0,
+  queueWaitMs: 0,
+  sessionMessageLimit: 1_000,
+  ipMessagesPerHour: 1_000,
+  ipSessionsPerHour: 1_000,
+  trustCfConnectingIp: false,
+};
+
+function chatProviders(
+  store: ChatSessionStore,
+  ai: AiProvider,
+  limits: ChatConfig = generousLimits,
+  concurrency: AiConcurrencyLimiter = new InMemoryConcurrency(),
+  rateLimiter: RateLimiter = new InMemoryRateLimiter(),
+) {
+  return [
+    ChatService,
+    { provide: CHAT_SESSION_STORE, useValue: store },
+    { provide: AI_PROVIDER, useValue: ai },
+    { provide: RATE_LIMITER, useValue: rateLimiter },
+    { provide: AI_CONCURRENCY, useValue: concurrency },
+    { provide: API_CONFIG, useValue: { chat: limits } as unknown as ApiConfig },
+  ];
+}
 
 /** Same semantics as the Redis adapter: NX locks owned by a token, history kept without resurrection. */
 class InMemoryChatStore implements ChatSessionStore {
@@ -87,11 +147,7 @@ describe('chat sessions and messages', () => {
     ai = new FakeAi();
     app = await createTestApp({
       controllers: [ChatController],
-      providers: [
-        ChatService,
-        { provide: CHAT_SESSION_STORE, useValue: store },
-        { provide: AI_PROVIDER, useValue: ai },
-      ],
+      providers: chatProviders(store, ai),
     });
   });
 
@@ -312,5 +368,156 @@ describe('promptHistory', () => {
       selected.map(({ content }) => content[0]),
       ['c', 'd'],
     );
+  });
+});
+
+describe('chat quotas and capacity', () => {
+  let app: NestFastifyApplication | undefined;
+
+  after(async () => {
+    await app?.close();
+  });
+
+  async function boot(
+    limits: Partial<ChatConfig>,
+    concurrency: AiConcurrencyLimiter = new InMemoryConcurrency(),
+    ai: AiProvider = new FakeAi(),
+  ) {
+    await app?.close();
+    app = await createTestApp({
+      controllers: [ChatController],
+      providers: chatProviders(
+        new InMemoryChatStore(),
+        ai,
+        { ...generousLimits, ...limits },
+        concurrency,
+      ),
+    });
+    return app;
+  }
+
+  const session = async (target: NestFastifyApplication, remoteAddress = '203.0.113.7') => {
+    const response = await target.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      remoteAddress,
+    });
+    return { response, cookie: String(response.headers['set-cookie'] ?? '').split(';')[0] ?? '' };
+  };
+
+  const message = (
+    target: NestFastifyApplication,
+    cookie: string,
+    remoteAddress = '203.0.113.7',
+    headers: Record<string, string> = {},
+  ) =>
+    target.inject({
+      method: 'POST',
+      url: '/api/v1/chat/messages',
+      remoteAddress,
+      headers: { cookie, ...headers },
+      payload: { message: 'hi' },
+    });
+
+  it('limits new sessions per client address with 429 and Retry-After', async () => {
+    const target = await boot({ ipSessionsPerHour: 2 });
+    assert.equal((await session(target)).response.statusCode, 201);
+    assert.equal((await session(target)).response.statusCode, 201);
+
+    const { response } = await session(target);
+    assert.equal(response.statusCode, 429);
+    assert.equal(response.json<ApiErrorResponse>().error.code, 'rate_limited');
+    assert.equal(response.headers['retry-after'], '1234');
+    assert.equal(response.headers['set-cookie'], undefined);
+
+    assert.equal((await session(target, '198.51.100.9')).response.statusCode, 201);
+  });
+
+  it('limits messages per session and per client address', async () => {
+    let target = await boot({ sessionMessageLimit: 2 });
+    let { cookie } = await session(target);
+    assert.equal((await message(target, cookie)).statusCode, 200);
+    assert.equal((await message(target, cookie)).statusCode, 200);
+    const perSession = await message(target, cookie);
+    assert.equal(perSession.statusCode, 429);
+    assert.equal(perSession.json<ApiErrorResponse>().error.code, 'rate_limited');
+
+    target = await boot({ ipMessagesPerHour: 1 });
+    ({ cookie } = await session(target));
+    const other = (await session(target)).cookie;
+    assert.equal((await message(target, cookie)).statusCode, 200);
+    assert.equal(
+      (await message(target, other)).statusCode,
+      429,
+      'the address quota spans sessions',
+    );
+  });
+
+  it('does not charge quota for a 409 chat_busy', async () => {
+    const ai = new FakeAi();
+    const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai);
+    const { cookie } = await session(target);
+    ai.hold();
+    const first = message(target, cookie);
+    while (ai.requests.length === 0) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((await message(target, cookie)).statusCode, 409);
+    ai.release();
+    assert.equal((await first).statusCode, 200);
+  });
+
+  it('answers 503 ai_overloaded with Retry-After when no AI slot is free', async () => {
+    const target = await boot({}, new InMemoryConcurrency(0));
+    const { cookie } = await session(target);
+    const response = await message(target, cookie);
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.json<ApiErrorResponse>().error.code, 'ai_overloaded');
+    assert.equal(response.headers['retry-after'], '10');
+    assert.equal((await message(target, cookie)).statusCode, 503, 'the session lock was released');
+  });
+
+  it('ignores CF-Connecting-IP unless the deployment trusts it', async () => {
+    let target = await boot({ ipSessionsPerHour: 1 });
+    assert.equal((await session(target)).response.statusCode, 201);
+    const spoofed = await target.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      remoteAddress: '203.0.113.7',
+      headers: { 'cf-connecting-ip': '192.0.2.55' },
+    });
+    assert.equal(spoofed.statusCode, 429, 'a forged header must not open a new quota bucket');
+
+    target = await boot({ ipSessionsPerHour: 1, trustCfConnectingIp: true });
+    const viaTunnel = (ip: string) =>
+      target.inject({
+        method: 'POST',
+        url: '/api/v1/chat/sessions',
+        remoteAddress: '198.51.100.200',
+        headers: { 'cf-connecting-ip': ip },
+      });
+    assert.equal((await viaTunnel('192.0.2.1')).statusCode, 201);
+    assert.equal(
+      (await viaTunnel('192.0.2.2')).statusCode,
+      201,
+      'visitors behind one tunnel differ',
+    );
+    assert.equal((await viaTunnel('192.0.2.1')).statusCode, 429);
+  });
+});
+
+describe('client addresses', () => {
+  it('buckets IPv4 individually and IPv6 per /64', () => {
+    assert.equal(clientBucket('203.0.113.7'), 'v4:203.0.113.7');
+    assert.equal(clientBucket('::ffff:203.0.113.7'), 'v4:203.0.113.7');
+    assert.equal(clientBucket('2001:db8:1:2:aaaa::1'), 'v6:2001:0db8:0001:0002::/64');
+    assert.equal(clientBucket('2001:db8:1:2:ffff:ffff:ffff:ffff'), 'v6:2001:0db8:0001:0002::/64');
+    assert.equal(clientBucket('::1'), 'v6:0000:0000:0000:0000::/64');
+    assert.equal(clientBucket('not an ip'), 'unknown');
+  });
+
+  it('uses CF-Connecting-IP only when trusted and well-formed', () => {
+    assert.equal(clientAddress('198.51.100.1', '192.0.2.1', false), '198.51.100.1');
+    assert.equal(clientAddress('198.51.100.1', '192.0.2.1', true), '192.0.2.1');
+    assert.equal(clientAddress('198.51.100.1', 'evil, 1.2.3.4', true), '198.51.100.1');
+    assert.equal(clientAddress('198.51.100.1', ['192.0.2.1', '192.0.2.2'], true), '198.51.100.1');
   });
 });
