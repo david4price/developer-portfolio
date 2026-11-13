@@ -6,12 +6,16 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-13_
 
-**Current phase:** 5 (AI chatbot). Phase 4 (public edge) is complete: the static site and the API
-are public, hardened, and proven to degrade gracefully. Phase 3 has three 🔒 tasks left (P3-05
-backups, P3-06 HPA, P3-08 Sealed Secrets), and Phase 2 lacks only the owner's content (P2-12).
+**Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
+the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
+Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P3-06: the API autoscales on CPU (1–3 pods). Under synthetic load it scaled 1→2→3, served
+  950k requests with zero errors, and scaled back to 1; Argo CD stayed Synced with no extra syncs.
+- P3-05: nightly PostgreSQL backups, restore drilled: the dump restored cleanly, migrations had
+  nothing to apply, and every table's row count matched production.
 - P3-08: Sealed Secrets. Every portfolio Secret now lives in Git encrypted, so the cluster can be
   rebuilt from Git plus one locally backed-up key (restore drilled).
 - P4-04: offline drill. With the whole cluster stopped, the site kept serving and said "API
@@ -66,7 +70,7 @@ backups, P3-06 HPA, P3-08 Sealed Secrets), and Phase 2 lacks only the owner's co
 2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #24 (P3-08 Sealed Secrets). Open every PR against `main`.
+**Open pull requests:** #27 (backup waits for PostgreSQL; P3-05/P3-06 records). Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -142,7 +146,7 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (6/8)
+## Phase 3: Kubernetes and GitOps (8/8)
 
 - [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
       Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
@@ -163,14 +167,16 @@ Read-only inventory of the reference host. Findings:
       reachable only via the tailnet; Application synced. Done 2026-11-13: pinned to the v3.6.1
       release commit; least-privilege `portfolio` AppProject; deployed revision and image digests
       match `main`; UI is a ClusterIP Service published only by `tailscale serve` (HTTPS 8443).
-- [ ] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
-      when:_ one successful restore recorded.
-      In review (#25): nightly CronJob to a host directory outside K3s's data, 7 daily + 4
-      weekly. Tick after the first backup is restored in the drill.
-- [ ] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
-      observed under synthetic load with no sync flapping.
-      In review (#26): CPU HPA (1–3 replicas, 70%), Deployment omits `replicas` when enabled.
-      Tick after scale-out under synthetic load with Argo CD staying Synced.
+- [x] **P3-05** 🔒 PostgreSQL backup CronJob and restore drill. _Needs:_ P3-03, P1-04. _Done
+      when:_ one successful restore recorded. Done 2026-11-13: nightly CronJob to a host directory
+      outside K3s's data, 7 daily + 4 weekly; restore recorded in the
+      [runbook](operations/runbooks.md#restore-drill). The first run showed that K3s refuses a
+      new pod's connections for about two seconds, so the job now waits for PostgreSQL (#27).
+- [x] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
+      observed under synthetic load with no sync flapping. Done 2026-11-13: CPU HPA (1–3
+      replicas, 70%), Deployment omits `replicas` when enabled. Three minutes of load against
+      the API's ClusterIP scaled it 1→2→3 (30 s apart) with zero failed requests; it returned to
+      1 five and six minutes after the load stopped. Argo CD's sync history didn't change.
 - [x] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
       when:_ ADR in `docs/architecture/`. Owner chose Sealed Secrets, 2026-11-12:
       [ADR 0001](architecture/adr-0001-secrets-management.md).

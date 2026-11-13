@@ -171,11 +171,11 @@ above remain the way to run the chart without the owner's controller.
 
 Manifests live in `infrastructure/argocd/`:
 
-| File                         | Purpose                                                                                                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `install/kustomization.yaml` | Upstream non-HA install, pinned to the release **commit** (not the tag)                                                                                          |
-| `project.yaml`               | `portfolio` AppProject: this repository, the `portfolio` namespace, no cluster-scoped resources, only the kinds the chart renders (no Secrets)                   |
-| `application.yaml`           | Chart + `environments/production/{values,images}.yaml` from `main`; automated sync with prune and self-heal; ignores `portfolio-api` replicas for the future HPA |
+| File                         | Purpose                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install/kustomization.yaml` | Upstream non-HA install, pinned to the release **commit** (not the tag)                                                                             |
+| `project.yaml`               | `portfolio` AppProject: this repository, the `portfolio` namespace, no cluster-scoped resources, only the kinds the chart renders (no Secrets)      |
+| `application.yaml`           | Chart + `environments/production/{values,images}.yaml` from `main`; automated sync with prune and self-heal; ignores `portfolio-api` replicas (HPA) |
 
 Install, in order:
 
@@ -188,6 +188,11 @@ kubectl apply -f infrastructure/argocd/project.yaml -f infrastructure/argocd/app
 kubectl -n argocd get application portfolio   # Synced / Healthy
 ```
 
+- **Argo CD doesn't manage itself:** the AppProjects and Applications in `infrastructure/argocd/`
+  were applied by hand, so merging a change to them changes nothing in the cluster. Re-apply the
+  changed file after the merge (`kubectl diff -f <file>` first, then `kubectl apply -f <file>`).
+  Until then a sync that needs a newly allowed kind fails with `resource <kind> is not permitted
+in project portfolio`; if it has already failed, re-apply, then trigger a sync.
 - **Private access:** `argocd-server` stays a ClusterIP Service: no Ingress, LoadBalancer,
   NodePort, or tunnel. The host can reach ClusterIPs, so `tailscale serve` publishes it on the
   tailnet only, with a valid certificate for the machine's tailnet name:
