@@ -59,6 +59,20 @@ describe('loadApiConfig', () => {
     });
   });
 
+  it('requires an http(s) base URL for the openai-compatible provider', () => {
+    const enabled = {
+      ...required,
+      AI_ENABLED: 'true',
+      AI_PROVIDER: 'openai-compatible',
+      AI_MODEL: 'example-model',
+    };
+    assert.throws(() => loadApiConfig(enabled), /AI_BASE_URL/);
+    assert.throws(
+      () => loadApiConfig({ ...enabled, AI_BASE_URL: 'ftp://inference.internal/v1' }),
+      /AI_BASE_URL/,
+    );
+  });
+
   it('rejects ambiguous boolean values', () => {
     assert.throws(() => loadApiConfig({ ...required, AI_ENABLED: 'yes' }), /AI_ENABLED/);
   });

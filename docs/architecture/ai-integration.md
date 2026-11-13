@@ -4,13 +4,13 @@
 
 The API depends on an `AiProvider` port, never on a specific vendor SDK or model.
 
-| Adapter             | Use                                                                                                    | Status             |
-| ------------------- | ------------------------------------------------------------------------------------------------------ | ------------------ |
-| `disabled`          | Default. Chat endpoints return `ai_disabled`; everything else works                                    | Confirmed          |
-| `openai-compatible` | Any OpenAI-style `/v1/chat/completions` server: Docker Model Runner, llama.cpp server, vLLM, LM Studio | Proposed (Phase 5) |
-| `ollama`            | Ollama native API                                                                                      | Proposed           |
-| `openai`            | OpenAI API                                                                                             | Proposed           |
-| `anthropic`         | Anthropic Messages API                                                                                 | Proposed           |
+| Adapter             | Use                                                                                                    | Status               |
+| ------------------- | ------------------------------------------------------------------------------------------------------ | -------------------- |
+| `disabled`          | Default. Chat endpoints return `ai_disabled`; everything else works                                    | Confirmed            |
+| `openai-compatible` | Any OpenAI-style `/v1/chat/completions` server: Docker Model Runner, llama.cpp server, vLLM, LM Studio | Adapter done (P5-01) |
+| `ollama`            | Ollama native API                                                                                      | Proposed             |
+| `openai`            | OpenAI API                                                                                             | Proposed             |
+| `anthropic`         | Anthropic Messages API                                                                                 | Proposed             |
 
 The provider is chosen at deploy time by configuration. Visitors cannot choose providers, models,
 endpoints, or system prompts.

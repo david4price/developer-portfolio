@@ -5,7 +5,7 @@ description: Implement or review the portfolio chatbot and AI provider layer —
 
 # AI Integration
 
-Status: the `AiProvider` port and `disabled` adapter exist (`apps/api/src/modules/ai/`). Everything
+Status: the `AiProvider` port, the `disabled` adapter, and the `openai-compatible` adapter exist (`apps/api/src/modules/ai/`). Everything
 else is **Proposed** (Phase 5). Design reference: `docs/architecture/ai-integration.md`.
 
 ## Provider Adapters
