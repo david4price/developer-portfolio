@@ -12,6 +12,8 @@ backups, P3-06 HPA, P3-08 Sealed Secrets), and Phase 2 lacks only the owner's co
 
 **Recently done**
 
+- P3-08: Sealed Secrets. Every portfolio Secret now lives in Git encrypted, so the cluster can be
+  rebuilt from Git plus one locally backed-up key (restore drilled).
 - P4-04: offline drill. With the whole cluster stopped, the site kept serving and said "API
   unavailable"; everything recovered on its own with data intact. Phase 4 complete.
 - P4-03: the API is public at `api.<domain>/api/v1/*` only, through a dedicated tunnel with
@@ -64,7 +66,7 @@ backups, P3-06 HPA, P3-08 Sealed Secrets), and Phase 2 lacks only the owner's co
 2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #23 (P4-04 drill record). Open every PR against `main`.
+**Open pull requests:** #24 (P3-08 Sealed Secrets). Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -140,7 +142,7 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (5/8)
+## Phase 3: Kubernetes and GitOps (6/8)
 
 - [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
       Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
@@ -168,10 +170,13 @@ Read-only inventory of the reference host. Findings:
 - [x] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
       when:_ ADR in `docs/architecture/`. Owner chose Sealed Secrets, 2026-11-12:
       [ADR 0001](architecture/adr-0001-secrets-management.md).
-- [ ] **P3-08** 🔒 Install the Sealed Secrets controller, commit its public certificate, back up
+- [x] **P3-08** 🔒 Install the Sealed Secrets controller, commit its public certificate, back up
       its key off-host. _Needs:_ P3-03, P1-04. _Done when:_ chart version and image digest pinned;
       automatic key renewal off; `sealed-secrets.pem` committed; key backup restored once into a
-      throwaway cluster and a test `SealedSecret` unseals there.
+      throwaway cluster and a test `SealedSecret` unseals there. Done 2026-11-13: chart 2.22.0,
+      image 0.41.2 by digest, `--key-renew-period 0`; the key is backed up **locally**, not
+      off-host (P1-04); the restore was drilled in a throwaway K3s in Docker. The PostgreSQL
+      password, tunnel token, and CORS origin are now SealedSecrets synced by Argo CD.
 
 ## Phase 4: Public Edge (4/4)
 

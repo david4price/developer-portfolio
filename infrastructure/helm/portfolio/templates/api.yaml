@@ -73,11 +73,17 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
-          {{- with .envConfigMap }}
-          # Out-of-band settings that don't belong in Git (e.g. CORS_ORIGINS with the real domain).
+          {{- if or .envConfigMap .envSecret }}
+          # Settings that don't belong in plain Git (e.g. CORS_ORIGINS with the real domain).
           envFrom:
+            {{- with .envConfigMap }}
             - configMapRef:
                 name: {{ . }}
+            {{- end }}
+            {{- with .envSecret }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
           {{- end }}
           # Liveness and startup check only the process; readiness checks PostgreSQL and Redis,
           # so a dependency outage takes the pod out of rotation without restarting it.

@@ -26,6 +26,8 @@ api:
   # Optional ConfigMap, created out of band, whose keys become environment variables. For values
   # that shouldn't live in Git, such as the real domain in CORS_ORIGINS.
   envConfigMap: ''
+  # Optional Secret (e.g. unsealed from a SealedSecret) whose keys become environment variables.
+  envSecret: ''
   # Use CF-Connecting-IP as the client address for chat quotas. Requires cloudflared.enabled and
   # networkPolicy.enabled, so the API is reachable only through the tunnel.
   trustCloudflareClientIp: false

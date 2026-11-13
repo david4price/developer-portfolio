@@ -1,7 +1,8 @@
 # ADR 0001: Secrets Management with Sealed Secrets
 
-- **Status:** Accepted (2026-11-12). Not yet installed: the controller arrives with the cluster
-  (P3-08).
+- **Status:** Accepted (2026-11-12). Implemented 2026-11-13 (P3-08): controller chart 2.22.0 /
+  0.41.2, key renewal off, certificate committed, key backed up locally (P1-04), and restore
+  drilled. Procedures are in the [deployment guide](../deployment/kubernetes.md#3-secrets).
 - **Task:** P3-07
 
 ## Context

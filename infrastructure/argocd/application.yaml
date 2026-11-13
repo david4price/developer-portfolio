@@ -8,15 +8,19 @@ metadata:
   # No resources-finalizer: deleting the Application leaves the workloads (and data) in place.
 spec:
   project: portfolio
-  source:
-    repoURL: https://github.com/david4price/developer-portfolio.git
-    targetRevision: main
-    path: infrastructure/helm/portfolio
-    helm:
-      releaseName: portfolio
-      valueFiles:
-        - ../../environments/production/values.yaml
-        - ../../environments/production/images.yaml
+  sources:
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      path: infrastructure/helm/portfolio
+      helm:
+        releaseName: portfolio
+        valueFiles:
+          - ../../environments/production/values.yaml
+          - ../../environments/production/images.yaml
+    # SealedSecrets (ADR 0001); the controller unseals them into the Secrets the chart references.
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      path: infrastructure/environments/production/secrets
   destination:
     server: https://kubernetes.default.svc
     namespace: portfolio
