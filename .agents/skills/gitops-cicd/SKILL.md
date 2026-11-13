@@ -5,8 +5,9 @@ description: Write or review GitHub Actions workflows, GHCR image publishing, di
 
 # GitOps and CI/CD
 
-Status: CI (`.github/workflows/ci.yml`) exists; release workflow, GHCR publishing, and Argo CD are
-**Proposed** (Phase 3).
+Status: CI (`.github/workflows/ci.yml`), the release workflow (`release.yml`, GHCR by digest), and
+Argo CD (`infrastructure/argocd/`, P3-04) exist. The deployment guide
+(`docs/deployment/kubernetes.md`) has the exact install and access steps.
 
 ## CI (current)
 
