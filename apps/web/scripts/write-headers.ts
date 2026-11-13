@@ -8,6 +8,9 @@
  *
  * `connect-src` allows only this origin plus the API origin from NEXT_PUBLIC_API_BASE_URL (unset in
  * previews, so they can't call the production API).
+ *
+ * Cloudflare Web Analytics is the one third party: the edge injects its beacon script on the custom
+ * domain, and the beacon reports page views and Web Vitals. Only its two exact hosts are allowed.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -21,6 +24,9 @@ if (existsSync(workspaceEnv)) process.loadEnvFile(workspaceEnv);
 /** Cloudflare Pages limits each `_headers` line to 2,000 characters. */
 const MAX_LINE = 2_000;
 const INLINE_SCRIPT = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
+/** Cloudflare Web Analytics: the beacon script and the endpoint it reports to. */
+const ANALYTICS_SCRIPT = 'https://static.cloudflareinsights.com';
+const ANALYTICS_REPORT = 'https://cloudflareinsights.com';
 
 function htmlFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -58,11 +64,11 @@ for (const page of pages) {
 const api = apiOrigin();
 const csp = [
   "default-src 'self'",
-  `script-src 'self' ${[...hashes].sort().join(' ')}`.trim(),
+  `script-src 'self' ${ANALYTICS_SCRIPT} ${[...hashes].sort().join(' ')}`.trim(),
   "style-src 'self'",
   "img-src 'self' data:",
   "font-src 'self'",
-  `connect-src 'self'${api ? ` ${api}` : ''}`,
+  `connect-src 'self'${api ? ` ${api}` : ''} ${ANALYTICS_REPORT}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
