@@ -46,6 +46,14 @@ spec:
                   mkdir -p "$daily" "$weekly"
                   partial="$daily/.portfolio-$ts.dump.partial"
                   trap 'rm -f "$partial"' EXIT
+                  # A new pod's first connections can be refused until the network policy
+                  # controller admits its IP (about two seconds on K3s), so wait up to a minute.
+                  tries=0
+                  until pg_isready --timeout=2 > /dev/null; do
+                    tries=$((tries + 1))
+                    if [ "$tries" -ge 30 ]; then echo "postgres is not reachable" >&2; exit 1; fi
+                    sleep 2
+                  done
                   pg_dump --format=custom --no-owner --no-privileges --file "$partial"
                   # Keep only dumps that pg_restore can read.
                   pg_restore --list "$partial" > /dev/null
