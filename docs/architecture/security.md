@@ -42,6 +42,12 @@ The public surface is a static site and a small REST API. The main risks:
     `font-src 'self'`.
   - `connect-src 'self'` plus the API origin from `NEXT_PUBLIC_API_BASE_URL`. Previews have none, so
     they can't call the production API. Turnstile is added with P5-04.
+  - The only third party is **Cloudflare Web Analytics** (cookie-less): the edge injects its beacon
+    on the custom domain, so `script-src` allows `https://static.cloudflareinsights.com` and
+    `connect-src` allows `https://cloudflareinsights.com`. Nothing broader.
+  - Cloudflare features that inject **inline** scripts at the edge (JavaScript Detections, Rocket
+    Loader, email obfuscation) can't be hashed and stay off for the zone; a CSP violation in the
+    console on the custom domain but not on `pages.dev` means one was switched on.
   - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`,
     `upgrade-insecure-requests`.
 - `Strict-Transport-Security: max-age=31536000` (no `includeSubDomains`: not every host under the
