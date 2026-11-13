@@ -11,6 +11,8 @@ Repository-only Phase 3 work can continue; installing K3s waits on the firewall 
 
 **Recently done**
 
+- P3-07: secrets go in Git as Sealed Secrets
+  ([ADR 0001](architecture/adr-0001-secrets-management.md)); controller install is P3-08.
 - P3-01: Helm chart (api, worker, PostgreSQL, Redis, migrate Job, default-deny NetworkPolicies),
   checked by `pnpm helm:check` locally and in CI.
 - P2-15: `GET /api/v1/projects` is keyset-paginated (`limit` ≤ 50, `nextCursor`) and selects
@@ -23,10 +25,9 @@ Repository-only Phase 3 work can continue; installing K3s waits on the firewall 
 
 **Next up, in order**
 
-1. **P3-07:** secrets management ADR (SOPS vs Sealed Secrets); feeds the chart's secret handling.
-2. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
+1. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
    GitHub package and workflow permissions.
-3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+2. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
 **Waiting on the owner** (these unblock Phase 3; the domain for Phase 4 is ready)
 
@@ -96,7 +97,7 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (1/7)
+## Phase 3: Kubernetes and GitOps (2/8)
 
 - [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
       Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
@@ -112,8 +113,13 @@ Read-only inventory of the reference host. Findings:
       when:_ one successful restore recorded.
 - [ ] **P3-06** 🔒 HPA for api; Argo CD ignores replicas. _Needs:_ P3-04. _Done when:_ scale-out
       observed under synthetic load with no sync flapping.
-- [ ] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
-      when:_ ADR in `docs/architecture/`.
+- [x] **P3-07** Secrets management decision (SOPS vs Sealed Secrets). _Needs:_ P3-03. _Done
+      when:_ ADR in `docs/architecture/`. Owner chose Sealed Secrets, 2026-11-12:
+      [ADR 0001](architecture/adr-0001-secrets-management.md).
+- [ ] **P3-08** 🔒 Install the Sealed Secrets controller, commit its public certificate, back up
+      its key off-host. _Needs:_ P3-03, P1-04. _Done when:_ chart version and image digest pinned;
+      automatic key renewal off; `sealed-secrets.pem` committed; key backup restored once into a
+      throwaway cluster and a test `SealedSecret` unseals there.
 
 ## Phase 4: Public Edge (0/4)
 

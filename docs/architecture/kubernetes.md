@@ -61,8 +61,10 @@ Chart behavior:
   rollout); its PVC is kept if the release is uninstalled. It has no password and is reachable
   only through NetworkPolicy, as in Compose.
 
-Secrets are referenced by name (`existingSecret`) and created out of band, for example with
-SOPS or Sealed Secrets (to be decided in P3-07). They are never stored in values files.
+Secrets are referenced by name (`existingSecret`) and never stored in values files. On the
+reference deployment they are committed as `SealedSecret` resources and unsealed by the Sealed
+Secrets controller ([ADR 0001](adr-0001-secrets-management.md)); anyone else can create the same
+named Secrets with `kubectl`.
 
 ## Probes
 
