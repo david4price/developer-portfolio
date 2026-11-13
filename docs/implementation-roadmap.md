@@ -12,6 +12,9 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Recently done**
 
+- P4-01: the static site is live on Cloudflare Pages, built by Cloudflare from GitHub on every
+  push to `main`, with a preview for every PR
+  ([guide](deployment/cloudflare-pages.md)).
 - P3-04: Argo CD v3.6.1 syncs the `portfolio` Application from `main` (Synced/Healthy); the UI is
   tailnet-only via `tailscale serve`. NetworkPolicies verified enforced: another namespace can't
   reach PostgreSQL, Redis, or the API, and the API has no internet egress.
@@ -44,12 +47,12 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **P4-01:** 🔒 approved. The owner reviews the site locally first (`compose.full.yaml`, port
-   8080), then it's deployed to Cloudflare Pages.
+1. **Custom domain** for the site (🔒 DNS change, needs the owner's go-ahead), then **P4-02**
+   (`_headers` with CSP and HSTS).
 2. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #14 (P3-04 Argo CD and the P6-04 design). Open every PR against `main`: #9 once merged
+**Open pull requests:** #15 (P4-01 Cloudflare Pages). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -159,10 +162,13 @@ Read-only inventory of the reference host. Findings:
       automatic key renewal off; `sealed-secrets.pem` committed; key backup restored once into a
       throwaway cluster and a test `SealedSecret` unseals there.
 
-## Phase 4: Public Edge (0/4)
+## Phase 4: Public Edge (1/4)
 
-- [ ] **P4-01** 🔒 Cloudflare Pages deployment of `apps/web/out`. _Needs:_ P1-03. _Done when:_
-      site live; PR previews build without secrets.
+- [x] **P4-01** 🔒 Cloudflare Pages deployment of `apps/web/out`. _Needs:_ P1-03. _Done when:_
+      site live; PR previews build without secrets. Live on `pages.dev` 2026-11-13 via Git
+      integration (Cloudflare builds; no token in GitHub). Previews get no API URL and no secrets;
+      first preview was this PR (#15). Custom domain: see
+      [Cloudflare Pages](deployment/cloudflare-pages.md#custom-domain).
 - [ ] **P4-02** `_headers` with CSP (hash-based scripts) and HSTS. _Needs:_ P4-01. _Done when:_
       security-header scan passes; no CSP errors in the console.
 - [ ] **P4-03** 🔒 Dedicated tunnel with in-cluster cloudflared, API-only ingress. _Needs:_ P3-04,
