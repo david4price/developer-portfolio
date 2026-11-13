@@ -1,0 +1,63 @@
+{{- if .Values.cloudflared.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "cloudflared" }}
+{{- with .Values.cloudflared }}
+# Outbound-only connector for the dedicated tunnel: no Service, no ingress, no host ports.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-cloudflared
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: '3'
+spec:
+  replicas: {{ .replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        # The image's built-in nonroot user.
+        {{- include "portfolio.podSecurityContext" 65532 | nindent 8 }}
+      containers:
+        - name: cloudflared
+          image: {{ include "portfolio.image" .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          args: [tunnel, --no-autoupdate, --metrics, '0.0.0.0:2000', run]
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "cloudflared.tokenSecret is required" .tokenSecret }}
+                  key: token
+          ports:
+            - name: metrics
+              containerPort: 2000
+          # /ready reports 200 once at least one connection to Cloudflare's edge is up.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+{{- end }}
+{{- end }}

@@ -5,6 +5,7 @@
 {{- $migrate := dict "root" $ "component" "migrate" }}
 {{- $postgres := dict "root" $ "component" "postgres" }}
 {{- $redis := dict "root" $ "component" "redis" }}
+{{- $cloudflared := dict "root" $ "component" "cloudflared" }}
 # Everything in the namespace is denied unless a policy below allows it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -164,4 +165,46 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+{{- if .Values.cloudflared.enabled }}
+---
+# cloudflared: no ingress. Reaches the API, and Cloudflare's edge on public addresses only (7844
+# for the tunnel over QUIC or HTTP/2, 443 for its control-plane calls). Private, CGNAT/tailnet,
+# link-local, and loopback ranges are excluded, so it can't reach the LAN or other services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-cloudflared
+  labels:
+    {{- include "portfolio.componentLabels" $cloudflared | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $cloudflared | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "portfolio.selectorLabels" $api | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+              - 127.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 7844
+        - protocol: UDP
+          port: 7844
+        - protocol: TCP
+          port: 443
+{{- end }}
 {{- end }}

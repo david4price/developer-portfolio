@@ -117,7 +117,10 @@ Create secrets out of band; they never go in Git:
 kubectl create namespace portfolio
 # URL-safe characters only: the chart embeds the password in DATABASE_URL.
 kubectl -n portfolio create secret generic portfolio-postgres --from-literal=password='<password>'
-kubectl -n portfolio create secret generic portfolio-tunnel --from-file=credentials.json  # Phase 4
+# Tunnel token (P4-03): pipe it from the API into a 0600 temp file, never echo it
+kubectl -n portfolio create secret generic portfolio-tunnel --from-file=token=<token-file>
+# Settings that must not be in Git (the real domain): keys become API environment variables
+kubectl -n portfolio create configmap portfolio-api-public --from-literal=CORS_ORIGINS=https://<domain>
 ```
 
 The chart reads `portfolio-postgres` (key `password`) for both PostgreSQL and the API; override
@@ -187,12 +190,34 @@ kubectl -n argocd get application portfolio   # Synced / Healthy
 3. Argo CD syncs. The rolling update uses `maxUnavailable: 0`, and readiness gates traffic.
 4. Run migrations as a pre-sync Job, only for backward-compatible migrations (see runbooks).
 
-## 6. Public Exposure (Phase 4)
+## 6. Public Exposure (P4-03)
 
-- Create a dedicated Cloudflare Tunnel and run `cloudflared` in the `portfolio` namespace.
-- Tunnel ingress has only `api.<domain>` mapped to `http://portfolio-api.portfolio.svc:3001`
-  (release `portfolio`), plus a catch-all 404.
-- Set `CORS_ORIGINS` to the public site origin.
+A **dedicated, remotely managed** tunnel (`portfolio-api`) serves only the API; the reference
+host's other tunnel is untouched. With `cf`:
+
+1. `cf tunnels create --body '{"name":"portfolio-api","config_src":"cloudflare"}'`
+2. Ingress rules (`cf tunnels config update <id> --body …`), in order:
+   - `hostname: api.<domain>`, `path: ^/api/v1/` → `http://portfolio-api.portfolio.svc.cluster.local:3001`
+   - catch-all → `http_status:404`
+
+   So the tunnel can reach nothing but the API Service, and only for `/api/v1/*`.
+
+3. `cf tunnels token get <id>` into the `portfolio-tunnel` Secret (section 3), without printing it.
+4. Chart: `cloudflared.enabled: true` (image pinned by digest). The Deployment has no Service and
+   no ingress; its NetworkPolicy allows egress only to the API and to public addresses on 7844
+   (tunnel, TCP/UDP) and 443. Private, tailnet, link-local, and loopback ranges are excluded.
+5. Once the tunnel reports **healthy**, add a proxied DNS `CNAME api.<domain> → <id>.cfargotunnel.com`.
+
+The API's NetworkPolicy admits only `cloudflared`, so every request carries Cloudflare's
+`CF-Connecting-IP`; production sets `api.trustCloudflareClientIp: true` for chat quotas. The chart
+refuses that setting unless `cloudflared.enabled` and `networkPolicy.enabled` are both true.
+`CORS_ORIGINS` comes from the `portfolio-api-public` ConfigMap (`api.envConfigMap`).
+
+**Verify:** `https://api.<domain>/api/v1/health` returns 200; `/`, `/metrics`, and any non-API path
+on that host return 404; no public hostname reaches Argo CD.
+
+**Rollback:** delete the DNS record (the API is offline at once), then set
+`cloudflared.enabled: false`, or delete the tunnel.
 
 ## Rollback
 
