@@ -64,6 +64,18 @@ const apiEnvironmentSchema = z
         message: 'required when AI_ENABLED=true',
       });
     }
+    if (environment.AI_PROVIDER === 'openai-compatible') {
+      const baseUrl = environment.AI_BASE_URL;
+      if (baseUrl === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['AI_BASE_URL'],
+          message: 'required when AI_PROVIDER=openai-compatible',
+        });
+      } else if (!/^https?:$/.test(new URL(baseUrl).protocol)) {
+        context.addIssue({ code: 'custom', path: ['AI_BASE_URL'], message: 'must be http(s)' });
+      }
+    }
   });
 
 export function loadApiConfig(

@@ -7,11 +7,15 @@ The single checklist for this project. Start here when you pick the work back up
 _Last updated: 2026-11-13_
 
 **Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-Repository-only Phase 3 work can continue; the K3s install (P3-03) is unblocked and waits only for
-approval.
+All remaining Phase 3 tasks need approval (🔒), so repository-only work continues in Phase 5; the
+K3s install (P3-03) is unblocked and waits only for approval.
 
 **Recently done**
 
+- P5-01: `openai-compatible` adapter (`fetch`, 30 s timeout combined with the caller's abort,
+  `max_tokens` on every call, no redirects, capped reply size). Failures become typed
+  `ai_unavailable` / `ai_overloaded` errors without upstream text. Not yet reachable: no chat
+  endpoint exists until P5-02.
 - P1-02: host firewall reviewed (no conflicting rules); K3s ports get a dedicated nftables guard
   ([deployment guide](deployment/kubernetes.md#k3s-port-guard-allow-list)).
 - P3-07: secrets go in Git as Sealed Secrets
@@ -28,13 +32,15 @@ approval.
 
 **Next up, in order**
 
-1. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
+1. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
+2. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
    GitHub package and workflow permissions.
-2. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
-3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+3. **P3-03:** 🔒 install the K3s port guard, then K3s; needs approval and a maintenance window.
+4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** none. #7 to #9 are merged. #9 merged into #8's branch, not `main`, so its
-changes reached `main` through a follow-up PR. Retarget stacked PRs to `main` before merging them.
+**Open pull requests:** #10 (lands P1-02 on `main`), then #11 (P5-01). Both target `main`; #11
+contains #10's commits, so merge #10 first. #9 had merged into #8's branch instead of `main`, so
+retarget stacked PRs to `main` before merging them.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -145,10 +151,12 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
       loads and shows "unavailable".
 
-## Phase 5: AI Chatbot (0/6)
+## Phase 5: AI Chatbot (1/6)
 
-- [ ] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
-      contract tests pass against a fake server.
+- [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
+      contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
+      abort, 429/503 → overloaded, other errors, malformed and oversized replies, and redirects.
+      `AI_BASE_URL` (http/https) is required for this provider. No API-key support yet.
 - [ ] **P5-02** Redis sessions with secure cookies and a per-session lock. _Needs:_ P2-06. _Done
       when:_ concurrent requests in one session yield one 409; sessions isolated.
 - [ ] **P5-03** Quotas, global concurrency semaphore, bounded queue. _Needs:_ P5-01. _Done when:_
