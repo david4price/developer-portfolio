@@ -61,11 +61,24 @@ The public surface is a static site and a small REST API. The main risks:
 - No `dangerouslySetInnerHTML` on API or model output. Model output is rendered as text or a
   sanitized markdown subset.
 
-## Sessions (Proposed, Phase 5)
+## Sessions (Confirmed, P5-02)
 
-- Session IDs: 256-bit random values from a CSPRNG, kept server-side in Redis with a TTL.
-- Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/api/v1/chat`.
-- No user accounts and no personal data. Conversation TTL is 24 hours.
+- Session IDs: 256-bit random values from a CSPRNG (`randomBytes(32)`, base64url), kept
+  server-side in Redis under `portfolio:chat:session:<id>` with a 24-hour TTL. Only the cookie
+  carries the ID; response bodies never do.
+- Cookie: `portfolio_chat`, `HttpOnly; Secure; SameSite=Lax; Path=/api/v1/chat; Max-Age=86400`, no
+  `Domain` (host-only). The API accepts only a value of exactly the shape it issues.
+- Per-session lock: `SET portfolio:chat:lock:<id> <token> NX PX` for the AI timeout plus 15 s; a
+  second message while one is in flight gets `409 chat_busy`. Release is compare-and-delete, so a
+  holder whose lock expired can't free a newer one. Unknown IDs are rejected before any lock key
+  is written.
+- Writing history uses `KEEPTTL XX`: it never extends a session's life or recreates an expired
+  one.
+- No user accounts and no personal data. Visitors can't choose the model, prompt, or provider: the
+  message body is `{ "message": string }` (≤ 1,000 characters) and nothing else.
+- While `AI_ENABLED=false`, no sessions are issued (`503 ai_disabled`). **Don't enable chat
+  publicly before P5-03 (quotas) and P5-04 (Turnstile)**: until then nothing limits how many
+  sessions one client creates.
 
 ## Infrastructure Explorer (Proposed, Phase 6)
 

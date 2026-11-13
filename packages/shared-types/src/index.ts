@@ -58,6 +58,8 @@ export type ApiErrorCode =
   | 'ai_disabled'
   | 'ai_unavailable'
   | 'ai_overloaded'
+  | 'chat_session_required'
+  | 'chat_busy'
   | 'internal_error';
 
 export interface ApiErrorResponse {
@@ -66,4 +68,25 @@ export interface ApiErrorResponse {
     readonly message: string;
     readonly requestId: string | null;
   };
+}
+
+/** Longest visitor message `POST /api/v1/chat/messages` accepts, in characters. */
+export const CHAT_MESSAGE_MAX_LENGTH = 1_000;
+
+/**
+ * `POST /api/v1/chat/sessions`. The session ID travels only in an `HttpOnly` cookie scoped to
+ * `/api/v1/chat`; the body never contains it.
+ */
+export interface ChatSessionResponse {
+  /** ISO 8601 time after which the session and its history are gone. */
+  readonly expiresAt: string;
+}
+
+export interface ChatMessageRequest {
+  readonly message: string;
+}
+
+export interface ChatMessageResponse {
+  /** Plain text. Clients must render it as text, never as HTML. */
+  readonly reply: string;
 }

@@ -12,6 +12,9 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Recently done**
 
+- P5-02: chat sessions (`POST /api/v1/chat/sessions`, `/messages`) with a 256-bit `HttpOnly` cookie,
+  Redis state with a 24-hour TTL, and a per-session lock (`409 chat_busy`). Off while
+  `AI_ENABLED=false`.
 - P4-02: hash-based CSP and security headers live on the custom domain; zone hardened (HTTPS
   redirect, TLS 1.2 minimum, no edge script injection). Settings in the
   [Pages guide](deployment/cloudflare-pages.md#zone-settings).
@@ -50,10 +53,12 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
-2. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+1. **P5-03:** per-session and per-IP quotas, a Redis-backed global concurrency semaphore, and a
+   bounded wait queue (repository-only).
+2. **P4-03:** 🔒 Cloudflare tunnel for `api.<domain>` (needs approval).
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #18 (P4-02 record). Open every PR against `main`: #9 once merged
+**Open pull requests:** #19 (P5-02 chat sessions). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -182,14 +187,17 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
       loads and shows "unavailable".
 
-## Phase 5: AI Chatbot (1/6)
+## Phase 5: AI Chatbot (2/6)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
       abort, 429/503 → overloaded, other errors, malformed and oversized replies, and redirects.
       `AI_BASE_URL` (http/https) is required for this provider. No API-key support yet.
-- [ ] **P5-02** Redis sessions with secure cookies and a per-session lock. _Needs:_ P2-06. _Done
-      when:_ concurrent requests in one session yield one 409; sessions isolated.
+- [x] **P5-02** Redis sessions with secure cookies and a per-session lock. _Needs:_ P2-06. _Done
+      when:_ concurrent requests in one session yield one 409; sessions isolated. Done 2026-11-13:
+      unit tests (concurrent message → one `409 chat_busy`, a busy session doesn't block another,
+      no cross-session history) and Redis integration tests (one lock winner of 20, owner-only
+      release, no TTL extension or resurrection). Chat stays off publicly until P5-03 and P5-04.
 - [ ] **P5-03** Quotas, global concurrency semaphore, bounded queue. _Needs:_ P5-01. _Done when:_
       load test shows 429/503 instead of timeouts.
 - [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
