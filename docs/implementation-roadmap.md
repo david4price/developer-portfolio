@@ -47,12 +47,11 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **Custom domain** for the site (🔒 DNS change, needs the owner's go-ahead), then **P4-02**
-   (`_headers` with CSP and HSTS).
+1. **P4-02:** merge #16, turn on Always Use HTTPS for the zone, then scan the deployed site.
 2. **P5-02:** Redis chat sessions with secure cookies and a per-session lock (repository-only).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #15 (P4-01 Cloudflare Pages). Open every PR against `main`: #9 once merged
+**Open pull requests:** #15 (P4-01), then #16 (P4-02, contains #15's commit; merge #15 first). Open every PR against `main`: #9 once merged
 into an already-merged base branch and never reached `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -170,7 +169,9 @@ Read-only inventory of the reference host. Findings:
       first preview was this PR (#15). Custom domain: see
       [Cloudflare Pages](deployment/cloudflare-pages.md#custom-domain).
 - [ ] **P4-02** `_headers` with CSP (hash-based scripts) and HSTS. _Needs:_ P4-01. _Done when:_
-      security-header scan passes; no CSP errors in the console.
+      security-header scan passes; no CSP errors in the console. In review (#16): generated
+      `_headers` with a hash-based CSP; headless Chromium showed no CSP violations on any page or
+      client-side navigation. Tick after the scan of the deployed site.
 - [ ] **P4-03** 🔒 Dedicated tunnel with in-cluster cloudflared, API-only ingress. _Needs:_ P3-04,
       P1-03. _Done when:_ only `/api/v1/*` reachable publicly; Argo CD unreachable.
 - [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site

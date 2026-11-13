@@ -44,12 +44,20 @@ Build variables (plain text, not secrets):
   production API. Production points at the API hostname that the tunnel serves from P4-03; until
   then its badge honestly says "unavailable".
 
+## Security Headers
+
+`pnpm build` writes `apps/web/out/_headers` (see
+[security](../architecture/security.md#frontend-confirmed-p4-02)). Pages applies it on deploy;
+nothing is configured in the dashboard. Check a deployment with
+`curl -sI https://<deployment>/ | grep -i -E 'content-security|strict-transport'`.
+
 ## Custom Domain
 
 Attach the apex domain to the project (dashboard: the project → **Custom domains**, or
 `cf pages projects domains create <project> --name <domain>`). Pages then needs a proxied `CNAME`
 from the apex to `<project>.pages.dev` in the zone; the dashboard creates it, the API does not.
-Check that the domain's status becomes `active` and that `https://<domain>/` serves the site.
+Check that the domain's status becomes `active` and that `https://<domain>/` serves the site. Turn on
+**Always Use HTTPS** for the zone (SSL/TLS → Edge Certificates) so plain-HTTP requests redirect.
 
 ## Rollback
 
