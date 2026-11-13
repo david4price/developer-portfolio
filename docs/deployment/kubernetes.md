@@ -111,20 +111,47 @@ WantedBy=multi-user.target
 
 ## 3. Secrets
 
-Create secrets out of band; they never go in Git:
+The reference deployment keeps every Secret in Git as a **SealedSecret** (ADR 0001, P3-08). The
+Sealed Secrets controller runs in `kube-system`, installed by the Argo CD Application
+`infrastructure/argocd/sealed-secrets.yaml` (chart 2.22.0, image pinned by digest, automatic key
+renewal off) under the `platform` AppProject. The `portfolio` Application syncs
+`infrastructure/environments/production/secrets/` as a second source, at sync wave −1.
+
+| SealedSecret         | Keys           | Used by                                        |
+| -------------------- | -------------- | ---------------------------------------------- |
+| `portfolio-postgres` | `password`     | PostgreSQL and the API (`DATABASE_URL`)        |
+| `portfolio-tunnel`   | `token`        | cloudflared (`TUNNEL_TOKEN`)                   |
+| `portfolio-api-env`  | `CORS_ORIGINS` | API environment (`api.envSecret`); real domain |
+
+**Seal a new or changed value** offline with the committed certificate; the plaintext goes through
+a pipe only, never a file in the repository:
 
 ```bash
-kubectl create namespace portfolio
-# URL-safe characters only: the chart embeds the password in DATABASE_URL.
-kubectl -n portfolio create secret generic portfolio-postgres --from-literal=password='<password>'
-# Tunnel token (P4-03): pipe it from the API into a 0600 temp file, never echo it
-kubectl -n portfolio create secret generic portfolio-tunnel --from-file=token=<token-file>
-# Settings that must not be in Git (the real domain): keys become API environment variables
-kubectl -n portfolio create configmap portfolio-api-public --from-literal=CORS_ORIGINS=https://<domain>
+kubectl create secret generic <name> -n portfolio --from-literal=<key>='<value>' \
+  --dry-run=client -o yaml \
+  | kubeseal --cert infrastructure/environments/production/sealed-secrets.pem -o yaml \
+  > infrastructure/environments/production/secrets/<name>.sealedsecret.yaml
 ```
 
-The chart reads `portfolio-postgres` (key `password`) for both PostgreSQL and the API; override
-the name with `postgres.auth.existingSecret`. It never creates or renders a Secret.
+Add `metadata.annotations."argocd.argoproj.io/sync-wave": "-1"` and commit. The source values
+belong in the owner's password manager: they can't be read back from Git.
+
+**Adopting a hand-made Secret:** the controller won't overwrite a Secret it didn't create. Annotate
+it with `sealedsecrets.bitnami.com/managed=true` before the matching SealedSecret is synced.
+
+**Key backup and restore.** The controller's key pair was exported once (2026-11-13) to a `0600`
+file on the reference host, outside the cluster's data directory and both repositories. The path
+is in the private register (P1-04: local backups for now). To rebuild:
+
+1. Apply the backed-up key Secret to `kube-system` **before** the controller starts (strip
+   `resourceVersion`, `uid`, and other cluster-specific metadata).
+2. Sync the `sealed-secrets` Application, then the `portfolio` Application.
+
+Drilled on 2026-11-13: in a throwaway K3s (in Docker), the restored key unsealed a test
+SealedSecret sealed with the committed certificate to its exact original value.
+
+**Without the owner's key** (forks, local clusters): create the same named Secrets with
+`kubectl create secret …`; the chart only references them by name and never renders a Secret.
 
 ## Chart Validation (no cluster needed)
 

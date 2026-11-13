@@ -1,6 +1,6 @@
 # Least-privilege project: one repository, one namespace, no cluster-scoped resources, and only
-# the kinds the chart renders. Secrets are deliberately absent: they're created out of band (later
-# as SealedSecrets, P3-08, which must be added here when introduced).
+# the kinds the chart renders. Plain Secrets are deliberately absent: they arrive as SealedSecrets
+# (ADR 0001) and the controller creates the Secrets.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -27,3 +27,5 @@ spec:
       kind: Job
     - group: networking.k8s.io
       kind: NetworkPolicy
+    - group: bitnami.com
+      kind: SealedSecret

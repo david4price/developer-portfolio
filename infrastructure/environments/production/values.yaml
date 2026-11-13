@@ -2,9 +2,10 @@
 # The api and worker image digests live in images.yaml, which the release workflow rewrites on
 # every release from main. Don't edit images.yaml by hand.
 api:
-  # CORS_ORIGINS comes from the out-of-band ConfigMap below, so the domain stays out of Git.
+  # CORS_ORIGINS comes from the sealed Secret below (secrets/portfolio-api-env.sealedsecret.yaml),
+  # so the domain stays out of plain Git.
   corsOrigins: ''
-  envConfigMap: portfolio-api-public
+  envSecret: portfolio-api-env
   # Every request arrives through the tunnel (only cloudflared may reach the API).
   trustCloudflareClientIp: true
 postgres:
