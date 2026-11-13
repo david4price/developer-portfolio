@@ -14,22 +14,81 @@ starts.
 
 ## 2. Install K3s (approval required)
 
+Install the port guard (below) first, then K3s:
+
 ```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
   --disable traefik \
   --disable servicelb \
   --write-kubeconfig-mode 0600 \
-  --bind-address <tailnet-or-loopback-address> \
   --tls-san <tailnet-hostname>" sh -
 ```
 
 - `--disable traefik --disable servicelb` keep K3s off host ports 80/443, which another reverse
-  proxy may already own.
+  proxy may already own. The chart creates only ClusterIP Services, so nothing gets a NodePort.
+- The API server stays on all interfaces instead of `--bind-address <tailnet-address>`: pods reach
+  it through the node address, and binding it to the tailnet would make the cluster depend on
+  Tailscale being up. The port guard limits who can connect instead.
 - Default CIDRs (`10.42.0.0/16` pods, `10.43.0.0/16` services) must not overlap Docker, LAN, or VPN
   ranges.
 - **Validate:** `kubectl get nodes` is Ready, `kubectl top nodes` works (metrics-server), and every
   pre-existing service still responds.
 - **Rollback:** `/usr/local/bin/k3s-uninstall.sh`, then re-check the existing services.
+
+### K3s port guard (allow-list)
+
+**Proposed.** K3s listens on all interfaces: `6443/tcp` (Kubernetes API), `10250/tcp` (kubelet),
+and `8472/udp` (flannel VXLAN, unused on one node). A host without its own firewall exposes them to
+the whole LAN. The guard below allows them only from loopback, the tailnet, and pods (`cni0`), and
+leaves every other port and existing rule alone.
+
+Why not enable ufw or the distribution's `nftables.service`: a default-deny ufw would also cut off
+every other LAN service on the host unless each one is allowed (and Docker-published ports bypass
+ufw anyway), and the stock `/etc/nftables.conf` usually starts with `flush ruleset`, which deletes
+Docker's and Tailscale's rules. A separate table is a smaller change with a one-line rollback.
+
+`/etc/k3s-guard.nft`:
+
+```text
+table inet k3s_guard {}
+delete table inet k3s_guard
+
+table inet k3s_guard {
+  chain input {
+    type filter hook input priority filter - 1; policy accept;
+    iifname { "lo", "tailscale0", "cni0" } accept
+    tcp dport { 6443, 10250 } drop
+    udp dport 8472 drop
+  }
+}
+```
+
+The first two lines make the file safe to load repeatedly. Only the `input` hook is used, so traffic
+Docker forwards to containers is untouched. Load it at boot, before K3s, with
+`/etc/systemd/system/k3s-guard.service`:
+
+```ini
+[Unit]
+Description=Restrict K3s ports to loopback, tailnet, and pods
+Before=k3s.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/k3s-guard.nft
+ExecStop=/usr/sbin/nft delete table inet k3s_guard
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- **Apply:** `sudo nft -c -f /etc/k3s-guard.nft` (dry run), then
+  `sudo systemctl enable --now k3s-guard`.
+- **Validate:** `sudo nft list table inet k3s_guard`; `nc -vz <lan-address> 6443` from another
+  LAN machine times out; `kubectl get nodes` works over the tailnet; `kubectl top nodes` and
+  `kubectl logs` still work; every pre-existing service still responds.
+- **Rollback:** `sudo systemctl disable --now k3s-guard` (its stop command deletes the table).
 
 ## 3. Secrets
 
