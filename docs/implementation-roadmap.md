@@ -6,12 +6,14 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-13_
 
-**Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
-Argo CD deploys every digest pin on `main` to K3s automatically. Phase 3 has only the 🔒 tasks
-that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P4-01).
+**Current phase:** 5 (AI chatbot). Phase 4 (public edge) is complete: the static site and the API
+are public, hardened, and proven to degrade gracefully. Phase 3 has three 🔒 tasks left (P3-05
+backups, P3-06 HPA, P3-08 Sealed Secrets), and Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P4-04: offline drill. With the whole cluster stopped, the site kept serving and said "API
+  unavailable"; everything recovered on its own with data intact. Phase 4 complete.
 - P4-03: the API is public at `api.<domain>/api/v1/*` only, through a dedicated tunnel with
   in-cluster `cloudflared`; everything else on that host is a 404, and Argo CD has no public
   hostname. Chat quotas use the real client IP from Cloudflare.
@@ -58,13 +60,11 @@ that depend on later work left (P3-05, P3-06, P3-08); next is the public edge (P
 
 **Next up, in order**
 
-1. **P4-04:** 🔒 offline drill: stop the cluster and confirm the site loads and shows
-   "unavailable" (needs a short API outage window).
-2. **P5-05:** registry-grounded retrieval and validated navigation links (repository-only).
-3. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
-4. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+1. **P5-05:** registry-grounded retrieval and validated navigation links (repository-only).
+2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
-**Open pull requests:** #22 (P4-03 record). Open every PR against `main`.
+**Open pull requests:** #23 (P4-04 drill record). Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -173,7 +173,7 @@ Read-only inventory of the reference host. Findings:
       automatic key renewal off; `sealed-secrets.pem` committed; key backup restored once into a
       throwaway cluster and a test `SealedSecret` unseals there.
 
-## Phase 4: Public Edge (3/4)
+## Phase 4: Public Edge (4/4)
 
 - [x] **P4-01** 🔒 Cloudflare Pages deployment of `apps/web/out`. _Needs:_ P1-03. _Done when:_
       site live; PR previews build without secrets. Live on `pages.dev` 2026-11-13 via Git
@@ -193,8 +193,11 @@ Read-only inventory of the reference host. Findings:
       `/api/v1/health`, `/health/ready`, and `/projects` answer 200 while `/`, `/metrics`, `/api`,
       `/api/v2/*`, `/.env`, and an Argo-style path get the tunnel's 404; CORS admits only the site
       origin; the zone has no hostname for Argo CD. The live site's badge shows "API online".
-- [ ] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
-      loads and shows "unavailable".
+- [x] **P4-04** 🔒 Offline drill. _Needs:_ P4-03. _Done when:_ with the cluster stopped, the site
+      loads and shows "unavailable". Done 2026-11-13: `k3s-killall.sh` for about 3 minutes; the
+      site served 200 throughout with "API unavailable — the site still works", and everything
+      recovered on its own with data intact
+      ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
 ## Phase 5: AI Chatbot (3/6)
 
