@@ -1,0 +1,9 @@
+# Keep every default rule; allow only SealedSecret ciphertext (ADR 0001). Those files are
+# encrypted with the Sealed Secrets controller's public key and are safe to publish, but their
+# encryptedData values look like API keys to the generic rules.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "SealedSecret ciphertext (ADR 0001)"
+paths = ['''^infrastructure/environments/[^/]+/secrets/[^/]+\.sealedsecret\.yaml$''']
