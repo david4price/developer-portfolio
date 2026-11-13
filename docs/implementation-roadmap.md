@@ -6,10 +6,13 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-12_
 
-**Current phase:** 2 (Foundation) is almost done. Phase 3 is waiting on owner input.
+**Current phase:** 3 (Kubernetes and GitOps). Phase 2 lacks only the owner's content (P2-12).
+Repository-only Phase 3 work can continue; installing K3s waits on the firewall rules (P1-02).
 
 **Recently done**
 
+- P3-01: Helm chart (api, worker, PostgreSQL, Redis, migrate Job, default-deny NetworkPolicies),
+  checked by `pnpm helm:check` locally and in CI.
 - P2-15: `GET /api/v1/projects` is keyset-paginated (`limit` ≤ 50, `nextCursor`) and selects
   summary columns only.
 - P1-03: domain is an active Cloudflare zone; no hostname collisions with the existing tunnel.
@@ -20,8 +23,9 @@ _Last updated: 2026-11-12_
 
 **Next up, in order**
 
-1. **P3-01:** Helm chart (no cluster needed; validated with `helm lint` / `helm template` in CI).
-2. **P3-07:** secrets management ADR (SOPS vs Sealed Secrets); feeds the chart's secret handling.
+1. **P3-07:** secrets management ADR (SOPS vs Sealed Secrets); feeds the chart's secret handling.
+2. **P3-02:** 🔒 release workflow (GHCR push by digest, production values); needs approval for
+   GitHub package and workflow permissions.
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
 
 **Waiting on the owner** (these unblock Phase 3; the domain for Phase 4 is ready)
@@ -92,9 +96,12 @@ Read-only inventory of the reference host. Findings:
       validated by zod; contract updated in `shared-types`; tests cover paging. Keyset cursor on
       (featured, title, slug); no index added, since the table holds only a few rows.
 
-## Phase 3: Kubernetes and GitOps (0/7)
+## Phase 3: Kubernetes and GitOps (1/7)
 
-- [ ] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_ Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values.
+- [x] **P3-01** Helm chart: api, worker, redis, postgres, NetworkPolicies, probes. _Needs:_
+      Phase 2. _Done when:_ `helm lint` and `helm template` pass in CI; no secrets in values. CI
+      job `helm` runs `pnpm helm:check` (also kubeconform and guardrail tests). Worker liveness
+      waits for a heartbeat; NetworkPolicy enforcement is verified after P3-03.
 - [ ] **P3-02** 🔒 Release workflow: GHCR push by digest, values commit. _Needs:_ P2-11. _Done
       when:_ digest-pinned values committed only from `main`. Changes GitHub settings.
 - [ ] **P3-03** 🔒 Install K3s with Traefik and ServiceLB disabled. _Needs:_ P1-02. _Done when:_

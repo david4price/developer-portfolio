@@ -17,6 +17,7 @@
     "db:migrate": "tsc -b --pretty false && pnpm --filter @portfolio/api db:migrate",
     "db:seed": "tsc -b --pretty false && pnpm --filter @portfolio/api db:seed",
     "format": "prettier --write .",
+    "helm:check": "bash infrastructure/helm/check-chart.sh",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",
     "test": "tsc -b --pretty false && pnpm -r --if-present test",

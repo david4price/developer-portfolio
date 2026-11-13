@@ -6,3 +6,5 @@ pnpm-lock.yaml
 **/next-env.d.ts
 apps/api/drizzle/meta/
 coverage/
+# Helm templates are Go templates, not plain YAML.
+infrastructure/helm/portfolio/templates/

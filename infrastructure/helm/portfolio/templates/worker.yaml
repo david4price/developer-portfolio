@@ -1,0 +1,63 @@
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "worker" }}
+{{- with .Values.worker }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-worker
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  replicas: {{ .replicaCount }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "portfolio.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "portfolio.componentLabels" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # The worker serves no traffic, so it has no readiness probe. A liveness probe waits for a
+      # worker heartbeat (see docs/architecture/kubernetes.md); until then a crash restarts the pod.
+      terminationGracePeriodSeconds: {{ .terminationGracePeriodSeconds }}
+      securityContext:
+        {{- include "portfolio.podSecurityContext" (include "portfolio.nodeUid" $) | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "portfolio.image" .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: LOG_LEVEL
+              value: {{ .logLevel | quote }}
+            - name: REDIS_URL
+              value: {{ include "portfolio.redisUrl" $ | quote }}
+            - name: WORKER_CONCURRENCY
+              value: {{ .concurrency | quote }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+{{- end }}

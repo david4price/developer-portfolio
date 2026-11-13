@@ -5,7 +5,8 @@ description: Write or review this project's container images, Docker Compose fil
 
 # Docker and Kubernetes
 
-Status: Docker/Compose are implemented; Kubernetes is **Proposed** (Phase 3). Read
+Status: Docker/Compose are implemented; the Helm chart exists (P3-01) but nothing is deployed
+yet (Phase 3). Read
 `docs/architecture/kubernetes.md` and `docs/deployment/kubernetes.md` first.
 
 ## Images (`infrastructure/docker/`)
@@ -45,11 +46,15 @@ Status: Docker/Compose are implemented; Kubernetes is **Proposed** (Phase 3). Re
 ## Validation
 
 ```bash
-helm lint infrastructure/helm/portfolio
-helm template portfolio infrastructure/helm/portfolio -f infrastructure/environments/production/values.yaml | kubeconform -strict -summary
+pnpm helm:check   # infrastructure/helm/check-chart.sh
 ```
 
-(Install `helm`/`kubeconform` only with approval; CI should run these once charts exist.)
+It lints the chart, renders every `ci/*-values.yaml` through `kubeconform -strict`, rejects
+rendered Secrets, and asserts the guardrails fail with their messages (missing image reference,
+malformed digest, AI without a model, missing Secret name). Add a `ci/*-values.yaml` fixture for
+new options and an `expect_failure` case for new `required`/`fail` guards. CI's `helm` job runs
+the same script with pinned tools. Install `helm`/`kubeconform` locally only with approval
+(a checksum-verified download into a temporary directory is enough).
 
 ## K3s on the Reference Host
 

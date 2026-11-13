@@ -1,0 +1,111 @@
+# Safe defaults for the portfolio chart. No secrets belong here: credentials come from Secrets
+# created out of band and referenced by name (`existingSecret`).
+#
+# Image references: set `digest` (preferred, `sha256:…`) or `tag`. Environment values files under
+# `infrastructure/environments/*` pin digests; rendering fails if an image has neither.
+#
+# Resource numbers are small placeholders until Phase 7 load tests measure real usage.
+
+nameOverride: ''
+fullnameOverride: ''
+
+imagePullPolicy: IfNotPresent
+imagePullSecrets: []
+
+api:
+  image:
+    repository: ghcr.io/example/portfolio-api
+    tag: ''
+    digest: ''
+  replicaCount: 1
+  port: 3001
+  logLevel: log
+  # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com.
+  corsOrigins: ''
+  ai:
+    enabled: false
+    provider: ''
+    model: ''
+    baseUrl: ''
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+worker:
+  image:
+    repository: ghcr.io/example/portfolio-worker
+    tag: ''
+    digest: ''
+  replicaCount: 1
+  logLevel: log
+  concurrency: 1
+  # Time for the worker to finish its active job after SIGTERM.
+  terminationGracePeriodSeconds: 60
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      memory: 192Mi
+
+# One-shot `migrate` then `seed` using the API image. Runs as an Argo CD Sync hook after
+# PostgreSQL (wave 0) and before the API and worker (wave 2).
+migrations:
+  enabled: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      memory: 192Mi
+
+postgres:
+  image:
+    repository: docker.io/library/postgres
+    tag: 17-alpine
+    digest: ''
+  database: portfolio
+  user: portfolio
+  auth:
+    # Secret created out of band, e.g.
+    #   kubectl -n portfolio create secret generic portfolio-postgres --from-literal=password=…
+    # Use URL-safe characters only: the password is embedded in DATABASE_URL.
+    existingSecret: portfolio-postgres
+    passwordKey: password
+  storage:
+    size: 2Gi
+    # Empty uses the cluster default (K3s: local-path).
+    storageClassName: ''
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+redis:
+  image:
+    repository: docker.io/library/redis
+    tag: 7-alpine
+    digest: ''
+  storage:
+    size: 1Gi
+    storageClassName: ''
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+networkPolicy:
+  # Default-deny for every pod in the namespace plus the explicit allows in
+  # docs/architecture/networking.md.
+  enabled: true
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns

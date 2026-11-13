@@ -1,0 +1,7 @@
+apiVersion: v2
+name: portfolio
+description: Portfolio API, worker, PostgreSQL, and Redis for a single-node K3s cluster.
+type: application
+version: 0.1.0
+appVersion: '0.0.0'
+kubeVersion: '>=1.30.0-0'
