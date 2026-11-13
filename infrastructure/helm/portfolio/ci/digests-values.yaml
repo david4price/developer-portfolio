@@ -4,6 +4,8 @@ api:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   corsOrigins: https://portfolio.example.com
   trustCloudflareClientIp: true
+  autoscaling:
+    enabled: true
 worker:
   image:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

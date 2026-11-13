@@ -202,6 +202,14 @@ kubectl -n argocd get application portfolio   # Synced / Healthy
   workloads running (no resources finalizer). Remove Argo CD with
   `kubectl delete -k infrastructure/argocd/install`.
 
+### API autoscaling (P3-06)
+
+`api.autoscaling.enabled` renders a CPU-based HorizontalPodAutoscaler (production: 1–3 replicas
+at 70% of the CPU request; scale up by one pod per 30 s, down by one per 60 s after a 5-minute
+calm). While it's on, the Deployment omits `replicas`, so the HPA alone sets the count, and the
+Application additionally ignores `/spec/replicas` on `portfolio-api` (`RespectIgnoreDifferences`).
+Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server ships with K3s.
+
 ## 5. Release Flow
 
 1. Merge to `main`. CI passes.

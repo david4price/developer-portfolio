@@ -18,6 +18,12 @@ api:
     tag: ''
     digest: ''
   replicaCount: 1
+  # CPU-based HorizontalPodAutoscaler (P3-06). When enabled, replicaCount is ignored.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
   port: 3001
   logLevel: log
   # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com. Leave
