@@ -91,5 +91,6 @@ docs/                    Architecture, deployment, operations
 ## Related Documents
 
 [Networking](networking.md) · [Kubernetes](kubernetes.md) · [AI integration](ai-integration.md) ·
-[Security](security.md) · [Validation register](validation-register.md) ·
+[Security](security.md) · [Infrastructure Explorer](infrastructure-explorer.md) ·
+[Validation register](validation-register.md) ·
 [Roadmap](../implementation-roadmap.md)

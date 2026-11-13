@@ -192,6 +192,9 @@ Read-only inventory of the reference host. Findings:
       scoped to one Application.
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
+      Design: animated infrastructure map in a flux-capacitor-inspired style
+      ([visual design](architecture/infrastructure-explorer.md)). A prototype with fake data can come
+      first.
 
 ## Phase 7: Hardening (0/5)
 
