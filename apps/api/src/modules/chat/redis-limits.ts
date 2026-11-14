@@ -22,27 +22,20 @@ async function withRedis<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /*
- * KEYS[1] counts hits (a plain string, as before); KEYS[2] (`<key>:w`) names the window with an ID
- * and expires with it. Keeping the counter's type means counters written by an older replica keep
- * working during a rollout; a window without an ID gets one on its next hit.
+ * A window's ID is its counter's absolute expiry (PEXPIRETIME, Redis 7+): set once when the window
+ * starts, never changed by INCR or DECR, and gone with the window. No second key can be evicted or
+ * land in another cluster slot, and counters written by an older replica already have one.
  */
 
-/**
- * ARGV: windowSeconds, new window ID. INCR, start the window on the first hit, and report the
- * count, the remaining TTL, and the window's ID atomically.
- */
+/** ARGV: windowSeconds. INCR, start the window on the first hit; report count, TTL, window ID. */
 const HIT = `local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 local ttl = redis.call('TTL', KEYS[1])
 if ttl < 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]); ttl = tonumber(ARGV[1]) end
-local pttl = math.max(1, redis.call('PTTL', KEYS[1]))
-if count == 1 then redis.call('SET', KEYS[2], ARGV[2], 'PX', pttl) end
-local window = redis.call('GET', KEYS[2])
-if not window then window = ARGV[2]; redis.call('SET', KEYS[2], window, 'PX', pttl) end
-return {count, ttl, window}`;
+return {count, ttl, redis.call('PEXPIRETIME', KEYS[1])}`;
 
 /** ARGV: window ID. DECR (keeping the TTL) only while that same window is current and not empty. */
-const REFUND = `if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end
+const REFUND = `if tostring(redis.call('PEXPIRETIME', KEYS[1])) ~= ARGV[1] then return 0 end
 local count = tonumber(redis.call('GET', KEYS[1]))
 if count and count > 0 then return redis.call('DECR', KEYS[1]) end
 return 0`;
@@ -51,16 +44,18 @@ export class RedisRateLimiter implements RateLimiter {
   constructor(private readonly redis: Redis) {}
 
   async hit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
-    const counter = RATE_PREFIX + key;
-    const [count, ttl, window] = (await withRedis(() =>
-      this.redis.eval(HIT, 2, counter, `${counter}:w`, windowSeconds, randomUUID()),
-    )) as [number, number, string];
-    return { allowed: count <= limit, retryAfterSeconds: Math.max(1, ttl), window };
+    const [count, ttl, expiresAt] = (await withRedis(() =>
+      this.redis.eval(HIT, 1, RATE_PREFIX + key, windowSeconds),
+    )) as [number, number, number];
+    return {
+      allowed: count <= limit,
+      retryAfterSeconds: Math.max(1, ttl),
+      window: String(expiresAt),
+    };
   }
 
   async refund(key: string, window: string): Promise<void> {
-    const counter = RATE_PREFIX + key;
-    await withRedis(() => this.redis.eval(REFUND, 2, counter, `${counter}:w`, window));
+    await withRedis(() => this.redis.eval(REFUND, 1, RATE_PREFIX + key, window));
   }
 }
 
