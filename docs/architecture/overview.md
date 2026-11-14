@@ -70,8 +70,8 @@ GitHub -> Actions (lint, test, build, scan) -> GHCR (images by digest)
 layout. A small vector artwork button opens a native dialog above the page. Only the launcher
 loads initially; `next/dynamic` loads the chat client on first interaction. Closing and reopening
 preserve the conversation across internal navigation. Other mini-apps remain scoped to their
-own routes. The owner's three local dog SVGs show resting, open, and waiting states beside a
-comic-style speech bubble.
+own routes. Small lossless WebP derivatives of the owner's three local dog SVGs show resting,
+open, and waiting states beside a comic-style speech bubble; the originals remain available.
 
 ```text
 apps/web                 Next.js static site

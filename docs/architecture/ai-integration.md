@@ -99,9 +99,12 @@ comic-style speech bubble in a native top-layer dialog; the React chat client lo
 The dog remains visible inside the dialog: sitting while open and standing only during a message
 request, alongside a textual "Thinking…" status. Replies and errors return it to sitting; closing
 shows the lying-down launcher even if a request is still running. The three local SVG poses share
-a bottom-aligned frame. Only the resting pose loads initially; sitting and standing mount together
+a bottom-aligned frame. Display-sized lossless WebP derivatives serve the widget; the supplied
+SVG originals remain in the repository. Only the resting pose loads initially; sitting and standing mount together
 on the first activation and stay mounted so later pose changes reuse them.
 The dialog supports Escape, backdrop dismissal, focus containment/restoration, and mobile sizing.
+Successful session creation focuses the committed composer while the popup is active. In short
+viewports, the dog and bubble tail hide to leave the full dialog height for the controls.
 Conversation state persists across closing and internal navigation. Exchanges keep stable IDs as
 the 20-entry history window advances, so new replies remain additions to the accessible log.
 Closing during verification

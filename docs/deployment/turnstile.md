@@ -15,8 +15,11 @@ Compose build forwards both settings to the web image. Rebuild after changing ei
 The shared layout renders a resting dog launcher. The first click lazy-loads the chat into a
 comic-style speech bubble in a viewport-bounded native dialog in the browser's top layer. It has a close button, Escape and
 backdrop dismissal, native keyboard focus containment, and focus restoration to the launcher.
-The local artwork in `apps/web/public/` uses `dog-lying-down.svg` while closed, `dog-sitting.svg`
-while open, and `dog-standing.svg` while a message request is in flight. Replies and failures
+The original artwork in `apps/web/public/` is `dog-lying-down.svg` for the closed state,
+`dog-sitting.svg` for open, and `dog-standing.svg` for a message request in flight. The widget
+serves committed, display-sized lossless WebP derivatives to avoid loading the multi-megabyte SVGs.
+Regenerate them after editing the originals with `pnpm --filter @portfolio/web artwork:build`.
+Sharp is a development-only dependency for this command and artwork validation. Replies and failures
 return the dog to sitting, alongside a textual status for waiting and errors. The descriptive
 `/apps/portfolio-assistant/` route points visitors to the launcher instead of mounting another chat.
 
@@ -32,6 +35,8 @@ navigation. A missing/expired session returns to verification without automatica
 the visitor's message. Browser tokens and conversation text are never put in browser storage.
 Suggested project links use client-side navigation and close the popup to reveal the selected
 page; reopening the launcher returns to the same conversation.
+Successful session creation focuses the composer after it mounts, only while chat is open.
+Short viewports hide the dog and speech-bubble tail so the controls retain the full dialog height.
 
 Answers render as plain text. Only separately returned links that match this build's registry
 and canonical relative paths become anchors; their titles come from the registry too. The UI

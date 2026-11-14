@@ -18,6 +18,8 @@ Phase 2 lacks only the owner's content (P2-12).
   failures. Closing restores the lying pose; all three SVGs share a bottom-aligned frame.
   Review fixes defer the two active poses until first activation and keep exchange IDs stable
   as the 20-entry history advances, preserving new-reply announcements in the accessible log.
+  A further review adds small lossless WebP derivatives while preserving the original SVGs,
+  hides decorative artwork in short viewports, and focuses the composer after session creation.
   The chat client loads on the first click; closing and reopening
   preserves the conversation, and unused verification tokens are discarded on close. The
   dog uses the owner's three local SVG poses. Escape,

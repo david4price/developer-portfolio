@@ -282,15 +282,15 @@ main {
 }
 
 .chat-dog__pose--lying {
-  background-image: url('/dog-lying-down.svg');
+  background-image: url('/dog-lying-down.webp');
 }
 
 .chat-dog__pose--sitting {
-  background-image: url('/dog-sitting.svg');
+  background-image: url('/dog-sitting.webp');
 }
 
 .chat-dog__pose--standing {
-  background-image: url('/dog-standing.svg');
+  background-image: url('/dog-standing.webp');
 }
 
 .chat-dog[data-pose='lying'] .chat-dog__pose--lying,
@@ -361,6 +361,7 @@ main {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -401,4 +402,25 @@ main {
 .chat-popup__close:focus-visible {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Leave the full dialog height for controls when zoom or the keyboard reduces the viewport. */
+@media (max-height: 28rem) {
+  .chat-launcher {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .chat-popup[open] {
+    gap: 0;
+  }
+
+  .chat-popup__bubble {
+    margin-right: 0;
+  }
+
+  .chat-popup__dog,
+  .chat-popup__bubble::after {
+    display: none;
+  }
 }

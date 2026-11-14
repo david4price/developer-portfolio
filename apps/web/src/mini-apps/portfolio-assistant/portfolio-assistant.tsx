@@ -41,6 +41,9 @@ export function PortfolioChat({
   useEffect(() => {
     if (!active) setToken(null);
   }, [active]);
+  useEffect(() => {
+    if (active && phase === 'ready') input.current?.focus();
+  }, [active, phase]);
   const onToken = useCallback((value: string | null) => {
     setToken(value);
     if (value !== null) setVerificationFailed(false);
@@ -109,7 +112,6 @@ export function PortfolioChat({
       if (request.current === controller) request.current = null;
       if (!controller.signal.aborted) {
         setPhase(nextPhase);
-        input.current?.focus();
       }
     }
   }
@@ -140,7 +142,13 @@ export function PortfolioChat({
       />
       <p role="status" aria-live="polite">
         {notice ||
-          (phase === 'starting' ? 'Starting chat…' : phase === 'sending' ? 'Thinking…' : '')}
+          (phase === 'starting'
+            ? 'Starting chat…'
+            : phase === 'sending'
+              ? 'Thinking…'
+              : phase === 'ready'
+                ? 'Chat is ready. Ask a question below.'
+                : '')}
       </p>
       {phase === 'verify' && (
         <div>
