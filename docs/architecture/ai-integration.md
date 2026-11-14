@@ -116,10 +116,14 @@ Turnstile (P5-04).
    block's tag (`portfolio_data`/`portfolio-data` after any `<`, even cut off; the plain words
    "portfolio data" only as a tag), chat-template tokens (`<|im_start|>`,
    `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`), or role tags (`<system>`, `</system>`,
-   `<system-reminder>`; generics like `Task<Instructions>` and prose like "load < system capacity
-   -> add pods" are not tags). One detector (`controlMarkupIn` in `@portfolio/project-registry`)
+   `<system-reminder>`, including tags attached to a word). Reserved role names also reject
+   ambiguous generics such as `Task<Instructions>`; use another type name in content. Generics
+   like `Task<Command>` and prose like "load < system capacity -> add pods" remain valid.
+   One detector (`controlMarkupIn` in `@portfolio/project-registry`)
    defines it, looking through invisible characters, NFKC compatibility forms, look-alike
-   brackets (not CJK title brackets), and HTML entities. Nor can data contain hidden text
+   brackets (not CJK title brackets), and HTML entities. Visitor messages are checked before
+   and after normalization so it cannot erase a disguised delimiter's original bracket form.
+   Nor can data contain hidden text
    (Unicode tag characters, repeated variation selectors or zero-width characters, supplementary
    selectors outside CJK variants, interlinear annotations, bidi overrides, private-use, controls
    other than tab and line breaks; a single emoji selector or joiner, soft hyphens, and LRM/RLM

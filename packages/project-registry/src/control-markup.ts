@@ -95,13 +95,12 @@ const PATTERNS: readonly (readonly [ControlMarkupKind, RegExp])[] = [
   ['template_token', /<\|[^\s|<>]{1,40}\|>|\[\/?inst\]|<<\/?sys>>|《\/?sys》/],
   // `<system>`, `</system>`, `<system-reminder>`, `<system_v2>`, `<assistant_response lang="en">`.
   // Suffixes come from a fixed list, so components such as `<system-status>` or
-  // `<developer-card>` aren't tags. Closing tags always count; an opening `<` glued to a word is a
-  // generic (`Task<Instructions>`, `Dictionary<System.String, int>`), but one after punctuation
-  // (`Thanks.<system>`) is a tag.
+  // `<developer-card>` aren't tags. Role tags count even when glued to a word; that also reserves
+  // ambiguous generic syntax such as `Task<Instructions>`.
   [
     'role_tag',
     new RegExp(
-      String.raw`(?:(?<!\w)<|<\s*\/)\s*(?:system|assistant|developer|instructions?)(?:[_:-]?(?:prompt|message|turn|reminder|response|instructions?|context|note|role|v?\d+))*(?![\w.-])${ATTRIBUTES}>`,
+      String.raw`<\s*\/?\s*(?:system|assistant|developer|instructions?)(?:[_:-]?(?:prompt|message|turn|reminder|response|instructions?|context|note|role|v?\d+))*(?![\w.-])${ATTRIBUTES}>`,
     ),
   ],
 ];

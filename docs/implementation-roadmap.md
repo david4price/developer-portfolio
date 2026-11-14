@@ -12,6 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Review fixes to P5-07: role tags are rejected even when attached to a word (ambiguous
+  `Task<Instructions>` syntax is reserved too); messages are checked before and after
+  normalization so disguised bracket forms cannot bypass the shared detector. Regression tests
+  cover message screening, HTTP rejection before the model, registry validation, and prompt data.
 - Follow-ups to P5-05/P5-07: one control-markup detector (`controlMarkupIn` in the registry
   package) screens messages and replies, and the registry schema rejects it in content, so data
   reaches the model exactly as written (`Array<string>`, `10⁶`) yet can never pose as prompt
