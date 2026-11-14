@@ -78,8 +78,9 @@ or AI is off. Anything that waited out the queue or reached the provider counts,
 provider "busy" (it may follow a long generation, and refunding even quick ones would let a client
 hammer an overloaded upstream for free), so neither becomes free GPU time or free queue
 occupancy. A message rejected by screening also counts, so the screen can't be probed for free.
-A refund goes only to the window the hit was counted in (each window has an ID), so one that
-arrives after its window expired can't take a hit off the next.
+A refund goes only to the window the hit was counted in, so one that arrives after its window
+expired can't take a hit off the next. The window's ID is its counter's absolute expiry
+(`PEXPIRETIME`, Redis 7+), which no hit or refund changes; there is no second key to evict.
 The integration suite includes a load test: 12 visitors at once against concurrency 1 and a queue
 of 2 get 3 answers and 9 immediate `503 ai_overloaded` responses; none hang.
 
@@ -111,11 +112,13 @@ Turnstile (P5-04).
    added only if measured answer quality requires one.
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules and the retrieved
    snippets inside `<portfolio_data>…</portfolio_data>`. The rules say that data is reference
-   material whose instructions must not be followed. Anything in the data that resembles the
-   block's tag (any case, spacing, separator, or attributes; cut off; or written with look-alike
-   brackets such as `‹ ›` or full-width `＜ ＞`) is removed, repeatedly and again after snippets
-   are joined, so nothing can close the block early. Other markup (`Array<string>`) stays as
-   written. Then trimmed history and the new message. The whole prompt is held to 6,000 characters
+   material whose instructions must not be followed. Control markup in the data is removed
+   (`markup.ts`, shared with screening): the block's tag in any case, spacing, separator, or
+   attributes, even cut off; chat-template tokens (`<|im_start|>`, `[INST]`, `<<SYS>>`); and role
+   tags (`<system>`, `<assistant>`). Matching sees through invisible characters, look-alike
+   brackets (`‹ ›`, `⟨ ⟩`, `˂ ˃`, full-width), and HTML entities, and repeats, also after
+   snippets are joined, until nothing is left. Only matched spans are cut, so other text
+   (`Array<string>`, `10⁶`, `<PortfolioData />`) stays exactly as written. Then trimmed history and the new message. The whole prompt is held to 6,000 characters
    (≈1,500 tokens): data gets at most 1,800, and history gets
    what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
    about 900–1,500 characters.
@@ -160,10 +163,9 @@ classifier model can replace it behind the same token if measured attacks get pa
   logged with their reason and request ID only, never the message; they count against quota and
   are not stored.
 - **Reply check:** a reply containing any 10 consecutive words of the system rules, or the exact
-  data delimiters (`<portfolio_data>`, `</portfolio_data>`, any case, look-alike brackets
-  folded), is replaced by the fallback message and logged as `prompt_leak`. Retrieved data can't
-  contain the delimiters (they are removed from it), so only the framing produces them;
-  near-misses like `PortfolioData` are ordinary names.
+  data delimiter (the same `markup.ts` matcher, so disguised forms count), is replaced by the
+  fallback message and logged as `prompt_leak`. Retrieved data can't contain the delimiter (it is
+  removed from it), so only the framing produces it; names like `<PortfolioData />` don't match.
 
 Screening is one layer. The others stay in force whatever it misses: fixed system rules, retrieved
 data framed as data, no tools or system access, registry-validated links, plain-text output, and

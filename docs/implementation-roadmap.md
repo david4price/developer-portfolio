@@ -12,9 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
-- Follow-ups to P5-05/P5-07: retrieved data keeps its markup (`Array<string>`) while every form of
-  the data delimiter, including look-alike brackets, is removed; quota refunds are bound to the
-  window they were counted in. The guard's phrasing limit is recorded as P5-08.
+- Follow-ups to P5-05/P5-07: one control-markup matcher (`markup.ts`) for data, messages, and
+  replies removes delimiters, template tokens, and role tags however disguised, while other text
+  (`Array<string>`, `10⁶`) stays as written; quota refunds are bound to their window by its
+  expiry time. The guard's phrasing limit is recorded as P5-08.
 - P5-07: chat messages are screened before the model (Unicode normalization; instruction
   override, prompt extraction, role markup, jailbreak, and hidden-payload patterns →
   `422 message_rejected`), and replies that leak the system rules are withheld. Full-repo review
@@ -86,7 +87,8 @@ Phase 2 lacks only the owner's content (P2-12).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Open pull requests:** none. Open every PR against `main`.
+**Open pull requests:** follow-ups to P5-05/P5-07 (control markup, refund windows). Open every PR
+against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
