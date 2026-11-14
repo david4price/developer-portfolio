@@ -1,17 +1,11 @@
-import { DATA_CLOSE, DATA_OPEN, foldBrackets, SYSTEM_RULES } from './chat-prompt.js';
+import { SYSTEM_RULES } from './chat-prompt.js';
+import { containsControlMarkup, containsDataDelimiter, INVISIBLE } from './markup.js';
 import type {
   MessageGuard,
   MessageRejection,
   ReplyRejection,
   ScreenedMessage,
 } from './message-guard.js';
-
-/**
- * Characters a visitor can't see but a model reads: format characters (zero-width, bidi
- * overrides, BOM, Unicode tag characters used to smuggle hidden instructions), private-use code
- * points, and control characters other than tab and newline.
- */
-const INVISIBLE = /[\p{Cf}\p{Co}]|(?![\t\n])\p{Cc}/gu;
 
 /** Lowercase letters and digits only, words separated by single spaces, accents removed. */
 const fold = (text: string) =>
@@ -28,11 +22,6 @@ const squeezedRuns = (folded: string) =>
 
 /** Patterns over the raw (normalized) text, where markup still matters. */
 const RAW_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
-  // Chat-template control tokens and role tags: <|im_start|>, [INST], <<SYS>>, <system>.
-  ['role_injection', /<\|[\w-]{1,30}\|>|\[\/?inst\]|<<\/?sys>>/i],
-  ['role_injection', /<\s*\/?\s*(?:system|assistant|developer|instructions?)\b[^>]*>/i],
-  // Anything resembling the data block's tag, whatever its case, spacing, or separator.
-  ['role_injection', /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i],
   // A line that claims to speak as another role: "System: …", "### Assistant:".
   [
     'role_injection',
@@ -104,16 +93,6 @@ const DEMANDED_PROMPT =
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
 
-/**
- * True when `reply` echoes the data block's exact delimiters, in any case or with look-alike
- * brackets. Retrieved data can't contain them (it is neutralized), so only the framing produces
- * them; near-misses such as `PortfolioData` or `portfolio-data-sync` are ordinary names.
- */
-function echoesDelimiters(reply: string): boolean {
-  const folded = foldBrackets(reply).toLowerCase();
-  return [DATA_OPEN, DATA_CLOSE].some((tag) => folded.includes(tag.toLowerCase()));
-}
-
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
 
@@ -144,6 +123,8 @@ export class HeuristicMessageGuard implements MessageGuard {
       .trim();
     if (message === '') return { allowed: false, reason: 'empty' };
 
+    // Delimiters, template tokens, and role tags, however disguised (shared with data cleaning).
+    if (containsControlMarkup(message)) return { allowed: false, reason: 'role_injection' };
     for (const [reason, pattern] of RAW_RULES) {
       if (pattern.test(message)) return { allowed: false, reason };
     }
@@ -162,7 +143,8 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    if (echoesDelimiters(reply)) return 'prompt_leak';
+    // Retrieved data can't contain the delimiter (it is stripped), so only the framing does.
+    if (containsDataDelimiter(reply)) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );
