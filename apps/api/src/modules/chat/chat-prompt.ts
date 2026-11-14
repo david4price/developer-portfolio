@@ -1,3 +1,4 @@
+import { containsHiddenText, controlMarkupIn } from '@portfolio/project-registry';
 import type { AiMessage } from '../ai/ai-provider.js';
 import type { ChatTurn } from './chat-session.store.js';
 import { linkMarker } from './navigation-links.js';
@@ -16,12 +17,6 @@ const HISTORY_MAX_CHARS = 4_000;
 
 export const DATA_OPEN = '<portfolio_data>';
 export const DATA_CLOSE = '</portfolio_data>';
-
-/**
- * Angle brackets in retrieved data become look-alike guillemets, so no snippet, alone or joined
- * to the next, can form a tag that closes the data block early. No pattern to keep up to date.
- */
-const neutralizeMarkup = (text: string) => text.replaceAll('<', '‹').replaceAll('>', '›');
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
@@ -57,18 +52,25 @@ export function promptHistory(
   return selected;
 }
 
-/** Best snippets first while they fit; markup is neutralized so data can't close the block. */
+const NO_DATA = 'No portfolio data matched this question.';
+
+/**
+ * Best snippets first while they fit. The registry schema already rejects control markup and
+ * hidden text in content; as a safety net, a snippet that still contains either is left out
+ * (never edited), and so is the whole block if joining snippets ever formed control markup.
+ */
 function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = neutralizeMarkup(snippet);
-    const cost = clean.length + (kept.length > 0 ? 2 : 0);
+    if (controlMarkupIn(snippet).size > 0 || containsHiddenText(snippet)) continue;
+    const cost = snippet.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
-    kept.push(clean);
+    kept.push(snippet);
     characters += cost;
   }
-  const body = kept.length > 0 ? kept.join('\n\n') : 'No portfolio data matched this question.';
+  const joined = kept.join('\n\n');
+  const body = joined === '' || controlMarkupIn(joined).size > 0 ? NO_DATA : joined;
   return `${DATA_OPEN}\n${body}\n${DATA_CLOSE}`;
 }
 

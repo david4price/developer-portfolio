@@ -1,17 +1,11 @@
-import { DATA_CLOSE, DATA_OPEN, SYSTEM_RULES } from './chat-prompt.js';
+import { controlMarkupIn, INVISIBLE } from '@portfolio/project-registry';
+import { SYSTEM_RULES } from './chat-prompt.js';
 import type {
   MessageGuard,
   MessageRejection,
   ReplyRejection,
   ScreenedMessage,
 } from './message-guard.js';
-
-/**
- * Characters a visitor can't see but a model reads: format characters (zero-width, bidi
- * overrides, BOM, Unicode tag characters used to smuggle hidden instructions), private-use code
- * points, and control characters other than tab and newline.
- */
-const INVISIBLE = /[\p{Cf}\p{Co}]|(?![\t\n])\p{Cc}/gu;
 
 /** Lowercase letters and digits only, words separated by single spaces, accents removed. */
 const fold = (text: string) =>
@@ -28,11 +22,6 @@ const squeezedRuns = (folded: string) =>
 
 /** Patterns over the raw (normalized) text, where markup still matters. */
 const RAW_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
-  // Chat-template control tokens and role tags: <|im_start|>, [INST], <<SYS>>, <system>.
-  ['role_injection', /<\|[\w-]{1,30}\|>|\[\/?inst\]|<<\/?sys>>/i],
-  ['role_injection', /<\s*\/?\s*(?:system|assistant|developer|instructions?)\b[^>]*>/i],
-  // Anything resembling the data block's tag, whatever its case, spacing, or separator.
-  ['role_injection', /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i],
   // A line that claims to speak as another role: "System: …", "### Assistant:".
   [
     'role_injection',
@@ -104,13 +93,6 @@ const DEMANDED_PROMPT =
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
 
-/**
- * The data block's exact delimiters, echoed back. Retrieved data can't contain them (its markup is
- * neutralized), so only the framing itself produces them; near-misses such as `PortfolioData` or
- * `portfolio-data-sync` are ordinary names, not leaks.
- */
-const DELIMITERS = [DATA_OPEN, DATA_CLOSE].map((tag) => tag.toLowerCase());
-
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
 
@@ -133,6 +115,9 @@ export class HeuristicMessageGuard implements MessageGuard {
   private readonly ruleShingles = new Set(shingles(fold(SYSTEM_RULES), LEAK_SHINGLE_WORDS));
 
   screenMessage(raw: string): ScreenedMessage {
+    // Inspect the original brackets before NFKC folds U+2329/U+232A into CJK title brackets,
+    // which the shared detector deliberately allows. Keep the normalized-text check below too.
+    if (controlMarkupIn(raw).size > 0) return { allowed: false, reason: 'role_injection' };
     const message = raw
       .normalize('NFKC')
       .replace(/\r\n?/g, '\n')
@@ -141,6 +126,8 @@ export class HeuristicMessageGuard implements MessageGuard {
       .trim();
     if (message === '') return { allowed: false, reason: 'empty' };
 
+    // Delimiters, template tokens, and role tags, however disguised (the registry's definition).
+    if (controlMarkupIn(message).size > 0) return { allowed: false, reason: 'role_injection' };
     for (const [reason, pattern] of RAW_RULES) {
       if (pattern.test(message)) return { allowed: false, reason };
     }
@@ -159,8 +146,11 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    const lower = reply.toLowerCase();
-    if (DELIMITERS.some((tag) => lower.includes(tag))) return 'prompt_leak';
+    // Data can't contain a delimiter (the registry schema rejects it), so only the framing does;
+    // a template token in a reply would be replayed from history into later prompts. Role tags
+    // aren't checked here: `<System />` is ordinary JSX in an answer about React.
+    const markup = controlMarkupIn(reply);
+    if (markup.has('data_delimiter') || markup.has('template_token')) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );

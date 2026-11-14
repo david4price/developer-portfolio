@@ -21,15 +21,22 @@ async function withRedis<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-/** INCR, start the window on the first hit, and report the count and remaining TTL atomically. */
+/*
+ * A window's ID is its counter's absolute expiry (PEXPIRETIME, Redis 7+): set once when the window
+ * starts, never changed by INCR or DECR, and gone with the window. No second key can be evicted or
+ * land in another cluster slot, and counters written by an older replica already have one.
+ */
+
+/** ARGV: windowSeconds. INCR, start the window on the first hit; report count, TTL, window ID. */
 const HIT = `local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 local ttl = redis.call('TTL', KEYS[1])
 if ttl < 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]); ttl = tonumber(ARGV[1]) end
-return {count, ttl}`;
+return {count, ttl, redis.call('PEXPIRETIME', KEYS[1])}`;
 
-/** DECR keeps the window's TTL; a missing (expired) or empty window is left alone. */
-const REFUND = `local count = tonumber(redis.call('GET', KEYS[1]))
+/** ARGV: window ID. DECR (keeping the TTL) only while that same window is current and not empty. */
+const REFUND = `if tostring(redis.call('PEXPIRETIME', KEYS[1])) ~= ARGV[1] then return 0 end
+local count = tonumber(redis.call('GET', KEYS[1]))
 if count and count > 0 then return redis.call('DECR', KEYS[1]) end
 return 0`;
 
@@ -37,14 +44,18 @@ export class RedisRateLimiter implements RateLimiter {
   constructor(private readonly redis: Redis) {}
 
   async hit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
-    const [count, ttl] = (await withRedis(() =>
+    const [count, ttl, expiresAt] = (await withRedis(() =>
       this.redis.eval(HIT, 1, RATE_PREFIX + key, windowSeconds),
-    )) as [number, number];
-    return { allowed: count <= limit, retryAfterSeconds: Math.max(1, ttl) };
+    )) as [number, number, number];
+    return {
+      allowed: count <= limit,
+      retryAfterSeconds: Math.max(1, ttl),
+      window: String(expiresAt),
+    };
   }
 
-  async refund(key: string): Promise<void> {
-    await withRedis(() => this.redis.eval(REFUND, 1, RATE_PREFIX + key));
+  async refund(key: string, window: string): Promise<void> {
+    await withRedis(() => this.redis.eval(REFUND, 1, RATE_PREFIX + key, window));
   }
 }
 

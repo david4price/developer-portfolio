@@ -2,6 +2,12 @@ import type { MiniAppSummary, ProjectDetail, ProjectSummary } from '@portfolio/s
 import { registryData } from './data.js';
 import { registrySchema, type RegistryInput } from './schema.js';
 
+export {
+  type ControlMarkupKind,
+  containsHiddenText,
+  controlMarkupIn,
+  INVISIBLE,
+} from './control-markup.js';
 export { miniAppSchema, projectSchema, registrySchema, slug } from './schema.js';
 export type { RegistryInput } from './schema.js';
 

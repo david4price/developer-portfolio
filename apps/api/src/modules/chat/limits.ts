@@ -5,14 +5,19 @@ export interface RateLimitResult {
   readonly allowed: boolean;
   /** Seconds until the current window resets (meaningful when `allowed` is false). */
   readonly retryAfterSeconds: number;
+  /** Identifies the window this hit counted in, so a refund can't land in a later one. */
+  readonly window: string;
 }
 
 /** Fixed-window counters. Keys are built by the caller from server-derived values only. */
 export interface RateLimiter {
   /** Counts one hit against `key`; allowed while the window's count is at most `limit`. */
   hit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult>;
-  /** Takes back one hit from the current window, if the window still exists and isn't empty. */
-  refund(key: string): Promise<void>;
+  /**
+   * Takes back one hit, but only from `window` (the one `hit` counted it in): once that window
+   * has expired and a new one started, there is nothing to take back.
+   */
+  refund(key: string, window: string): Promise<void>;
 }
 
 /** No slot became free in time, or the wait queue was full. */
