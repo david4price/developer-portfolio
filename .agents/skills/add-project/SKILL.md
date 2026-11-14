@@ -34,8 +34,9 @@ Mini-apps have `slug`, `title`, `summary`, and `status` (`planned` until the app
 - Renaming a slug breaks public URLs. Avoid it; if unavoidable, mention the broken link to the user.
 - Content feeds the chat assistant's prompt, so the schema rejects prompt control markup in every
   text field: the `<portfolio_data>` delimiter, chat-template tokens such as `<|im_start|>`, and
-  role tags such as `<system>`, however disguised. Ordinary code (`Array<string>`, `<MyComponent />`)
-  is fine. On that error, rephrase the text rather than escaping it.
+  role tags such as `<system>`, however disguised, and hidden text (Unicode tag characters, bidi
+  overrides, control characters). Ordinary code (`Array<string>`, `<MyComponent />`) is fine. On
+  that error, rephrase the text rather than escaping it.
 - If a new validation rule is needed, add it to `schema.ts` with a test in
   `packages/project-registry/test/registry.test.ts`.
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { controlMarkupIn } from './control-markup.js';
+import { containsHiddenText, controlMarkupIn } from './control-markup.js';
 
 export const slug = z
   .string()
@@ -11,8 +11,9 @@ const httpsUrl = z.url().refine((value) => new URL(value).protocol === 'https:',
 });
 
 /**
- * Text that reaches the chat assistant's prompt. Control markup (`control-markup.ts`) is
- * rejected here, at the source, so content can never pose as prompt structure.
+ * Text that reaches the chat assistant's prompt. Control markup and hidden text
+ * (`control-markup.ts`) are rejected here, at the source, so content reaches the model exactly as
+ * written and can never pose as prompt structure or hide instructions.
  */
 const content = (max: number) =>
   z
@@ -22,6 +23,9 @@ const content = (max: number) =>
     .refine((value) => controlMarkupIn(value).size === 0, {
       message:
         'must not contain prompt control markup (data delimiters, template tokens, role tags)',
+    })
+    .refine((value) => !containsHiddenText(value), {
+      message: 'must not contain hidden text (Unicode tag characters, bidi overrides, controls)',
     });
 
 export const projectSchema = z.object({

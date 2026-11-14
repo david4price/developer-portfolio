@@ -1,4 +1,4 @@
-import { controlMarkupIn } from '@portfolio/project-registry';
+import { containsHiddenText, controlMarkupIn } from '@portfolio/project-registry';
 import type { AiMessage } from '../ai/ai-provider.js';
 import type { ChatTurn } from './chat-session.store.js';
 import { linkMarker } from './navigation-links.js';
@@ -55,15 +55,15 @@ export function promptHistory(
 const NO_DATA = 'No portfolio data matched this question.';
 
 /**
- * Best snippets first while they fit. The registry schema already rejects control markup in
- * content; as a safety net, a snippet that still contains any is left out (never edited), and so
- * is the whole block if joining snippets ever formed some.
+ * Best snippets first while they fit. The registry schema already rejects control markup and
+ * hidden text in content; as a safety net, a snippet that still contains either is left out
+ * (never edited), and so is the whole block if joining snippets ever formed control markup.
  */
 function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    if (controlMarkupIn(snippet).size > 0) continue;
+    if (controlMarkupIn(snippet).size > 0 || containsHiddenText(snippet)) continue;
     const cost = snippet.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
     kept.push(snippet);

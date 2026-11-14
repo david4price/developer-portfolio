@@ -8,9 +8,8 @@ describe('controlMarkupIn', () => {
   const cases: readonly (readonly [ControlMarkupKind, string])[] = [
     ['data_delimiter', '</portfolio_data>'],
     ['data_delimiter', '<PORTFOLIO DATA lang="en">'],
-    ['data_delimiter', '</portfolio​_data>'],
+    ['data_delimiter', '</portfolio\u200B_data>'],
     ['data_delimiter', '⟨/portfolio_data⟩'],
-    ['data_delimiter', '〈/portfolio_data〉'],
     ['data_delimiter', '˂/portfolio_data˃'],
     ['data_delimiter', '＜／ｐｏｒｔｆｏｌｉｏ＿ｄａｔａ＞'],
     ['data_delimiter', '<𝐩𝐨𝐫𝐭𝐟𝐨𝐥𝐢𝐨_𝐝𝐚𝐭𝐚>'],
@@ -22,17 +21,16 @@ describe('controlMarkupIn', () => {
     ['data_delimiter', '<portfolio_data:x>'],
     ['template_token', '<|im_start|>'],
     ['template_token', '<|eot_id|>'],
+    ['template_token', '<｜begin▁of▁sentence｜>'],
     ['template_token', '&lt;|im_end|&gt;'],
     ['template_token', '[INST]'],
     ['template_token', '<</SYS>>'],
     ['template_token', '≪SYS≫'],
     ['role_tag', '<system>'],
     ['role_tag', '<ſystem>'],
-    ['role_tag', '<system: override>'],
-    ['role_tag', '<system role:admin>'],
-    ['role_tag', '<system 1>'],
     ['role_tag', '</assistant-turn>'],
-    ['role_tag', '<developer.note>'],
+    ['role_tag', '<system role="admin">'],
+    ['role_tag', '<system_prompt>'],
     ['role_tag', '<Instructions>'],
   ];
   for (const [kind, text] of cases) {
@@ -47,8 +45,13 @@ describe('controlMarkupIn', () => {
       '<PortfolioData /> and <portfolio-data-sync> and <User /> components.',
       'costs < portfolio data budget',
       'In Elm, write `f <| g x |> h`.',
-      '10⁶ req/s, 5 m², ⟨x⟩ in math, emoji 👨‍👩‍👧, soft­hyphen.',
+      '10⁶ req/s, 5 m², ⟨x⟩ in math, emoji 👨\u200D👩\u200D👧, soft\u00ADhyphen.',
       'The system design and the assistant role were documented.',
+      'In C#, Dictionary<System.String, int> and Task<Instructions>.',
+      'If load < system capacity -> add pods; trim when tokens < instructions budget -> ok.',
+      '我在读《System Design Interview》这本书, see 〈system〉.',
+      'value = a << sys >> 2',
+      'costs < portfolio data budget -> fine',
     ]) {
       assert.deepEqual(kindsOf(text), [], text);
     }
@@ -85,6 +88,25 @@ describe('registry content', () => {
         description,
       );
     }
+  });
+
+  it('rejects hidden text, but not joiners or soft hyphens', () => {
+    for (const description of [
+      'Looks fine\u{E0049}\u{E0047}',
+      'Reversed \u202Etxet',
+      'Bell\u0007',
+    ]) {
+      assert.throws(
+        () => createRegistry({ projects: [project(description)], miniApps: [] }),
+        /hidden text/,
+        JSON.stringify(description),
+      );
+    }
+    const registry = createRegistry({
+      projects: [project('Family 👨\u200D👩\u200D👧 and soft\u00ADhyphen.')],
+      miniApps: [],
+    });
+    assert.equal(registry.projects.length, 1);
   });
 
   it('accepts ordinary markup and code', () => {

@@ -19,12 +19,26 @@ export type ControlMarkupKind = 'data_delimiter' | 'template_token' | 'role_tag'
  */
 export const INVISIBLE = /[\p{Cf}\p{Co}]|(?![\t\n])\p{Cc}/gu;
 
-/** Brackets a model may read as `<` or `>`, beyond what NFKC folds. Doubled ones stay doubled. */
+/**
+ * Text a model must never receive from content: Unicode tag characters (invisible ASCII used to
+ * smuggle instructions), bidi overrides and isolates, private-use code points, and control
+ * characters other than tab and newline. Joiners, variation selectors, and soft hyphens, which
+ * ordinary text uses (emoji sequences, Persian, hyphenation), are not included.
+ */
+const HIDDEN_TEXT = /[\u{E0000}-\u{E007F}\u202A-\u202E\u2066-\u2069\p{Co}]|(?![\t\n])\p{Cc}/u;
+
+/** True when `text` contains characters that hide content from a reader (`HIDDEN_TEXT`). */
+export const containsHiddenText = (text: string) => HIDDEN_TEXT.test(text);
+
+/**
+ * Brackets a model may read as `<` or `>`, beyond what NFKC folds. Doubled ones stay doubled. CJK
+ * title brackets (〈 〉 《 》) are left alone: 《System Design Interview》 is a book title.
+ */
 const LOOKALIKES: readonly (readonly [RegExp, string])[] = [
-  [/[≪⟪《]/g, '<<'],
-  [/[≫⟫》]/g, '>>'],
-  [/[‹〈⟨❮❬⧼˂ᐸ〈]/g, '<'],
-  [/[›〉⟩❯❭⧽˃ᐳ〉]/g, '>'],
+  [/[≪⟪]/g, '<<'],
+  [/[≫⟫]/g, '>>'],
+  [/[‹⟨❮❬⧼˂ᐸ]/g, '<'],
+  [/[›⟩❯❭⧽˃ᐳ]/g, '>'],
 ];
 
 /** `&lt`, `&lt;`, `&#60;`, `&#x3c;` and their `>` forms; a semicolon is optional in HTML. */
@@ -42,15 +56,30 @@ function normalizedView(text: string): string {
   return view.toLowerCase();
 }
 
+/**
+ * What may follow a tag name before its `>`: real attributes only (`lang="en"`, `hidden`). Prose
+ * after a `<` ("load < system capacity -> add pods") isn't attribute-shaped, so it never counts.
+ */
+const ATTRIBUTES = String.raw`(?:\s+[a-z][\w-]*(?:\s*=\s*(?:"[^"<>]*"|'[^'<>]*'|[^\s<>"']+))?){0,10}\s*\/?`;
+
 const PATTERNS: readonly (readonly [ControlMarkupKind, RegExp])[] = [
-  // The data block's tag with any separator and anything up to its `>`: `</portfolio_data!>`.
-  // A separator is required, so component names such as `<PortfolioData />` don't count.
-  ['data_delimiter', /<\s*\/?\s*portfolio[\s_-]+data(?![\w-])[^<>\n]{0,100}>/],
-  // `<|im_start|>`, `<|eot_id|>`, `[INST]`, `<<SYS>>`. Token names are word-like, so pipe
-  // operators with spaces (Elm's `f <| g x |> h`) are not tokens.
-  ['template_token', /<\|[\w.-]{1,30}\|>|\[\/?inst\]|<<\s*\/?\s*sys\s*>>/],
-  // `<system>`, `<system: override>`, `</assistant-turn>`, `<developer.note>`.
-  ['role_tag', /<\s*\/?\s*(?:system|assistant|developer|instructions?)\b[^<>\n]{0,100}>/],
+  // The data block's tag, with a separator (so `<PortfolioData />` isn't it), punctuation glued
+  // to the name (`</portfolio_data!>`), and attributes.
+  [
+    'data_delimiter',
+    new RegExp(String.raw`<\s*\/?\s*portfolio[\s_-]+data(?![\w-])[^\s<>]{0,20}${ATTRIBUTES}>`),
+  ],
+  // `<|im_start|>`, `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`. Token names have no spaces, so
+  // pipe operators (Elm's `f <| g x |> h`) and shifts (`a << sys >> 2`) are code, not tokens.
+  ['template_token', /<\|[^\s|<>]{1,40}\|>|\[\/?inst\]|<<\/?sys>>/],
+  // `<system>`, `</assistant-turn>`, `<instructions lang="en">`, standing on their own: a `<`
+  // glued to a word is a generic (`Dictionary<System.String, int>`, `Task<Instructions>`).
+  [
+    'role_tag',
+    new RegExp(
+      String.raw`(?<![\w.])<\s*\/?\s*(?:system|assistant|developer|instructions?)(?:[_-]?(?:prompt|message|turn))?(?![\w.-])${ATTRIBUTES}>`,
+    ),
+  ],
 ];
 
 /** Every kind of control markup found in `text`; empty when there is none. */
