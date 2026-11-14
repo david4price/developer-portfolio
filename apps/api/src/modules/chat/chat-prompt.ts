@@ -21,6 +21,17 @@ const DATA_CLOSE = '</portfolio_data>';
  * with screening (`heuristic-message-guard.ts`); keep it in step with DATA_OPEN and DATA_CLOSE.
  */
 export const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i;
+const ALL_DATA_TAGS = new RegExp(DATA_TAG, 'gi');
+
+/** Removes data tags until none are left, so a nested one can't reassemble a real delimiter. */
+function stripDataTags(text: string): string {
+  let current = text;
+  for (;;) {
+    const next = current.replace(ALL_DATA_TAGS, '');
+    if (next === current) return current;
+    current = next;
+  }
+}
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
@@ -61,7 +72,7 @@ function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = snippet.replace(new RegExp(DATA_TAG, 'gi'), '');
+    const clean = stripDataTags(snippet);
     const cost = clean.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
     kept.push(clean);

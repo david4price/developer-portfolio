@@ -163,7 +163,7 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
         waited = true;
         if (await this.tryAcquire(token)) return;
       }
-      // With no wait configured, the queue place was never actually held.
+      // `waited` is false only if the deadline passed before the first poll.
       throw new AiCapacityError(retryAfterSeconds, waited);
     } catch (error) {
       // Leave the queue on timeout, abort, or Redis failure so the place isn't held.

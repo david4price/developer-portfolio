@@ -61,12 +61,17 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   ['instruction_override', /\bfrom now on you (?:are|will|must|should|can)\b/],
   // "System", "hidden", and "secret" prompts are rejected however they're asked ("print system
   // prompt", "the assistant's system prompt"), even in a question about a portfolio project's
-  // own. "Initial", "original", and "developer" prompts have everyday senses, so only when aimed
-  // at this assistant.
+  // own. "Initial", "original", and "developer" prompts have everyday senses ("what was the
+  // original prompt for this project?"), so only when aimed at this assistant or demanded with an
+  // extraction verb. What slips through still meets the reply check, which withholds leaks.
   ['prompt_extraction', /\b(?:system|hidden|secret) prompt\b/],
   [
     'prompt_extraction',
-    /\b(?:your|ur|its|this assistant s|the assistant s) (?:initial|original|developer) prompt\b/,
+    /\b(?:your|ur|this assistant s|the assistant s) (?:initial|original|developer) prompt\b/,
+  ],
+  [
+    'prompt_extraction',
+    /\b(?:print|repeat|reveal|output|display|dump|leak|recite|write out) (?:me )?(?:\w+ ){0,3}?(?:initial|original|developer) prompt\b/,
   ],
   [
     'prompt_extraction',
@@ -96,10 +101,12 @@ const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|p
 
 /**
  * The data block's tag in a reply: any tag-like form, even cut off or HTML-escaped
- * (`<portfolio data`, `&lt;/PORTFOLIODATA`), or the bare identifier `portfolio_data` as a whole
- * word. The plain words "portfolio data" and names such as `portfolio_database` are fine.
+ * (`<portfolio data`, `&lt;/PORTFOLIODATA`), or the bare identifier (`portfolio_data`,
+ * `[portfolio-data]`). The plain words "portfolio data" and longer names (`portfolio_database`,
+ * `PortfolioData`, `<PortfolioDataTable />`, `portfolio-data-sync`) are fine.
  */
-const DATA_IN_REPLY = /(?:<|&lt;)\s*\/?\s*portfolio[\s_-]*data|\bportfolio_?data\b/i;
+const DATA_IN_REPLY =
+  /(?:<|&lt;)\s*\/?\s*portfolio[\s_-]*data(?![a-z0-9])|\bportfolio[_-]data(?![_-]?[a-z0-9])/i;
 
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;

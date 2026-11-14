@@ -106,9 +106,12 @@ describe('write-headers as a script', () => {
       const link = join(work, 'linked-write-headers.js');
       symlinkSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), link);
 
-      const env = { ...process.env };
+      const env: NodeJS.ProcessEnv = { ...process.env, WRITE_HEADERS_OUT_DIR: out };
       delete env.NEXT_PUBLIC_API_BASE_URL;
-      const run = spawnSync(process.execPath, [link, out], { encoding: 'utf8', env });
+      const run = spawnSync(process.execPath, [link, '--extra-pnpm-arg'], {
+        encoding: 'utf8',
+        env,
+      });
       assert.equal(run.status, 0, run.stderr);
       const headers = readFileSync(join(out, '_headers'), 'utf8');
       assert.match(headers, /^\/\*\n {2}Content-Security-Policy: .*'sha256-/);
