@@ -66,3 +66,6 @@ Confirm `git status` shows only intended changes and that no build output (`dist
 
 Summarize as a short table: step, result (passed / failed / not run), and detail. Include test
 counts from `pnpm check`.
+
+Verification does not replace review. Before any requested `git push`, also run `/code-review`
+on the commits being pushed, as described in "Before Every Push" in `AGENTS.md`.

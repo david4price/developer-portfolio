@@ -54,4 +54,5 @@ new schema.
 ## Safety
 
 Creating tags, releases, GitHub settings, secrets, environments, or running workflows manually is
-outward-facing: confirm with the user first.
+outward-facing: confirm with the user first. Before any requested push, run `/code-review` on the
+commits being pushed and resolve its findings ("Before Every Push" in `AGENTS.md`).
