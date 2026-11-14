@@ -171,14 +171,13 @@ function apiOrigin(): string | null {
 }
 
 /**
- * Reads the export (`out/`, or `WRITE_HEADERS_OUT_DIR` for tests) and writes its `_headers`. Not
- * a positional argument: pnpm appends extra `build` arguments, which must not pick the directory.
- * Runs only as a script, so tests can import the rest.
+ * Reads the export (`out/`, or `--out=<dir>` for tests) and writes its `_headers`. Only that exact
+ * flag counts: other arguments pnpm appends to `build` are ignored, and nothing is read from the
+ * environment that a stale export could leave behind.
  */
 function main(): void {
-  const outDir = resolve(
-    process.env.WRITE_HEADERS_OUT_DIR?.trim() || resolve(import.meta.dirname, '../out'),
-  );
+  const outFlag = process.argv.slice(2).find((argument) => argument.startsWith('--out='));
+  const outDir = resolve(outFlag?.slice('--out='.length) || resolve(import.meta.dirname, '../out'));
   // Same rule as next.config.ts: the workspace `.env` fills in only what the environment lacks.
   const workspaceEnv = resolve(import.meta.dirname, '../../../.env');
   if (existsSync(workspaceEnv)) process.loadEnvFile(workspaceEnv);

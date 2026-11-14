@@ -106,9 +106,10 @@ describe('write-headers as a script', () => {
       const link = join(work, 'linked-write-headers.js');
       symlinkSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), link);
 
-      const env: NodeJS.ProcessEnv = { ...process.env, WRITE_HEADERS_OUT_DIR: out };
+      const env: NodeJS.ProcessEnv = { ...process.env };
       delete env.NEXT_PUBLIC_API_BASE_URL;
-      const run = spawnSync(process.execPath, [link, '--extra-pnpm-arg'], {
+      // `--debug` stands in for an extra argument pnpm appends; only `--out=` picks the directory.
+      const run = spawnSync(process.execPath, [link, '--debug', `--out=${out}`], {
         encoding: 'utf8',
         env,
       });

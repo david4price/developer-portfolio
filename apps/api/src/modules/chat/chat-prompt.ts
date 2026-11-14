@@ -14,24 +14,14 @@ export const CONTEXT_MAX_CHARS = 1_800;
 const HISTORY_MAX_TURNS = 8;
 const HISTORY_MAX_CHARS = 4_000;
 
-const DATA_OPEN = '<portfolio_data>';
-const DATA_CLOSE = '</portfolio_data>';
-/**
- * Anything that reads as a data tag, whatever its case, spacing, separator, or attributes. Shared
- * with screening (`heuristic-message-guard.ts`); keep it in step with DATA_OPEN and DATA_CLOSE.
- */
-export const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i;
-const ALL_DATA_TAGS = new RegExp(DATA_TAG, 'gi');
+export const DATA_OPEN = '<portfolio_data>';
+export const DATA_CLOSE = '</portfolio_data>';
 
-/** Removes data tags until none are left, so a nested one can't reassemble a real delimiter. */
-function stripDataTags(text: string): string {
-  let current = text;
-  for (;;) {
-    const next = current.replace(ALL_DATA_TAGS, '');
-    if (next === current) return current;
-    current = next;
-  }
-}
+/**
+ * Angle brackets in retrieved data become look-alike guillemets, so no snippet, alone or joined
+ * to the next, can form a tag that closes the data block early. No pattern to keep up to date.
+ */
+const neutralizeMarkup = (text: string) => text.replaceAll('<', '‹').replaceAll('>', '›');
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
@@ -67,12 +57,12 @@ export function promptHistory(
   return selected;
 }
 
-/** Best snippets first while they fit; data tags are stripped so data can't close the block. */
+/** Best snippets first while they fit; markup is neutralized so data can't close the block. */
 function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = stripDataTags(snippet);
+    const clean = neutralizeMarkup(snippet);
     const cost = clean.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
     kept.push(clean);

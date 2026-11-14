@@ -1,4 +1,4 @@
-import { DATA_TAG, SYSTEM_RULES } from './chat-prompt.js';
+import { DATA_CLOSE, DATA_OPEN, SYSTEM_RULES } from './chat-prompt.js';
 import type {
   MessageGuard,
   MessageRejection,
@@ -31,7 +31,8 @@ const RAW_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   // Chat-template control tokens and role tags: <|im_start|>, [INST], <<SYS>>, <system>.
   ['role_injection', /<\|[\w-]{1,30}\|>|\[\/?inst\]|<<\/?sys>>/i],
   ['role_injection', /<\s*\/?\s*(?:system|assistant|developer|instructions?)\b[^>]*>/i],
-  ['role_injection', DATA_TAG],
+  // Anything resembling the data block's tag, whatever its case, spacing, or separator.
+  ['role_injection', /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i],
   // A line that claims to speak as another role: "System: …", "### Assistant:".
   [
     'role_injection',
@@ -61,17 +62,12 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   ['instruction_override', /\bfrom now on you (?:are|will|must|should|can)\b/],
   // "System", "hidden", and "secret" prompts are rejected however they're asked ("print system
   // prompt", "the assistant's system prompt"), even in a question about a portfolio project's
-  // own. "Initial", "original", and "developer" prompts have everyday senses ("what was the
-  // original prompt for this project?"), so only when aimed at this assistant or demanded with an
-  // extraction verb. What slips through still meets the reply check, which withholds leaks.
+  // own. "Initial", "original", and "developer" prompts have everyday senses, so only when aimed
+  // at this assistant here, or demanded at the start of a clause (`DEMANDED_PROMPT`).
   ['prompt_extraction', /\b(?:system|hidden|secret) prompt\b/],
   [
     'prompt_extraction',
     /\b(?:your|ur|this assistant s|the assistant s) (?:initial|original|developer) prompt\b/,
-  ],
-  [
-    'prompt_extraction',
-    /\b(?:print|repeat|reveal|output|display|dump|leak|recite|write out) (?:me )?(?:\w+ ){0,3}?(?:initial|original|developer) prompt\b/,
   ],
   [
     'prompt_extraction',
@@ -96,17 +92,24 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   ],
 ];
 
+/**
+ * A clause that opens by demanding an initial, original, or developer prompt ("show me the
+ * initial prompt", "can you print the original prompt"). A question about what a program does
+ * ("does the CLI display its original prompt?") opens differently and passes; wording that slips
+ * through still meets the reply check.
+ */
+const DEMANDED_PROMPT =
+  /^(?:(?:please|now|just|ok|okay|so|hi|hey) )*(?:(?:can|could|would|will) you (?:please )?)?(?:print|repeat|reveal|show|output|display|dump|leak|recite|copy|share|write out|give me|tell me)(?: me)? (?:\w+ ){0,3}?(?:initial|original|developer) prompt\b/;
+
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
 
 /**
- * The data block's tag in a reply: any tag-like form, even cut off or HTML-escaped
- * (`<portfolio data`, `&lt;/PORTFOLIODATA`), or the bare identifier (`portfolio_data`,
- * `[portfolio-data]`). The plain words "portfolio data" and longer names (`portfolio_database`,
- * `PortfolioData`, `<PortfolioDataTable />`, `portfolio-data-sync`) are fine.
+ * The data block's exact delimiters, echoed back. Retrieved data can't contain them (its markup is
+ * neutralized), so only the framing itself produces them; near-misses such as `PortfolioData` or
+ * `portfolio-data-sync` are ordinary names, not leaks.
  */
-const DATA_IN_REPLY =
-  /(?:<|&lt;)\s*\/?\s*portfolio[\s_-]*data(?![a-z0-9])|\bportfolio[_-]data(?![_-]?[a-z0-9])/i;
+const DELIMITERS = [DATA_OPEN, DATA_CLOSE].map((tag) => tag.toLowerCase());
 
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
@@ -145,6 +148,10 @@ export class HeuristicMessageGuard implements MessageGuard {
     for (const [reason, pattern] of FOLDED_RULES) {
       if (pattern.test(folded)) return { allowed: false, reason };
     }
+    const clauses = message.split(/[.!?;:\n]+/).map(fold);
+    if (clauses.some((clause) => DEMANDED_PROMPT.test(clause))) {
+      return { allowed: false, reason: 'prompt_extraction' };
+    }
     if (squeezedRuns(folded).some((run) => SQUEEZED_TRIGGERS.test(run))) {
       return { allowed: false, reason: 'obfuscation' };
     }
@@ -152,9 +159,8 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    // The identifier, not the plain words: the rules and the empty-data notice say "portfolio
-    // data", so ordinary replies use that phrase too.
-    if (DATA_IN_REPLY.test(reply)) return 'prompt_leak';
+    const lower = reply.toLowerCase();
+    if (DELIMITERS.some((tag) => lower.includes(tag))) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );
