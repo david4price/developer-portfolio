@@ -30,7 +30,21 @@ export default async function MiniAppPage({ params }: MiniAppPageProps) {
     <article>
       <h1>{app.title}</h1>
       <p className="lead">{app.summary}</p>
-      {app.status === 'planned' && <StatusBadge tone="neutral" label="Planned — not built yet" />}
+      {app.status === 'planned' && (
+        <StatusBadge
+          tone="neutral"
+          label={
+            app.slug === 'portfolio-assistant'
+              ? 'Preview — production setup pending'
+              : 'Planned — not built yet'
+          }
+        />
+      )}
+      {app.slug === 'portfolio-assistant' && (
+        <p>
+          Open the chat button in the bottom-right corner to ask about the portfolio from any page.
+        </p>
+      )}
     </article>
   );
 }

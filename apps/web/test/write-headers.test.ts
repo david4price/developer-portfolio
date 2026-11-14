@@ -76,6 +76,21 @@ describe('buildHeadersFile', () => {
     assert.ok(text.indexOf('\n/about/\n') > text.indexOf('/_next/static/*'));
   });
 
+  it('allows the exact Turnstile origin in every page policy only when configured', () => {
+    const disabled = buildHeadersFile(pages, 'https://api.example.com');
+    assert.ok(!disabled.text.includes('https://challenges.cloudflare.com'));
+    assert.match(disabled.text, /frame-src 'none'/);
+    const enabled = buildHeadersFile(pages, 'https://api.example.com', true);
+    for (const headers of rules(enabled.text).values()) {
+      const csp = cspOf(headers);
+      if (!csp) continue;
+      assert.match(csp, /script-src[^;]* https:\/\/challenges\.cloudflare\.com/);
+      assert.match(csp, /frame-src https:\/\/challenges\.cloudflare\.com;/);
+      assert.ok(!csp.includes("'unsafe-inline'"));
+      assert.ok(!csp.includes('https://*.cloudflare.com'));
+    }
+  });
+
   it('keeps every line short however many pages there are', () => {
     const many = Array.from({ length: MAX_RULES - 2 }, (_, index) =>
       page(`/p${index}/`, `${index}`),
@@ -125,6 +140,7 @@ describe('write-headers as a script', () => {
 
       const env: NodeJS.ProcessEnv = { ...process.env };
       delete env.NEXT_PUBLIC_API_BASE_URL;
+      delete env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
       for (const entry of [script, link]) {
         rmSync(join(out, '_headers'), { force: true });
         // Extra arguments, as pnpm appends them to `build`, must change nothing.

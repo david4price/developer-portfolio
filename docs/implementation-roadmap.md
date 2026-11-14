@@ -12,11 +12,28 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-04 browser integration uses a resting dog on every page, opening a comic-style speech
+  bubble with a tail pointing toward the dog in a native dialog. It sits while open, stands
+  during a message request with a textual "Thinking…" status, and sits again after replies or
+  failures. Closing restores the lying pose; all three SVGs share a bottom-aligned frame.
+  Review fixes defer the two active poses until first activation and keep exchange IDs stable
+  as the 20-entry history advances, preserving new-reply announcements in the accessible log.
+  The chat client loads on the first click; closing and reopening
+  preserves the conversation, and unused verification tokens are discarded on close. The
+  dog uses the owner's three local SVG poses. Escape,
+  backdrop click, a close button, focus restoration, and viewport-bounded scrolling are supported.
+  `/apps/portfolio-assistant/` remains a descriptive entry. Turnstile loads only while the popup
+  is open with an API URL and public sitekey; used, expired, and
+  failed challenges require fresh verification. The client handles offline/disabled/busy/expired
+  sessions, sends cookie credentials only on chat requests, and renders replies as escaped text
+  with canonical registry links. CSP and container build settings support the widget. Widget
+  lifecycle, overlay dismissal/focus, HTTP failure, link filtering, and safe-rendering tests pass. Browser interaction and
+  the live verification drill remain unverified (no connected browser in this session).
 - P5-04 server boundary implemented: session creation requires a Turnstile token, hostname/action
   checks, a verification timeout, and an atomic Redis replay claim. Missing/invalid tokens never
   create sessions or cookies. AI-on configuration requires a secret and allowed hostnames;
   Compose and Helm support the settings, including explicit API-only verification egress.
-  Widget creation, browser integration, and the live drill are still pending approval/setup.
+  Widget creation, production settings, and the live drill are still pending approval/setup.
 - Review fixes to P5-07: role tags are rejected even when attached to a word (ambiguous
   `Task<Instructions>` syntax is reserved too); messages are checked before and after
   normalization so disguised bracket forms cannot bypass the shared detector. Regression tests
@@ -92,15 +109,16 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-04:** 🔒 finish Turnstile setup: the server boundary is ready; create the dedicated
-   Cloudflare widget, integrate it in the browser, provision the secret and egress, and run a
-   live drill ([guide](deployment/turnstile.md)).
+1. **P5-04:** 🔒 finish Turnstile setup: server and browser code are ready; create the dedicated
+   Cloudflare widget, configure the public sitekey, provision the secret and egress, and run
+   browser acceptance plus the live drill ([guide](deployment/turnstile.md)).
 2. **P5-06:** 🔒 connect the API to the reference inference runtime (NetworkPolicy egress rule).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Open pull requests:** none; #29 (control markup, refund windows) is merged. P5-04 implementation
-is on `feat/p5-04-turnstile`. Open every PR against `main`.
+**Branch in progress:** P5-04 browser integration and the dog speech bubble are on
+`feat/p5-04-turnstile`; the server-side Turnstile boundary is merged (#30).
+Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -263,8 +281,10 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
       rejected server-side. Server boundary implemented with hostname/action binding, bounded
       Siteverify calls, rate limits before verification, and Redis single-use token claims.
-      Tests cover failure paths and concurrent replay. _Pending:_ create the Cloudflare widget,
-      embed it in the browser, provision production settings, and run the live drill. See the
+      Browser integration is implemented with fresh-token handling, safe output, and offline
+      states in a site-wide floating popup (vector launcher artwork pending). Tests cover server failure paths, concurrent replay, widget and overlay lifecycle, client
+      requests, and output escaping. _Pending:_ create the Cloudflare widget, provision production
+      settings, verify browser interaction, and run the live drill. See the
       [setup guide](deployment/turnstile.md).
 - [x] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done
       when:_ unknown slugs never reach the client. Done 2026-11-14: unit tests drop unknown,

@@ -17,7 +17,8 @@ paths:
   a timeout, and `credentials: 'omit'` unless a cookie-based flow requires otherwise.
 - Never render API or model output with `dangerouslySetInnerHTML`.
 - Mini-apps load with `next/dynamic` on their own `/apps/[slug]` route so their code doesn't ship
-  elsewhere.
+  elsewhere. The portfolio assistant is a user-requested exception: a small launcher in the
+  shared layout opens a site-wide popup and lazy-loads the chat client on first activation.
 - Accessibility: semantic landmarks and headings, labelled controls, visible focus, status
   conveyed by text not color alone. Internal links use trailing slashes (`/projects/`).
 - Styling uses the CSS custom properties in `globals.css`; support light and dark schemes.

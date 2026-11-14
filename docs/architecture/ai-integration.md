@@ -93,8 +93,24 @@ Implemented (P5-02, P5-03, P5-04 server boundary, P5-05): `POST /api/v1/chat/ses
 registry retrieval, and validated links. Errors: `401 chat_session_required`, `409 chat_busy`,
 `403 challenge_failed`, `422 message_rejected`, `429 rate_limited`,
 `503 ai_disabled | ai_overloaded | ai_unavailable | challenge_unavailable`.
-Session details are in [security](security.md#sessions-confirmed-p5-02). Creating the live widget
-and embedding it in the browser remain **Proposed** (P5-04).
+Session details are in [security](security.md#sessions-confirmed-p5-02). Browser integration is
+**Confirmed in code** as a floating popup in the shared layout: a resting dog button opens a
+comic-style speech bubble in a native top-layer dialog; the React chat client loads on the first click.
+The dog remains visible inside the dialog: sitting while open and standing only during a message
+request, alongside a textual "Thinking…" status. Replies and errors return it to sitting; closing
+shows the lying-down launcher even if a request is still running. The three local SVG poses share
+a bottom-aligned frame. Only the resting pose loads initially; sitting and standing mount together
+on the first activation and stay mounted so later pose changes reuse them.
+The dialog supports Escape, backdrop dismissal, focus containment/restoration, and mobile sizing.
+Conversation state persists across closing and internal navigation. Exchanges keep stable IDs as
+the 20-entry history window advances, so new replies remain additions to the accessible log.
+Closing during verification
+removes the widget and clears its unused token. `/apps/portfolio-assistant/` is a descriptive
+entry, so it never creates a second conversation. The client uses explicit
+Turnstile rendering, cookie-based requests, and plain-text answers with canonical registry links.
+Both public build settings are required; an unconfigured or offline API never prevents the static
+site from working. Browser acceptance, creating the live widget, and production configuration
+remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
 
 1. **Session (Confirmed; live widget Proposed, P5-04):** `POST /api/v1/chat/sessions` sets an
    opaque, random session cookie (`HttpOnly; Secure; SameSite=Lax`). State lives in Redis under a

@@ -7,7 +7,11 @@ with GitOps.
 The site is fully static and stays online even when the API host is down. AI features are optional
 and provider-agnostic, and they are off by default.
 
-When AI is enabled, chat session creation requires server-verified Turnstile tokens. See the
+The resting dog opens a comic-style Portfolio Assistant speech bubble over any page. It sits while
+chat is open, stands while waiting for a reply, and lies down again when closed. When AI is enabled, session creation
+requires server-verified Turnstile tokens; without its public build configuration the page reports
+"not configured" and the rest of the site works. Production setup and browser acceptance remain
+pending. See the
 [Turnstile setup guide](docs/deployment/turnstile.md) for configuration and deployment status.
 
 **Progress and next steps:** [docs/implementation-roadmap.md](docs/implementation-roadmap.md)

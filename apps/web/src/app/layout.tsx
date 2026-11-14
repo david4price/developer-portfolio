@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { profile } from '@/content/profile';
+import { FloatingChat } from '@/components/floating-chat';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="https://github.com/david4price/developer-portfolio">Source on GitHub</a>
           </div>
         </footer>
+        <FloatingChat />
       </body>
     </html>
   );
