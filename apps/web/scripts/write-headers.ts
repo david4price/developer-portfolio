@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /*
  * Layout.
@@ -196,4 +197,7 @@ function main(): void {
   );
 }
 
-if (import.meta.main) main();
+// Run as a script, not when imported by tests. Compared by path rather than `import.meta.main`,
+// which Node 24.0 and 24.1 (allowed by `engines`) don't have: a skipped run would ship the site
+// without security headers while the build still looked green.
+if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) main();

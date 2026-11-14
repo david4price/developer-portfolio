@@ -1,4 +1,4 @@
-import { SYSTEM_RULES } from './chat-prompt.js';
+import { dataLabelPattern, dataTagPattern, SYSTEM_RULES } from './chat-prompt.js';
 import type {
   MessageGuard,
   MessageRejection,
@@ -30,10 +30,8 @@ const squeezedRuns = (folded: string) =>
 const RAW_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   // Chat-template control tokens and role tags: <|im_start|>, [INST], <<SYS>>, <system>.
   ['role_injection', /<\|[\w-]{1,30}\|>|\[\/?inst\]|<<\/?sys>>/i],
-  [
-    'role_injection',
-    /<\s*\/?\s*(?:system|assistant|developer|instructions?|portfolio[\s_-]*data)\b[^>]*>/i,
-  ],
+  ['role_injection', /<\s*\/?\s*(?:system|assistant|developer|instructions?)\b[^>]*>/i],
+  ['role_injection', dataTagPattern()],
   // A line that claims to speak as another role: "System: …", "### Assistant:".
   [
     'role_injection',
@@ -61,12 +59,9 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   ],
   ['instruction_override', /\b(?:you are|you re|youre) no longer\b/],
   ['instruction_override', /\bfrom now on you (?:are|will|must|should|can)\b/],
-  // Aimed at this assistant ("your/the/this system prompt"), so a question about how a portfolio
-  // project such as the Portfolio Assistant uses its system prompt still passes.
-  [
-    'prompt_extraction',
-    /\b(?:your|the|this) (?:system|initial|hidden|original|secret|developer) prompt\b/,
-  ],
+  // Broad on purpose: "print system prompt", "the assistant's system prompt". A question about
+  // how a portfolio project uses its own system prompt is rejected too and has to be rephrased.
+  ['prompt_extraction', /\b(?:system|initial|hidden|original|secret|developer) prompt\b/],
   [
     'prompt_extraction',
     /\b(?:reveal|show|print|repeat|output|display|dump|leak|recite|share|tell me|give me|write out|what (?:is|are|were)) (?:me )?(?:\w+ ){0,2}your (?:\w+ )?(?:prompt|instructions)\b/,
@@ -93,8 +88,8 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
 
-/** The data block's delimiter, in any case, spacing, or separator. */
-const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i;
+/** The data block's tag name in a reply, bare or wrapped (`<portfolio_data`, `&lt;…&gt;`). */
+const DATA_LABEL = dataLabelPattern();
 
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
@@ -140,9 +135,9 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    // Only the tag form: the rules and the empty-data notice say "portfolio data" in plain words,
-    // so ordinary replies use the phrase too.
-    if (DATA_TAG.test(reply)) return 'prompt_leak';
+    // The identifier, not the plain words: the rules and the empty-data notice say "portfolio
+    // data", so ordinary replies use that phrase too.
+    if (DATA_LABEL.test(reply)) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );

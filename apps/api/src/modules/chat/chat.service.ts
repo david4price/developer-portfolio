@@ -160,7 +160,8 @@ export class ChatService {
       const session = await this.store.load(sessionId);
       if (session === undefined) throw sessionRequired();
 
-      // Quotas count messages that would reach the model (not 409s or 401s); a 503 is refunded.
+      // Quotas count messages that would reach the model (not 409s or 401s); `generate()` says
+      // which 503s are refunded.
       const ipKey = `ip:${clientBucket}:messages`;
       const sessionKey = `session:${sessionId}:messages`;
       await this.enforce(ipKey, this.limits.ipMessagesPerHour, HOUR_SECONDS);
@@ -214,9 +215,10 @@ export class ChatService {
   /**
    * One completion within global capacity. Overload becomes `503 ai_overloaded`, never a hang;
    * typed provider errors become client-safe codes without upstream text. The quota is refunded
-   * only when the request used no capacity: an immediate queue-full rejection, a provider that
-   * answered "busy", or AI switched off. A request that waited out the queue, or reached the
-   * model and then timed out or failed, still counts, so neither can be repeated for free.
+   * only when the request certainly used no capacity: an immediate queue-full rejection, or AI
+   * switched off. A request that waited out the queue, or reached the provider (even one that
+   * then answered "busy", possibly after generating for a while), still counts, so neither can
+   * be repeated for free.
    */
   private async generate(
     messages: AiMessage[],
@@ -230,11 +232,7 @@ export class ChatService {
       );
       return completion.content;
     } catch (error) {
-      if (
-        (error instanceof AiCapacityError && !error.waited) ||
-        error instanceof AiOverloadedError ||
-        error instanceof AiDisabledError
-      ) {
+      if ((error instanceof AiCapacityError && !error.waited) || error instanceof AiDisabledError) {
         await Promise.allSettled(quotaKeys.map((key) => this.rateLimiter.refund(key)));
       }
       throw toApiError(error);

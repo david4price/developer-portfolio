@@ -130,6 +130,17 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     await hold;
   });
 
+  it('does not mark a request as having waited when no queue wait is configured', async () => {
+    const limit = limiter({ limit: 1, queueMax: 1, queueWaitMs: 0 });
+    const hold = limit.run(() => sleep(300), never);
+    await sleep(20);
+    await assert.rejects(
+      limit.run(async () => 'x', never),
+      (error) => error instanceof AiCapacityError && !error.waited,
+    );
+    await hold;
+  });
+
   it('frees the slot of a holder that died, once its lease expires', async () => {
     await redis.zadd('portfolio:chat:ai:holders', Date.now() + 200, 'crashed-replica');
     const limit = limiter({ limit: 1, queueMax: 1, queueWaitMs: 2_000, leaseMs: 5_000 });

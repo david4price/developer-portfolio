@@ -233,6 +233,35 @@ describe('resolveNavigationLinks', () => {
     );
   });
 
+  it('lets an explicit kind decide over a page of another kind with a similar name', () => {
+    const similar = new RegistryKnowledgeBase(
+      createRegistry({
+        projects: [
+          {
+            slug: 'mini-app-weather',
+            title: 'Mini-App Weather',
+            summary: 'A project.',
+            description: 'A project.',
+            kind: 'portfolio-app',
+            technologies: ['Go'],
+            featured: false,
+            repositoryUrl: null,
+            liveUrl: null,
+            miniAppSlug: null,
+          },
+        ],
+        miniApps: [
+          { slug: 'weather', title: 'Weather', summary: 'A mini-app.', status: 'planned' },
+        ],
+      }),
+    );
+    const resolved = resolveNavigationLinks('Try [[mini-app:weather]].', similar);
+    assert.deepEqual(
+      resolved.links.map(({ kind, slug }) => `${kind}:${slug}`),
+      ['mini-app:weather'],
+    );
+  });
+
   it('leaves double brackets that are not markers alone, such as code', () => {
     const code = 'Matrix: [[1, 2], [3, 4]] in Python, arr[[0]] in R, and [[note]] here.';
     assert.deepEqual(resolveNavigationLinks(code, knowledge), { reply: code, links: [] });

@@ -153,13 +153,16 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
     if (!queued) throw new AiCapacityError(retryAfterSeconds);
 
     const deadline = Date.now() + this.options.queueWaitMs;
+    let waited = false;
     try {
       while (Date.now() < deadline) {
         signal.throwIfAborted();
         await sleep(Math.min(this.pollMs, Math.max(0, deadline - Date.now())));
+        waited = true;
         if (await this.tryAcquire(token)) return;
       }
-      throw new AiCapacityError(retryAfterSeconds, true);
+      // With no wait configured, the queue place was never actually held.
+      throw new AiCapacityError(retryAfterSeconds, waited);
     } catch (error) {
       // Leave the queue on timeout, abort, or Redis failure so the place isn't held.
       await this.redis.zrem(WAITERS_KEY, token).catch(() => undefined);

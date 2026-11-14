@@ -6,6 +6,7 @@ import {
   AI_PROVIDER,
   type AiCompletion,
   type AiCompletionRequest,
+  AiDisabledError,
   AiOverloadedError,
   type AiProvider,
   AiUnavailableError,
@@ -590,6 +591,26 @@ describe('chat quotas and capacity', () => {
     assert.equal((await message(target, cookie)).statusCode, 503);
     ai.failWith = undefined;
     assert.equal((await message(target, cookie)).statusCode, 429, 'a timeout is not free');
+  });
+
+  it('charges the quota when the provider answered busy, possibly after generating', async () => {
+    const ai = new FakeAi();
+    ai.failWith = new AiOverloadedError(503);
+    const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai);
+    const { cookie } = await session(target);
+    assert.equal((await message(target, cookie)).statusCode, 503);
+    ai.failWith = undefined;
+    assert.equal((await message(target, cookie)).statusCode, 429);
+  });
+
+  it('refunds the quota when AI turned out to be off', async () => {
+    const ai = new FakeAi();
+    ai.failWith = new AiDisabledError();
+    const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai);
+    const { cookie } = await session(target);
+    assert.equal((await message(target, cookie)).statusCode, 503);
+    ai.failWith = undefined;
+    assert.equal((await message(target, cookie)).statusCode, 200);
   });
 
   it('charges the quota when the request waited out the queue', async () => {

@@ -59,9 +59,9 @@ hung request.
   prompt, and history. New patterns need a test case, plus a legitimate question that must still
   pass, in `test/message-guard.test.ts`.
 - Per-session and per-IP quotas, max input length (1,000 chars), and logging of rejected requests
-  (reason only, without message content). Refund the quota only when a request used no capacity (immediate queue-full rejection, provider
-  "busy", AI off); timeouts, failures after reaching the model, waiting out the queue, and
-  rejected messages all count.
+  (reason only, without message content). Refund the quota only when a request certainly used no capacity (immediate queue-full
+  rejection, AI off); waiting out the queue, anything after reaching the provider (even "busy"),
+  and rejected messages all count.
 
 ## Tests to Require
 

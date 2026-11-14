@@ -14,10 +14,16 @@ export const CONTEXT_MAX_CHARS = 1_800;
 const HISTORY_MAX_TURNS = 8;
 const HISTORY_MAX_CHARS = 4_000;
 
-const DATA_OPEN = '<portfolio_data>';
-const DATA_CLOSE = '</portfolio_data>';
+/** The data block's tag name. Screening (`heuristic-message-guard.ts`) builds on these patterns. */
+const DATA_LABEL = 'portfolio_data';
+const DATA_OPEN = `<${DATA_LABEL}>`;
+const DATA_CLOSE = `</${DATA_LABEL}>`;
 /** Anything that reads as a data tag, whatever its case, spacing, separator, or attributes. */
-const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/gi;
+export const dataTagPattern = (flags = 'i') =>
+  new RegExp(`<\\s*\\/?\\s*${DATA_LABEL.replace('_', '[\\s_-]*')}\\b[^>]*>`, flags);
+/** The tag name as an identifier (`portfolio_data`, `portfolio-data`), in any case or wrapping. */
+export const dataLabelPattern = () => new RegExp(DATA_LABEL.replace('_', '[_-]'), 'i');
+const DATA_TAG = dataTagPattern('gi');
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
