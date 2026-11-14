@@ -73,9 +73,10 @@ environment (`CHAT_*`); the defaults below apply when unset.
 | Bot challenge                | Turnstile verified server-side on session creation (Proposed) | P5-04                                                                                                                                           |
 
 Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing.
-A `503` is refunded only when the request certainly used no capacity: the queue was already full,
-or AI is off. A request that waited out the queue, or reached the provider (even one that then
-answered "busy", possibly after generating for a while), still counts, so neither becomes free GPU time or free queue
+A `503` is refunded only when the request used no capacity: the queue was already full, the
+provider answered "busy" within 2 seconds of the call (a rejection, not a cut-short generation),
+or AI is off. A request that waited out the queue, or reached the model and then timed out,
+failed, or was turned away late, still counts, so neither becomes free GPU time or free queue
 occupancy. A message rejected by screening also counts, so the screen can't be probed for free.
 The integration suite includes a load test: 12 visitors at once against concurrency 1 and a queue
 of 2 get 3 answers and 9 immediate `503 ai_overloaded` responses; none hang.
@@ -145,14 +146,16 @@ classifier model can replace it behind the same token if measured attacks get pa
   jailbreak personas (developer mode, DAN, "act as an unrestricted AI"), and hidden payloads
   (long base64 runs, letter-spaced trigger words). Matching runs on case-, accent-, and
   punctuation-folded text. Patterns target instruction-shaped phrasing, not topics: "what are your
-  rules for clean code?" or "override the existing CSS rules" pass. Any mention of a "system
-  prompt" (or initial, hidden, original prompt) is rejected, including a question about how a
-  portfolio project uses its own: the visitor rephrases. Rejections are logged with their reason and request ID only, never the
+  rules for clean code?" or "override the existing CSS rules" pass. Any mention of a "system",
+  "hidden", or "secret" prompt is rejected, even a question about how a portfolio project uses its
+  own (the visitor rephrases); "initial", "original", or "developer" prompt only when aimed at the
+  assistant ("your initial prompt"). Rejections are logged with their reason and request ID only, never the
   message; they count against quota and are not stored.
 - **Reply check:** a reply containing any 10 consecutive words of the system rules, or the data
-  block's tag name in any form (`portfolio_data`, `<portfolio_data`, `&lt;portfolio-data&gt;`;
-  the plain words "portfolio data" are fine), is replaced by the fallback message and logged as
-  `prompt_leak`.
+  tag in any tag-like form, even cut off or HTML-escaped (`<portfolio data`,
+  `&lt;/portfolio-data`), or the bare identifier `portfolio_data` (the plain words "portfolio
+  data" and names like `portfolio_database` are fine), is replaced by the fallback message and
+  logged as `prompt_leak`.
 
 Screening is one layer. The others stay in force whatever it misses: fixed system rules, retrieved
 data framed as data, no tools or system access, registry-validated links, plain-text output, and

@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   buildHeadersFile,
@@ -89,5 +93,27 @@ describe('buildHeadersFile', () => {
       () => buildHeadersFile([heavy, page('/')], null),
       /_headers line is \d+ characters/,
     );
+  });
+});
+
+describe('write-headers as a script', () => {
+  it('writes _headers when run directly, even through a symlinked path', () => {
+    const work = mkdtempSync(join(tmpdir(), 'write-headers-'));
+    try {
+      const out = join(work, 'out');
+      mkdirSync(out);
+      writeFileSync(join(out, 'index.html'), '<html><script>self.x=1</script></html>');
+      const link = join(work, 'linked-write-headers.js');
+      symlinkSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), link);
+
+      const env = { ...process.env };
+      delete env.NEXT_PUBLIC_API_BASE_URL;
+      const run = spawnSync(process.execPath, [link, out], { encoding: 'utf8', env });
+      assert.equal(run.status, 0, run.stderr);
+      const headers = readFileSync(join(out, '_headers'), 'utf8');
+      assert.match(headers, /^\/\*\n {2}Content-Security-Policy: .*'sha256-/);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
   });
 });

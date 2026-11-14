@@ -37,6 +37,8 @@ export const CHAT_SESSION_TTL_SECONDS = 24 * 60 * 60;
 export const AI_LEASE_MS = DEFAULT_AI_TIMEOUT_MS + 15_000;
 const HOUR_SECONDS = 60 * 60;
 const MAX_OUTPUT_TOKENS = 400;
+/** A provider "busy" this soon after the call was a rejection, not a generation cut short. */
+const QUICK_REJECTION_MS = 2_000;
 /** History kept in Redis. */
 const STORED_HISTORY_MAX_TURNS = 20;
 /**
@@ -215,24 +217,33 @@ export class ChatService {
   /**
    * One completion within global capacity. Overload becomes `503 ai_overloaded`, never a hang;
    * typed provider errors become client-safe codes without upstream text. The quota is refunded
-   * only when the request certainly used no capacity: an immediate queue-full rejection, or AI
-   * switched off. A request that waited out the queue, or reached the provider (even one that
-   * then answered "busy", possibly after generating for a while), still counts, so neither can
-   * be repeated for free.
+   * only when the request used no capacity: an immediate queue-full rejection, a provider "busy"
+   * within `QUICK_REJECTION_MS` of the call, or AI switched off. A request that waited out the
+   * queue, or reached the model and then timed out, failed, or was turned away late, still
+   * counts, so neither can be repeated for free.
    */
   private async generate(
     messages: AiMessage[],
     signal: AbortSignal,
     quotaKeys: readonly string[],
   ): Promise<string> {
+    let calledAt: number | undefined;
     try {
-      const completion = await this.concurrency.run(
-        () => this.ai.complete({ messages, maxOutputTokens: MAX_OUTPUT_TOKENS }, signal),
-        signal,
-      );
+      const completion = await this.concurrency.run(() => {
+        calledAt = Date.now();
+        return this.ai.complete({ messages, maxOutputTokens: MAX_OUTPUT_TOKENS }, signal);
+      }, signal);
       return completion.content;
     } catch (error) {
-      if ((error instanceof AiCapacityError && !error.waited) || error instanceof AiDisabledError) {
+      const quicklyTurnedAway =
+        error instanceof AiOverloadedError &&
+        calledAt !== undefined &&
+        Date.now() - calledAt < QUICK_REJECTION_MS;
+      if (
+        (error instanceof AiCapacityError && !error.waited) ||
+        quicklyTurnedAway ||
+        error instanceof AiDisabledError
+      ) {
         await Promise.allSettled(quotaKeys.map((key) => this.rateLimiter.refund(key)));
       }
       throw toApiError(error);

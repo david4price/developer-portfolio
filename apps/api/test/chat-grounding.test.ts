@@ -262,6 +262,33 @@ describe('resolveNavigationLinks', () => {
     );
   });
 
+  it('falls back to a whole title when the kind prefix is part of the title', () => {
+    const prefixed = new RegistryKnowledgeBase(
+      createRegistry({
+        projects: [
+          {
+            slug: 'weather-dashboard',
+            title: 'Mini-App: Weather Dashboard',
+            summary: 'A project.',
+            description: 'A project.',
+            kind: 'portfolio-app',
+            technologies: ['Go'],
+            featured: false,
+            repositoryUrl: null,
+            liveUrl: null,
+            miniAppSlug: null,
+          },
+        ],
+        miniApps: [],
+      }),
+    );
+    const resolved = resolveNavigationLinks('See [[Mini-App: Weather Dashboard]].', prefixed);
+    assert.deepEqual(
+      resolved.links.map(({ kind, slug }) => `${kind}:${slug}`),
+      ['project:weather-dashboard'],
+    );
+  });
+
   it('leaves double brackets that are not markers alone, such as code', () => {
     const code = 'Matrix: [[1, 2], [3, 4]] in Python, arr[[0]] in R, and [[note]] here.';
     assert.deepEqual(resolveNavigationLinks(code, knowledge), { reply: code, links: [] });

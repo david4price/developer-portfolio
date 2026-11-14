@@ -14,16 +14,13 @@ export const CONTEXT_MAX_CHARS = 1_800;
 const HISTORY_MAX_TURNS = 8;
 const HISTORY_MAX_CHARS = 4_000;
 
-/** The data block's tag name. Screening (`heuristic-message-guard.ts`) builds on these patterns. */
-const DATA_LABEL = 'portfolio_data';
-const DATA_OPEN = `<${DATA_LABEL}>`;
-const DATA_CLOSE = `</${DATA_LABEL}>`;
-/** Anything that reads as a data tag, whatever its case, spacing, separator, or attributes. */
-export const dataTagPattern = (flags = 'i') =>
-  new RegExp(`<\\s*\\/?\\s*${DATA_LABEL.replace('_', '[\\s_-]*')}\\b[^>]*>`, flags);
-/** The tag name as an identifier (`portfolio_data`, `portfolio-data`), in any case or wrapping. */
-export const dataLabelPattern = () => new RegExp(DATA_LABEL.replace('_', '[_-]'), 'i');
-const DATA_TAG = dataTagPattern('gi');
+const DATA_OPEN = '<portfolio_data>';
+const DATA_CLOSE = '</portfolio_data>';
+/**
+ * Anything that reads as a data tag, whatever its case, spacing, separator, or attributes. Shared
+ * with screening (`heuristic-message-guard.ts`); keep it in step with DATA_OPEN and DATA_CLOSE.
+ */
+export const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i;
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
@@ -64,7 +61,7 @@ function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = snippet.replace(DATA_TAG, '');
+    const clean = snippet.replace(new RegExp(DATA_TAG, 'gi'), '');
     const cost = clean.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
     kept.push(clean);

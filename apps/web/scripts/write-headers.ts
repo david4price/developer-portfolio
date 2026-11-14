@@ -14,7 +14,7 @@
  * domain, and the beacon reports page views and Web Vitals. Only its two exact hosts are allowed.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -170,9 +170,12 @@ function apiOrigin(): string | null {
   return url.origin;
 }
 
-/** Reads `out/`, writes `out/_headers`. Runs only as a script, so tests can import the rest. */
+/**
+ * Reads the export (`out/`, or the directory given as the first argument) and writes its
+ * `_headers`. Runs only as a script, so tests can import the rest.
+ */
 function main(): void {
-  const outDir = resolve(import.meta.dirname, '../out');
+  const outDir = resolve(process.argv[2] ?? resolve(import.meta.dirname, '../out'));
   // Same rule as next.config.ts: the workspace `.env` fills in only what the environment lacks.
   const workspaceEnv = resolve(import.meta.dirname, '../../../.env');
   if (existsSync(workspaceEnv)) process.loadEnvFile(workspaceEnv);
@@ -197,7 +200,17 @@ function main(): void {
   );
 }
 
-// Run as a script, not when imported by tests. Compared by path rather than `import.meta.main`,
-// which Node 24.0 and 24.1 (allowed by `engines`) don't have: a skipped run would ship the site
-// without security headers while the build still looked green.
-if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) main();
+/**
+ * Run as a script, not when imported by tests. Real paths are compared, so a symlinked checkout
+ * or script still runs; `import.meta.main` isn't used because Node 24.0 and 24.1 (allowed by
+ * `engines`) lack it. A skipped run would ship the site without security headers while the build
+ * looked green, so `test/write-headers.test.ts` runs the compiled script through a symlink.
+ */
+const invokedPath = process.argv[1];
+if (
+  invokedPath !== undefined &&
+  existsSync(invokedPath) &&
+  realpathSync(invokedPath) === realpathSync(fileURLToPath(import.meta.url))
+) {
+  main();
+}

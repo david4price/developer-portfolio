@@ -52,13 +52,14 @@ function classify(body: string, knowledge: Resolver): ChatLink | 'drop' | 'keep'
   if (trimmed === '') return 'drop';
   const prefixed = KIND_PREFIX.exec(trimmed);
   const kind = prefixed?.[1]?.toLowerCase();
-  // An explicit kind decides: its slug or title, else a whole title of that kind.
+  // An explicit kind is tried first: `[[mini-app:weather]]` is the mini-app even if a project
+  // has a similar name.
   if (kind !== undefined && isLinkKind(kind)) {
-    return (
-      knowledge.resolve(prefixed?.[2] ?? '', kind) ?? knowledge.resolve(trimmed, kind) ?? 'drop'
-    );
+    const ofKind = knowledge.resolve(prefixed?.[2] ?? '', kind);
+    if (ofKind !== undefined) return ofKind;
   }
-  // Otherwise a whole title ("Homelab: K3s Cluster" is a page, not the made-up kind "homelab").
+  // Then the whole text as a title of any kind ("Homelab: K3s Cluster", or a project titled
+  // "Mini-App: Weather Dashboard").
   const titled = knowledge.resolve(trimmed);
   if (titled !== undefined) return titled;
   if (prefixed !== null) return 'drop';

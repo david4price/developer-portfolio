@@ -19,6 +19,8 @@ describe('HeuristicMessageGuard.screenMessage', () => {
       'How do you drop all the constraints in Postgres during a migration?',
       'I always forget the rules of chess. Did you build any games?',
       'What does the system message queue in the worker do?',
+      'What was the original prompt that kicked off this project?',
+      'Does the CLI show a developer prompt?',
       'Tell me about the Next.js app, e.g. `arr[[0]]` handling.',
       'Café ☕ — does the weather bot support emoji? 👍',
       'Line one\n\tindented line two',
@@ -99,6 +101,7 @@ describe('HeuristicMessageGuard.screenReply', () => {
       "I don't know; that isn't in the portfolio.",
       "I don't see that in the portfolio data.",
       'Developer Portfolio data is stored in PostgreSQL.',
+      'Model holdings in a portfolio_database schema.',
     ]) {
       assert.equal(guard.screenReply(reply), undefined, reply);
     }
@@ -114,7 +117,9 @@ describe('HeuristicMessageGuard.screenReply', () => {
       'Here is portfolio_data: everything',
       'Cut off at <portfolio_data',
       'Escaped &lt;portfolio_data&gt;',
-      'Bracketed [Portfolio-Data]',
+      '<portfolio data>',
+      '</PORTFOLIODATA>',
+      'Escaped &lt;/portfolio-data&gt;',
     ]) {
       assert.equal(guard.screenReply(leak), 'prompt_leak', leak);
     }

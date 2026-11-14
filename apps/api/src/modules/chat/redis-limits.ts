@@ -139,6 +139,8 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
     if (await this.tryAcquire(token)) return;
 
     const retryAfterSeconds = Math.ceil(this.options.queueWaitMs / 1_000) || 1;
+    // No wait configured: don't take a queue place only to give it up at once.
+    if (this.options.queueWaitMs <= 0) throw new AiCapacityError(retryAfterSeconds);
     const queued = await withRedis(
       async () =>
         (await this.redis.eval(

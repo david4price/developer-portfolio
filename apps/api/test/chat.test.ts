@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, beforeEach, describe, it } from 'node:test';
+import { after, beforeEach, describe, it, mock } from 'node:test';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { ApiErrorResponse, ChatMessageResponse } from '@portfolio/shared-types';
 import {
@@ -593,14 +593,28 @@ describe('chat quotas and capacity', () => {
     assert.equal((await message(target, cookie)).statusCode, 429, 'a timeout is not free');
   });
 
-  it('charges the quota when the provider answered busy, possibly after generating', async () => {
-    const ai = new FakeAi();
-    ai.failWith = new AiOverloadedError(503);
-    const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai);
-    const { cookie } = await session(target);
-    assert.equal((await message(target, cookie)).statusCode, 503);
-    ai.failWith = undefined;
-    assert.equal((await message(target, cookie)).statusCode, 429);
+  it('refunds a provider "busy" that came at once, but not one after generating', async () => {
+    let now = 1_000_000;
+    const clock = mock.method(Date, 'now', () => now);
+    try {
+      let generateMs = 0;
+      const busy: AiProvider = {
+        enabled: true,
+        async complete() {
+          now += generateMs;
+          throw new AiOverloadedError(503);
+        },
+      };
+      const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), busy);
+      const { cookie } = await session(target);
+      assert.equal((await message(target, cookie)).statusCode, 503);
+      assert.equal((await message(target, cookie)).statusCode, 503, 'an instant busy is free');
+      generateMs = 5_000;
+      assert.equal((await message(target, cookie)).statusCode, 503);
+      assert.equal((await message(target, cookie)).statusCode, 429, 'a late busy costs');
+    } finally {
+      clock.mock.restore();
+    }
   });
 
   it('refunds the quota when AI turned out to be off', async () => {
