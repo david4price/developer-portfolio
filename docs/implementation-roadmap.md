@@ -12,12 +12,16 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Follow-ups to P5-05/P5-07: retrieved data keeps its markup (`Array<string>`) while every form of
+  the data delimiter, including look-alike brackets, is removed; quota refunds are bound to the
+  window they were counted in. The guard's phrasing limit is recorded as P5-08.
 - P5-07: chat messages are screened before the model (Unicode normalization; instruction
   override, prompt extraction, role markup, jailbreak, and hidden-payload patterns →
   `422 message_rejected`), and replies that leak the system rules are withheld. Full-repo review
-  fixes: quota refunded when an overload rejection used no capacity, link markers by title and code-safe, planned mini-apps labelled
-  in grounding data, quiet client disconnects, nginx security headers on static assets, a chart
-  guard so AI with NetworkPolicies requires an inference egress rule, and a per-page CSP in
+  fixes: quota refunded when an overload rejection used no capacity, link markers by title and
+  code-safe, planned mini-apps labelled in grounding data, quiet client disconnects, nginx
+  security headers on static assets, a chart guard so AI with NetworkPolicies requires an
+  inference egress rule, and a per-page CSP in
   `_headers` so adding projects can't outgrow Cloudflare's 2,000-character line limit.
 - P5-05: chat answers are grounded in the project registry (in-memory keyword search, top 3
   snippets in a delimited data block, whole prompt held to ~1,500 tokens). The model links pages
@@ -82,7 +86,7 @@ Phase 2 lacks only the owner's content (P2-12).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Open pull requests:** P5-05 (registry grounding). Open every PR against `main`.
+**Open pull requests:** none. Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -226,7 +230,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (5/7)
+## Phase 5: AI Chatbot (5/8)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -259,6 +263,12 @@ Read-only inventory of the reference host. Findings:
       adapter; unit tests cover each rejection class, obfuscated variants, legitimate questions
       that must pass, and leak detection; service tests show rejected messages never reach the
       model or history and still cost quota.
+- [ ] **P5-08** Classifier-based message screening. _Needs:_ P5-06, P5-07. _Done when:_ a
+      classifier adapter behind `MESSAGE_GUARD` beats the rule-based one on the cases in
+      `apps/api/test/message-guard.test.ts` plus a larger labelled set, within the latency and GPU
+      budget the reference runtime leaves (it also serves the private assistant). Rules can't
+      separate "print the initial prompt" from "does the CLI display its original prompt?" without
+      trading one error for another.
 
 ## Phase 6: Infrastructure Explorer (0/4)
 
