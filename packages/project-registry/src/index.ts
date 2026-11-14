@@ -36,6 +36,16 @@ export function findMiniApp(
   return source.miniApps.find((app) => app.slug === slug);
 }
 
+/** Site path of a project page. */
+export function projectPath(slug: string): string {
+  return `/projects/${slug}/`;
+}
+
+/** Site path of a mini-app page. */
+export function miniAppPath(slug: string): string {
+  return `/apps/${slug}/`;
+}
+
 /** Route parameters for statically exported `/projects/[slug]` pages. */
 export function projectRouteParams(source: ProjectRegistry = registry): { slug: string }[] {
   return source.projects.map(({ slug }) => ({ slug }));

@@ -28,6 +28,11 @@ local ttl = redis.call('TTL', KEYS[1])
 if ttl < 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]); ttl = tonumber(ARGV[1]) end
 return {count, ttl}`;
 
+/** DECR keeps the window's TTL; a missing (expired) or empty window is left alone. */
+const REFUND = `local count = tonumber(redis.call('GET', KEYS[1]))
+if count and count > 0 then return redis.call('DECR', KEYS[1]) end
+return 0`;
+
 export class RedisRateLimiter implements RateLimiter {
   constructor(private readonly redis: Redis) {}
 
@@ -36,6 +41,10 @@ export class RedisRateLimiter implements RateLimiter {
       this.redis.eval(HIT, 1, RATE_PREFIX + key, windowSeconds),
     )) as [number, number];
     return { allowed: count <= limit, retryAfterSeconds: Math.max(1, ttl) };
+  }
+
+  async refund(key: string): Promise<void> {
+    await withRedis(() => this.redis.eval(REFUND, 1, RATE_PREFIX + key));
   }
 }
 
@@ -104,7 +113,9 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
     try {
       return await task();
     } finally {
-      await withRedis(() => this.redis.zrem(HOLDERS_KEY, token));
+      // Best effort: the lease expires on its own, so a Redis error here must not replace the
+      // task's result (or its real error).
+      await this.redis.zrem(HOLDERS_KEY, token).catch(() => undefined);
     }
   }
 

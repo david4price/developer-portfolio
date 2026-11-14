@@ -60,6 +60,7 @@ export type ApiErrorCode =
   | 'ai_overloaded'
   | 'chat_session_required'
   | 'chat_busy'
+  | 'message_rejected'
   | 'internal_error';
 
 export interface ApiErrorResponse {
@@ -86,7 +87,23 @@ export interface ChatMessageRequest {
   readonly message: string;
 }
 
+export type ChatLinkKind = 'project' | 'mini-app';
+
+/** A site page the assistant suggests. The API only returns links to slugs in the registry. */
+export interface ChatLink {
+  readonly kind: ChatLinkKind;
+  readonly slug: string;
+  readonly title: string;
+  /** Site-relative path with a trailing slash, e.g. `/projects/<slug>/`. */
+  readonly path: string;
+}
+
 export interface ChatMessageResponse {
-  /** Plain text. Clients must render it as text, never as HTML. */
+  /**
+   * Plain text. Clients must render it as text, never as HTML, and must not turn URLs or paths in
+   * it into links: navigation goes only through `links`.
+   */
   readonly reply: string;
+  /** Validated links to registry pages, at most three, in the order the reply mentions them. */
+  readonly links: readonly ChatLink[];
 }

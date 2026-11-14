@@ -1,4 +1,9 @@
-import { findMiniApp, findProject, projectRouteParams } from '@portfolio/project-registry';
+import {
+  findMiniApp,
+  findProject,
+  miniAppPath,
+  projectRouteParams,
+} from '@portfolio/project-registry';
 import { TechList } from '@portfolio/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -45,7 +50,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         )}
         {miniApp !== undefined && (
           <li>
-            <Link href={`/apps/${miniApp.slug}/`}>{miniApp.title}</Link>
+            <Link href={miniAppPath(miniApp.slug)}>{miniApp.title}</Link>
           </li>
         )}
       </ul>

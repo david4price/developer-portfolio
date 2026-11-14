@@ -11,6 +11,8 @@ export interface RateLimitResult {
 export interface RateLimiter {
   /** Counts one hit against `key`; allowed while the window's count is at most `limit`. */
   hit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult>;
+  /** Takes back one hit from the current window, if the window still exists and isn't empty. */
+  refund(key: string): Promise<void>;
 }
 
 /** No slot became free in time, or the wait queue was full. */

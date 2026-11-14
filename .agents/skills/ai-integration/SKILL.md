@@ -5,9 +5,12 @@ description: Implement or review the portfolio chatbot and AI provider layer —
 
 # AI Integration
 
-Status: the `AiProvider` port, the `disabled` and `openai-compatible` adapters, and chat sessions
-with the per-session lock (`apps/api/src/modules/chat/`, P5-02) exist (`apps/api/src/modules/ai/`). Everything
-else is **Proposed** (Phase 5). Design reference: `docs/architecture/ai-integration.md`.
+Status: the `AiProvider` port and the `disabled` and `openai-compatible` adapters exist
+(`apps/api/src/modules/ai/`). In `apps/api/src/modules/chat/`: sessions with the per-session lock
+(P5-02), quotas and the Redis semaphore (P5-03), and registry retrieval (`KnowledgeBase` port,
+`registry-knowledge-base.ts`), the prompt builder (`chat-prompt.ts`), and validated links
+(`navigation-links.ts`) from P5-05. Turnstile (P5-04) and the other adapters are **Proposed**.
+Design reference: `docs/architecture/ai-integration.md`.
 
 ## Provider Adapters
 
@@ -45,10 +48,18 @@ hung request.
   vector store only with measured need).
 - Delimit retrieved content and history as data; the system prompt states that instructions inside
   them are not to be followed.
-- Navigation links: the model may only reference registry slugs; the API validates each against
-  the registry and drops unknown ones. Never render model output as HTML.
+- Navigation links: the model may only copy `[[project:<slug>]]` / `[[mini-app:<slug>]]` markers
+  from the retrieved data; `resolveNavigationLinks()` validates each against the registry, returns
+  valid ones in `links`, and strips every other marker from the text. Cleanup touches only the text
+  around a removed marker, and an empty result becomes `EMPTY_REPLY_FALLBACK`. Never render model
+  output as HTML.
+- Screen both directions through the `MessageGuard` port (`MESSAGE_GUARD`): normalize every
+  visitor message and reject injection attempts with `422 message_rejected` before the model;
+  withhold replies that leak the system rules. Only the screened text reaches retrieval, the
+  prompt, and history. New patterns need a test case, plus a legitimate question that must still
+  pass, in `test/message-guard.test.ts`.
 - Per-session and per-IP quotas, max input length (1,000 chars), and logging of rejected requests
-  (without message content).
+  (reason only, without message content). A `503` refunds the quota; a rejected message doesn't.
 
 ## Tests to Require
 

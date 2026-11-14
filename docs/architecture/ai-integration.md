@@ -66,37 +66,91 @@ environment (`CHAT_*`); the defaults below apply when unset.
 | Per-IP quotas                | 60 messages / hour and 10 new sessions / hour                 | Redis fixed window; IPv6 counted per /64 (`CHAT_IP_MESSAGES_PER_HOUR`, `CHAT_IP_SESSIONS_PER_HOUR`); `429 rate_limited` + `Retry-After`         |
 | Client IP                    | Socket address; `CF-Connecting-IP` only when trusted          | `CHAT_TRUST_CF_CONNECTING_IP=true` only where a NetworkPolicy admits nothing but `cloudflared` (P4-03)                                          |
 | Max input                    | 1,000 characters per message                                  | Request validation                                                                                                                              |
-| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)         | Prompt builder: history capped at 8 turns / 4,000 characters                                                                                    |
+| Message screening            | Every message, before the model                               | `MessageGuard` (P5-07); rejected → `422 message_rejected`, see [Message Screening](#message-screening-confirmed-p5-07)                          |
+| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)         | Prompt builder (P5-05): 6,000 characters in all; data ≤ 1,800; history ≤ 8 turns / 4,000 characters                                             |
 | Output limit                 | 400 tokens                                                    | Provider call                                                                                                                                   |
 | Response timeout             | 30 s                                                          | Provider call with abort                                                                                                                        |
 | Bot challenge                | Turnstile verified server-side on session creation (Proposed) | P5-04                                                                                                                                           |
 
-Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing.
+Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing,
+and a `503` (no AI slot, provider overloaded or unavailable) is refunded because the model never
+answered. A message rejected by screening does count, so the screen can't be probed for free.
 The integration suite includes a load test: 12 visitors at once against concurrency 1 and a queue
 of 2 get 3 answers and 9 immediate `503 ai_overloaded` responses; none hang.
 
 ## Chat Design (Phase 5)
 
-Implemented so far (P5-02): `POST /api/v1/chat/sessions` (201, sets the session cookie; `503
-ai_disabled` while AI is off) and `POST /api/v1/chat/messages` (`{ "message": string }` →
-`{ "reply": string }`) with the per-session lock, a fixed system prompt, and trimmed history (at
-most 8 turns or 4,000 characters per prompt, 20 turns stored). Errors: `401 chat_session_required`,
-`409 chat_busy`, `503 ai_disabled | ai_overloaded | ai_unavailable`. Session details are in
-[security](security.md#sessions-confirmed-p5-02). Still Proposed: Turnstile (P5-04), quotas (P5-03),
-retrieval and links (P5-05).
+Implemented (P5-02, P5-03, P5-05): `POST /api/v1/chat/sessions` (201, sets the session cookie;
+`503 ai_disabled` while AI is off) and `POST /api/v1/chat/messages` (`{ "message": string }` →
+`{ "reply": string, "links": ChatLink[] }`) with the per-session lock, quotas, message screening,
+registry retrieval, and validated links. Errors: `401 chat_session_required`, `409 chat_busy`,
+`422 message_rejected`, `429 rate_limited`, `503 ai_disabled | ai_overloaded | ai_unavailable`. Session details are in
+[security](security.md#sessions-confirmed-p5-02). Still Proposed: Turnstile (P5-04).
 
-1. **Session:** `POST /api/v1/chat/sessions` verifies Turnstile and sets an opaque, random session
-   cookie (`HttpOnly; Secure; SameSite=Lax`). State lives in Redis under a namespaced key with a
-   TTL.
-2. **Per-session lock:** a Redis lock with a short TTL. A second message while one is in flight
-   returns `409 chat_busy`, so the conversation can't interleave.
-3. **Retrieval:** keyword / full-text search over the project registry and approved profile text.
-   A vector database is added only if measured answer quality requires one.
-4. **Prompt:** a fixed system prompt, retrieved snippets (clearly delimited and treated as data),
-   and a trimmed history.
-5. **Navigation:** the model may suggest links only by registry slug. The API validates each slug
-   against the registry and drops anything else.
-6. **Output:** plain text or a restricted markdown subset, rendered without raw HTML.
+1. **Session (Confirmed; Turnstile Proposed, P5-04):** `POST /api/v1/chat/sessions` sets an
+   opaque, random session cookie (`HttpOnly; Secure; SameSite=Lax`). State lives in Redis under a
+   namespaced key with a TTL. Turnstile verification arrives with P5-04.
+2. **Per-session lock (Confirmed):** a Redis lock with a short TTL. A second message while one is
+   in flight returns `409 chat_busy`, so the conversation can't interleave.
+3. **Retrieval (Confirmed, P5-05):** in-memory keyword search over the project registry, behind a
+   `KnowledgeBase` port (`registry-knowledge-base.ts`). The registry ships with the API, so search
+   needs no I/O and every replica answers the same. Terms are lowercased, stop words dropped, and
+   simple plurals folded; title and slug matches count most, then technologies and summary, then
+   the description, each scaled by how rare the term is. The query is the new message plus the
+   previous question, so follow-ups ("what stack does it use?") keep their topic. The top 3
+   matches (580 characters each at most, header fields included; URLs and markers that don't fit
+   are left out rather than cut) go into the prompt; when nothing matches, featured
+   projects do. Approved profile text is **Proposed**: it lives in the web app today and joins the
+   index once it moves into a shared package with the real content (P2-12). A vector database is
+   added only if measured answer quality requires one.
+4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules and the retrieved
+   snippets inside `<portfolio_data>…</portfolio_data>`. The rules say that data is reference
+   material whose instructions must not be followed, and anything that reads as a data tag (any
+   case, spacing, separator, or attributes) is stripped from snippets so content can't close the
+   block early. Then trimmed history and the new message. The whole
+   prompt is held to 6,000 characters (≈1,500 tokens): data gets at most 1,800, and history gets
+   what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
+   about 900–1,500 characters.
+5. **Navigation (Confirmed, P5-05):** retrieved data names each page with a marker such as
+   `[[project:<slug>]]` or `[[mini-app:<slug>]]`, and the model may suggest pages only by copying
+   one. The API replaces each valid marker with the page title and returns it in `links` (`kind`,
+   `slug`, `title`, `path`; at most 3, de-duplicated). A marker may name its page by slug or title
+   (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
+   the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the
+   text, so made-up slugs never reach the client. Other double-bracketed text, such as code
+   (`arr[[0]]`), is not a marker and stays. An unclosed marker consumes only its `kind:slug`
+   token, never the prose after it. Only the text around a removed marker is tidied (including a
+   list item left empty), so the rest of the reply stays as written. If nothing is left, the API
+   answers with a fixed fallback message instead of an empty reply. The stored history keeps the
+   cleaned text.
+6. **Output (Confirmed):** plain text. Clients render it as text, never as HTML, and don't turn
+   URLs or paths in it into links: navigation goes only through `links`. A reply that quotes the
+   system rules or the data framing is withheld (see below).
+
+## Message Screening (Confirmed, P5-07)
+
+Everything that crosses the model boundary passes a `MessageGuard` port. The default adapter
+(`heuristic-message-guard.ts`) is rule-based, needs no model call, and runs in microseconds; a
+classifier model can replace it behind the same token if measured attacks get past it.
+
+- **Normalization (every message):** Unicode NFKC; zero-width, bidi-override, BOM, Unicode tag
+  (invisible-text smuggling), private-use, and control characters other than tab and newline are
+  removed; runs of blank lines collapse. Only this cleaned text reaches retrieval, the model, and
+  the stored history.
+- **Rejection (`422 message_rejected`, before the model):** instruction overrides ("ignore all
+  previous instructions", "from now on you are…"), system-prompt extraction, chat-template and
+  role markup (`<|im_start|>`, `[INST]`, `<<SYS>>`, `<system>`, `System:` lines, data tags),
+  jailbreak personas (developer mode, DAN, "act as an unrestricted AI"), and hidden payloads
+  (long base64 runs, letter-spaced trigger words). Matching runs on case-, accent-, and
+  punctuation-folded text. Patterns target instruction-shaped phrasing, not topics: "what are your
+  rules for clean code?" or "override the existing CSS rules" pass. Rejections are logged with
+  their reason only, never the message; they count against quota and are not stored.
+- **Reply check:** a reply containing any 10 consecutive words of the system rules, or a
+  `portfolio_data` tag, is replaced by the fallback message and logged as `prompt_leak`.
+
+Screening is one layer. The others stay in force whatever it misses: fixed system rules, retrieved
+data framed as data, no tools or system access, registry-validated links, plain-text output, and
+quotas.
 
 ## Isolation
 

@@ -1,18 +1,31 @@
 import { Module } from '@nestjs/common';
+import { registry } from '@portfolio/project-registry';
 import type { Redis } from 'ioredis';
 import { API_CONFIG, type ApiConfig } from '../../config/api-config.js';
 import { REDIS } from '../../redis/redis.module.js';
 import { CHAT_SESSION_STORE } from './chat-session.store.js';
 import { ChatController } from './chat.controller.js';
 import { AI_LEASE_MS, ChatService } from './chat.service.js';
+import { HeuristicMessageGuard } from './heuristic-message-guard.js';
+import { KNOWLEDGE_BASE } from './knowledge-base.js';
 import { AI_CONCURRENCY, RATE_LIMITER } from './limits.js';
+import { MESSAGE_GUARD } from './message-guard.js';
 import { RedisChatSessionStore } from './redis-chat-session.store.js';
+import { RegistryKnowledgeBase } from './registry-knowledge-base.js';
 import { RedisAiConcurrencyLimiter, RedisRateLimiter } from './redis-limits.js';
 
 @Module({
   controllers: [ChatController],
   providers: [
     ChatService,
+    {
+      provide: KNOWLEDGE_BASE,
+      useFactory: () => new RegistryKnowledgeBase(registry),
+    },
+    {
+      provide: MESSAGE_GUARD,
+      useFactory: () => new HeuristicMessageGuard(),
+    },
     {
       provide: CHAT_SESSION_STORE,
       inject: [REDIS],
