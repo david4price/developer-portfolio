@@ -61,7 +61,12 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
   ],
   ['instruction_override', /\b(?:you are|you re|youre) no longer\b/],
   ['instruction_override', /\bfrom now on you (?:are|will|must|should|can)\b/],
-  ['prompt_extraction', /\b(?:system|initial|hidden|original|secret|developer) prompt\b/],
+  // Aimed at this assistant ("your/the/this system prompt"), so a question about how a portfolio
+  // project such as the Portfolio Assistant uses its system prompt still passes.
+  [
+    'prompt_extraction',
+    /\b(?:your|the|this) (?:system|initial|hidden|original|secret|developer) prompt\b/,
+  ],
   [
     'prompt_extraction',
     /\b(?:reveal|show|print|repeat|output|display|dump|leak|recite|share|tell me|give me|write out|what (?:is|are|were)) (?:me )?(?:\w+ ){0,2}your (?:\w+ )?(?:prompt|instructions)\b/,
@@ -87,6 +92,9 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
 
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
+
+/** The data block's delimiter, in any case, spacing, or separator. */
+const DATA_TAG = /<\s*\/?\s*portfolio[\s_-]*data\b[^>]*>/i;
 
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
@@ -132,7 +140,9 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    if (/portfolio[\s_-]*data/i.test(reply)) return 'prompt_leak';
+    // Only the tag form: the rules and the empty-data notice say "portfolio data" in plain words,
+    // so ordinary replies use the phrase too.
+    if (DATA_TAG.test(reply)) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );

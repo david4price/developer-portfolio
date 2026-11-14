@@ -17,7 +17,11 @@ export interface RateLimiter {
 
 /** No slot became free in time, or the wait queue was full. */
 export class AiCapacityError extends Error {
-  constructor(readonly retryAfterSeconds: number) {
+  constructor(
+    readonly retryAfterSeconds: number,
+    /** True when the request held a queue place until the wait ran out (it used capacity). */
+    readonly waited = false,
+  ) {
     super('AI capacity exhausted');
     this.name = 'AiCapacityError';
   }

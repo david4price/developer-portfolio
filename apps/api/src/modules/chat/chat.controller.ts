@@ -62,6 +62,7 @@ export class ChatController {
       body.message,
       this.bucketOf(request),
       disconnected.signal,
+      request.id,
     );
   }
 }

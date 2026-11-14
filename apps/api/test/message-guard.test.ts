@@ -19,6 +19,7 @@ describe('HeuristicMessageGuard.screenMessage', () => {
       'How do you drop all the constraints in Postgres during a migration?',
       'I always forget the rules of chess. Did you build any games?',
       'What does the system message queue in the worker do?',
+      "How does the Portfolio Assistant's system prompt keep answers on topic?",
       'Tell me about the Next.js app, e.g. `arr[[0]]` handling.',
       'Café ☕ — does the weather bot support emoji? 👍',
       'Line one\n\tindented line two',
@@ -93,6 +94,8 @@ describe('HeuristicMessageGuard.screenReply', () => {
       'Recipe Finder is a React app over a small Go API.',
       "I can only talk about the developer's projects, skills, and work.",
       "I don't know; that isn't in the portfolio.",
+      "I don't see that in the portfolio data.",
+      'Developer Portfolio data is stored in PostgreSQL.',
     ]) {
       assert.equal(guard.screenReply(reply), undefined, reply);
     }

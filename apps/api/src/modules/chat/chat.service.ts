@@ -82,6 +82,29 @@ const aiDisabled = () =>
     'The assistant is not available on this deployment.',
   );
 
+const aiBusy = (retryAfterSeconds?: number) =>
+  new ApiException(
+    HttpStatus.SERVICE_UNAVAILABLE,
+    'ai_overloaded',
+    'The assistant is busy. Try again shortly.',
+    retryAfterSeconds,
+  );
+
+/** AI and capacity errors as client-safe API errors; anything else passes through unchanged. */
+function toApiError(error: unknown): unknown {
+  if (error instanceof AiCapacityError) return aiBusy(error.retryAfterSeconds);
+  if (error instanceof AiOverloadedError) return aiBusy();
+  if (error instanceof AiDisabledError) return aiDisabled();
+  if (error instanceof AiUnavailableError) {
+    return new ApiException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'ai_unavailable',
+      'The assistant is temporarily unavailable.',
+    );
+  }
+  return error;
+}
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger('ChatService');
@@ -122,6 +145,7 @@ export class ChatService {
     message: string,
     clientBucket: string,
     signal: AbortSignal,
+    requestId: string,
   ): Promise<ChatMessageResponse> {
     if (sessionId === undefined) throw sessionRequired();
     if (!this.ai.enabled) throw aiDisabled();
@@ -146,7 +170,7 @@ export class ChatService {
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
       const screened = this.guard.screenMessage(message);
       if (!screened.allowed) {
-        this.logger.warn({ message: 'Chat message rejected', reason: screened.reason });
+        this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();
       }
       const question = screened.message;
@@ -157,7 +181,8 @@ export class ChatService {
       );
       const messages = buildPrompt(snippets, session.history, question);
       const { reply, links } = this.screenReply(
-        await this.completeOrRefund(messages, signal, [ipKey, sessionKey]),
+        requestId,
+        await this.generate(messages, signal, [ipKey, sessionKey]),
       );
 
       const history = [
@@ -176,77 +201,43 @@ export class ChatService {
   }
 
   /** Withheld or empty replies become `FALLBACK_REPLY`; markers become validated links. */
-  private screenReply(raw: string): ChatMessageResponse {
+  private screenReply(requestId: string, raw: string): ChatMessageResponse {
     const rejection = this.guard.screenReply(raw);
     if (rejection !== undefined) {
-      this.logger.warn({ message: 'Chat reply withheld', reason: rejection });
+      this.logger.warn({ message: 'Chat reply withheld', reason: rejection, requestId });
       return { reply: FALLBACK_REPLY, links: [] };
     }
     const { reply, links } = resolveNavigationLinks(raw, this.knowledge);
     return { reply: reply === '' ? FALLBACK_REPLY : reply, links };
   }
 
-  /** A 503 means the model never answered, so the message's quota hits are taken back. */
-  private async completeOrRefund(
+  /**
+   * One completion within global capacity. Overload becomes `503 ai_overloaded`, never a hang;
+   * typed provider errors become client-safe codes without upstream text. The quota is refunded
+   * only when the request used no capacity: an immediate queue-full rejection, a provider that
+   * answered "busy", or AI switched off. A request that waited out the queue, or reached the
+   * model and then timed out or failed, still counts, so neither can be repeated for free.
+   */
+  private async generate(
     messages: AiMessage[],
     signal: AbortSignal,
     quotaKeys: readonly string[],
   ): Promise<string> {
     try {
-      return await this.completeWithinCapacity(messages, signal);
-    } catch (error) {
-      if (error instanceof ApiException && error.getStatus() === HttpStatus.SERVICE_UNAVAILABLE) {
-        await Promise.allSettled(quotaKeys.map((key) => this.rateLimiter.refund(key)));
-      }
-      throw error;
-    }
-  }
-
-  /** Waits (boundedly) for a global AI slot; overload becomes `503 ai_overloaded`, never a hang. */
-  private async completeWithinCapacity(
-    messages: AiMessage[],
-    signal: AbortSignal,
-  ): Promise<string> {
-    try {
-      return await this.concurrency.run(() => this.complete(messages, signal), signal);
-    } catch (error) {
-      if (error instanceof AiCapacityError) {
-        throw new ApiException(
-          HttpStatus.SERVICE_UNAVAILABLE,
-          'ai_overloaded',
-          'The assistant is busy. Try again shortly.',
-          error.retryAfterSeconds,
-        );
-      }
-      throw error;
-    }
-  }
-
-  private async complete(messages: AiMessage[], signal: AbortSignal): Promise<string> {
-    try {
-      const completion = await this.ai.complete(
-        { messages, maxOutputTokens: MAX_OUTPUT_TOKENS },
+      const completion = await this.concurrency.run(
+        () => this.ai.complete({ messages, maxOutputTokens: MAX_OUTPUT_TOKENS }, signal),
         signal,
       );
       return completion.content;
     } catch (error) {
-      // Typed provider errors carry no upstream text; map them to client-safe codes.
-      if (error instanceof AiDisabledError) throw aiDisabled();
-      if (error instanceof AiOverloadedError) {
-        throw new ApiException(
-          HttpStatus.SERVICE_UNAVAILABLE,
-          'ai_overloaded',
-          'The assistant is busy. Try again shortly.',
-        );
+      if (
+        (error instanceof AiCapacityError && !error.waited) ||
+        error instanceof AiOverloadedError ||
+        error instanceof AiDisabledError
+      ) {
+        await Promise.allSettled(quotaKeys.map((key) => this.rateLimiter.refund(key)));
       }
-      if (error instanceof AiUnavailableError) {
-        throw new ApiException(
-          HttpStatus.SERVICE_UNAVAILABLE,
-          'ai_unavailable',
-          'The assistant is temporarily unavailable.',
-        );
-      }
-      throw error;
+      throw toApiError(error);
     }
   }
 }

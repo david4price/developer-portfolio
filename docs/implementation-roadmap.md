@@ -15,7 +15,7 @@ Phase 2 lacks only the owner's content (P2-12).
 - P5-07: chat messages are screened before the model (Unicode normalization; instruction
   override, prompt extraction, role markup, jailbreak, and hidden-payload patterns →
   `422 message_rejected`), and replies that leak the system rules are withheld. Full-repo review
-  fixes: quota refunded on `503`, link markers by title and code-safe, planned mini-apps labelled
+  fixes: quota refunded when an overload rejection used no capacity, link markers by title and code-safe, planned mini-apps labelled
   in grounding data, quiet client disconnects, nginx security headers on static assets, a chart
   guard so AI with NetworkPolicies requires an inference egress rule, and a per-page CSP in
   `_headers` so adding projects can't outgrow Cloudflare's 2,000-character line limit.

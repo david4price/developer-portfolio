@@ -159,7 +159,7 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
         await sleep(Math.min(this.pollMs, Math.max(0, deadline - Date.now())));
         if (await this.tryAcquire(token)) return;
       }
-      throw new AiCapacityError(retryAfterSeconds);
+      throw new AiCapacityError(retryAfterSeconds, true);
     } catch (error) {
       // Leave the queue on timeout, abort, or Redis failure so the place isn't held.
       await this.redis.zrem(WAITERS_KEY, token).catch(() => undefined);

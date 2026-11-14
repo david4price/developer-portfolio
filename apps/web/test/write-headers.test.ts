@@ -6,7 +6,7 @@ import {
   MAX_LINE,
   MAX_RULES,
   urlPath,
-} from './headers-file.ts';
+} from '../scripts/write-headers.js';
 
 const hash = (name: string) => `'sha256-${name}='`;
 const page = (path: string, ...own: string[]): ExportedPage => ({

@@ -582,7 +582,29 @@ describe('chat quotas and capacity', () => {
     assert.equal((await message(target, cookie)).statusCode, 503, 'the session lock was released');
   });
 
-  it('refunds the quota when the model could not answer (503)', async () => {
+  it('charges the quota when the request reached the model and then failed', async () => {
+    const ai = new FakeAi();
+    ai.failWith = new AiUnavailableError('timeout');
+    const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai);
+    const { cookie } = await session(target);
+    assert.equal((await message(target, cookie)).statusCode, 503);
+    ai.failWith = undefined;
+    assert.equal((await message(target, cookie)).statusCode, 429, 'a timeout is not free');
+  });
+
+  it('charges the quota when the request waited out the queue', async () => {
+    const waited: AiConcurrencyLimiter = {
+      run: async () => {
+        throw new AiCapacityError(10, true);
+      },
+    };
+    const target = await boot({ sessionMessageLimit: 1 }, waited);
+    const { cookie } = await session(target);
+    assert.equal((await message(target, cookie)).statusCode, 503);
+    assert.equal((await message(target, cookie)).statusCode, 429, 'holding a queue place costs');
+  });
+
+  it('refunds the quota when a full queue rejected the message at once (503)', async () => {
     const concurrency = new InMemoryConcurrency(0);
     const target = await boot({ sessionMessageLimit: 1, ipMessagesPerHour: 1 }, concurrency);
     const { cookie } = await session(target);

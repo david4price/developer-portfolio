@@ -205,6 +205,34 @@ describe('resolveNavigationLinks', () => {
     );
   });
 
+  it('resolves a title that contains a colon instead of reading it as a kind', () => {
+    const colon = new RegistryKnowledgeBase(
+      createRegistry({
+        projects: [
+          {
+            slug: 'homelab',
+            title: 'Homelab: K3s Cluster',
+            summary: 'A cluster.',
+            description: 'A cluster.',
+            kind: 'portfolio-app',
+            technologies: ['K3s'],
+            featured: false,
+            repositoryUrl: null,
+            liveUrl: null,
+            miniAppSlug: null,
+          },
+        ],
+        miniApps: [],
+      }),
+    );
+    const resolved = resolveNavigationLinks('See [[Homelab: K3s Cluster]].', colon);
+    assert.equal(resolved.reply, 'See Homelab: K3s Cluster.');
+    assert.deepEqual(
+      resolved.links.map(({ slug }) => slug),
+      ['homelab'],
+    );
+  });
+
   it('leaves double brackets that are not markers alone, such as code', () => {
     const code = 'Matrix: [[1, 2], [3, 4]] in Python, arr[[0]] in R, and [[note]] here.';
     assert.deepEqual(resolveNavigationLinks(code, knowledge), { reply: code, links: [] });

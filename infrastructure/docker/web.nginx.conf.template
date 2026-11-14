@@ -1,29 +1,22 @@
-# Rendered by the nginx image's envsubst step; ${API_ORIGIN} comes from the container environment.
+# Rendered by the nginx image's envsubst step (see web.security-headers.inc.template).
 server {
     listen 8080;
     server_name _;
     root /usr/share/nginx/html;
     server_tokens off;
 
-    # Next.js static export inlines small bootstrap scripts, hence 'unsafe-inline' for scripts.
-    # Phase 4 replaces this with hashes when the site moves to Cloudflare Pages.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${API_ORIGIN}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    # Security headers live in one snippet (rendered from web.security-headers.inc.template). Any
+    # add_header in a location stops nginx inheriting the server's, so every location that adds
+    # its own header includes the snippet again.
+    include /etc/nginx/conf.d/security-headers.inc;
 
     location / {
         try_files $uri $uri/ $uri.html =404;
     }
 
-    # An add_header here stops nginx from inheriting the server-level ones, so the security
-    # headers are repeated: hashed assets need nosniff and the CSP as much as pages do.
     location /_next/static/ {
+        include /etc/nginx/conf.d/security-headers.inc;
         add_header Cache-Control "public, max-age=31536000, immutable";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${API_ORIGIN}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
         try_files $uri =404;
     }
 

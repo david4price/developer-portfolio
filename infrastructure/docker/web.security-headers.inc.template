@@ -1,0 +1,10 @@
+# Rendered by the nginx image's envsubst step into /etc/nginx/conf.d/security-headers.inc and
+# included by web.nginx.conf.template. Named .inc, not .conf, so nginx's default http block doesn't
+# load it on its own. ${API_ORIGIN} comes from the container environment.
+#
+# The Compose image allows 'unsafe-inline' for the export's bootstrap scripts; the public site on
+# Cloudflare Pages uses per-page script hashes instead (apps/web/scripts/write-headers.ts).
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${API_ORIGIN}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;

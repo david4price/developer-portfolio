@@ -81,6 +81,10 @@ class SnippetBuilder {
   private readonly parts: string[];
   private room: number;
 
+  /**
+   * `firstLine` (marker and title) is always kept: the registry schema caps slugs at 64 and
+   * titles at 80 characters, so it can never come near the limit on its own.
+   */
   constructor(firstLine: string) {
     this.parts = [firstLine];
     this.room = SNIPPET_MAX_CHARS - firstLine.length;
@@ -92,10 +96,12 @@ class SnippetBuilder {
   }
 
   prose(label: string, value: string): this {
+    const text = value.trim();
+    if (text === '') return this;
     const prefix = `\n${label}: `;
     const space = this.room - prefix.length;
-    if (space >= Math.min(MIN_PROSE_CHARS, value.length)) {
-      this.append(`${prefix}${truncate(value, space)}`);
+    if (space >= Math.min(MIN_PROSE_CHARS, text.length)) {
+      this.append(`${prefix}${truncate(text, space)}`);
     }
     return this;
   }

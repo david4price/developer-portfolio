@@ -16,5 +16,6 @@ RUN pnpm install --frozen-lockfile --filter "@portfolio/web..." \
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 COPY infrastructure/docker/web.nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY infrastructure/docker/web.security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY --from=build /repo/apps/web/out /usr/share/nginx/html
 EXPOSE 8080

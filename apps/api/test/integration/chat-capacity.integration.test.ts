@@ -117,11 +117,15 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     const started = Date.now();
     await assert.rejects(
       limit.run(async () => 'x', never),
-      AiCapacityError,
+      (error) => error instanceof AiCapacityError && !error.waited,
     );
     assert.ok(Date.now() - started < 200, 'a full queue rejects immediately');
 
-    await assert.rejects(queued, AiCapacityError, 'the waiter gives up after queueWaitMs');
+    await assert.rejects(
+      queued,
+      (error) => error instanceof AiCapacityError && error.waited,
+      'the waiter gives up after queueWaitMs, and is marked as having waited',
+    );
     assert.equal(await redis.zcard('portfolio:chat:ai:waiters'), 0, 'a timed-out waiter leaves');
     await hold;
   });

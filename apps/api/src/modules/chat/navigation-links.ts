@@ -50,12 +50,15 @@ type Resolver = Pick<KnowledgeBase, 'resolve'>;
 function classify(body: string, knowledge: Resolver): ChatLink | 'drop' | 'keep' {
   const trimmed = body.trim();
   if (trimmed === '') return 'drop';
+  // A whole title first: "Homelab: K3s Cluster" is a page, not the made-up kind "homelab".
+  const titled = knowledge.resolve(trimmed);
+  if (titled !== undefined) return titled;
   const prefixed = KIND_PREFIX.exec(trimmed);
   if (prefixed !== null) {
     const kind = (prefixed[1] ?? '').toLowerCase();
     return (isLinkKind(kind) ? knowledge.resolve(prefixed[2] ?? '', kind) : undefined) ?? 'drop';
   }
-  return knowledge.resolve(trimmed) ?? (SLUG_SHAPED.test(trimmed) ? 'drop' : 'keep');
+  return SLUG_SHAPED.test(trimmed) ? 'drop' : 'keep';
 }
 
 /**
