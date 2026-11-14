@@ -13,11 +13,31 @@ import { MESSAGE_GUARD } from './message-guard.js';
 import { RedisChatSessionStore } from './redis-chat-session.store.js';
 import { RegistryKnowledgeBase } from './registry-knowledge-base.js';
 import { RedisAiConcurrencyLimiter, RedisRateLimiter } from './redis-limits.js';
+import { CloudflareSessionChallenge } from './cloudflare-session-challenge.js';
+import { RedisChallengeReplayStore } from './redis-challenge-replay.store.js';
+import {
+  CHALLENGE_REPLAY_STORE,
+  SESSION_CHALLENGE,
+  type SessionChallenge,
+} from './session-challenge.js';
 
 @Module({
   controllers: [ChatController],
   providers: [
     ChatService,
+    {
+      provide: SESSION_CHALLENGE,
+      inject: [API_CONFIG],
+      useFactory: (config: ApiConfig): SessionChallenge =>
+        config.turnstile.enabled
+          ? new CloudflareSessionChallenge(config.turnstile)
+          : { verify: async () => false },
+    },
+    {
+      provide: CHALLENGE_REPLAY_STORE,
+      inject: [REDIS],
+      useFactory: (redis: Redis) => new RedisChallengeReplayStore(redis),
+    },
     {
       provide: KNOWLEDGE_BASE,
       useFactory: () => new RegistryKnowledgeBase(registry),

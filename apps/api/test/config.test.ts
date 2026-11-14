@@ -50,12 +50,19 @@ describe('loadApiConfig', () => {
       AI_PROVIDER: 'openai-compatible',
       AI_MODEL: 'example-model',
       AI_BASE_URL: 'http://inference.internal:8000/v1',
+      TURNSTILE_SECRET_KEY: 'test-only-challenge-secret',
+      TURNSTILE_HOSTNAMES: 'portfolio.example.com, LOCALHOST',
     });
     assert.deepEqual(config.ai, {
       enabled: true,
       provider: 'openai-compatible',
       model: 'example-model',
       baseUrl: 'http://inference.internal:8000/v1',
+    });
+    assert.deepEqual(config.turnstile, {
+      enabled: true,
+      secretKey: 'test-only-challenge-secret',
+      hostnames: ['portfolio.example.com', 'localhost'],
     });
   });
 
@@ -70,6 +77,65 @@ describe('loadApiConfig', () => {
     assert.throws(
       () => loadApiConfig({ ...enabled, AI_BASE_URL: 'ftp://inference.internal/v1' }),
       /AI_BASE_URL/,
+    );
+  });
+
+  it('requires challenge settings whenever AI is enabled', () => {
+    assert.throws(
+      () =>
+        loadApiConfig({
+          ...required,
+          AI_ENABLED: 'true',
+          AI_PROVIDER: 'ollama',
+          AI_MODEL: 'example-model',
+        }),
+      /TURNSTILE_SECRET_KEY[\s\S]*TURNSTILE_HOSTNAMES/,
+    );
+    assert.deepEqual(loadApiConfig(required).turnstile, { enabled: false });
+  });
+
+  it('rejects origins, wildcard domains, paths, ports, and empty hostname lists', () => {
+    for (const value of [
+      'https://example.com',
+      '*.example.com',
+      'example.com/path',
+      'example.com:443',
+      ' ',
+      'example.com,',
+    ]) {
+      assert.throws(
+        () => loadApiConfig({ ...required, TURNSTILE_HOSTNAMES: value }),
+        /TURNSTILE_HOSTNAMES/,
+      );
+    }
+  });
+
+  it('accepts empty optional Compose settings only while AI is disabled', () => {
+    const empty = {
+      ...required,
+      AI_PROVIDER: '',
+      AI_MODEL: '',
+      AI_BASE_URL: '',
+      TURNSTILE_SECRET_KEY: '',
+      TURNSTILE_HOSTNAMES: '',
+    };
+    assert.deepEqual(loadApiConfig(empty).turnstile, { enabled: false });
+    assert.throws(() => loadApiConfig({ ...empty, AI_ENABLED: 'true' }), /TURNSTILE_SECRET_KEY/);
+  });
+
+  it('does not echo challenge secrets in configuration errors', () => {
+    assert.throws(
+      () =>
+        loadApiConfig({
+          ...required,
+          TURNSTILE_SECRET_KEY: 'private-test-value',
+          TURNSTILE_HOSTNAMES: 'https://example.com',
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof EnvironmentValidationError);
+        assert.doesNotMatch(error.message, /private-test-value/);
+        return true;
+      },
     );
   });
 

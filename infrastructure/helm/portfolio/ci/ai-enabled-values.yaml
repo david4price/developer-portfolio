@@ -2,6 +2,9 @@
 api:
   image:
     tag: ci
+  turnstile:
+    existingSecret: portfolio-turnstile
+    hostnames: portfolio.example.com
   ai:
     enabled: true
     provider: openai-compatible

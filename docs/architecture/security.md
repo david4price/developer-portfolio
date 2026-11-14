@@ -14,8 +14,9 @@ The public surface is a static site and a small REST API. The main risks:
 ## Edge (Proposed)
 
 - Cloudflare Free plan: TLS, CDN, DDoS mitigation, managed WAF rules where the plan provides them.
-- Cloudflare Turnstile on chat session creation, verified server-side with the secret key. A
-  CAPTCHA is one layer of protection, not the only one.
+- Cloudflare Turnstile on chat session creation: server verification is **Confirmed in code**;
+  the live widget and browser integration are **Proposed**. A CAPTCHA is one layer of protection,
+  not the only one.
 - Plan limits and costs must be checked before launch, because free tiers change.
 
 ## API (Confirmed in the scaffold, unless marked)
@@ -46,7 +47,8 @@ The public surface is a static site and a small REST API. The main risks:
   - `style-src 'self'` (the export has no inline styles), `img-src 'self' data:`,
     `font-src 'self'`.
   - `connect-src 'self'` plus the API origin from `NEXT_PUBLIC_API_BASE_URL`. Previews have none, so
-    they can't call the production API. Turnstile is added with P5-04.
+    they can't call the production API. Turnstile hosts will be added when its browser widget is
+    embedded; the server verification boundary already exists (P5-04).
   - The only third party is **Cloudflare Web Analytics** (cookie-less): the edge injects its beacon
     on the custom domain, so `script-src` allows `https://static.cloudflareinsights.com` and
     `connect-src` allows `https://cloudflareinsights.com`. Nothing broader.
@@ -89,6 +91,13 @@ The public surface is a static site and a small REST API. The main risks:
   [AI integration](ai-integration.md#resource-protection-implemented-in-p5-03-unless-noted)).
   **Don't enable chat publicly before Turnstile (P5-04)**: per-IP quotas alone don't stop a client
   with many addresses.
+- Session creation requires a server-verified Turnstile token (P5-04, **Confirmed in code**),
+  matching an explicit hostname allowlist and action `chat_session`. Failed challenges issue no
+  cookie and consume the session-attempt quota. A Redis claim of the token's SHA-256 digest
+  enforces single use across replicas even during remote replay-detection propagation. Tokens
+  and secrets are never logged or persisted. Verification outages fail closed. Live widget
+  setup and browser integration remain **Proposed**; see the
+  [Turnstile guide](../deployment/turnstile.md).
 
 ## Infrastructure Explorer (Proposed, Phase 6)
 

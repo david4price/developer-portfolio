@@ -61,6 +61,8 @@ export type ApiErrorCode =
   | 'chat_session_required'
   | 'chat_busy'
   | 'message_rejected'
+  | 'challenge_failed'
+  | 'challenge_unavailable'
   | 'internal_error';
 
 export interface ApiErrorResponse {
@@ -73,6 +75,14 @@ export interface ApiErrorResponse {
 
 /** Longest visitor message `POST /api/v1/chat/messages` accepts, in characters. */
 export const CHAT_MESSAGE_MAX_LENGTH = 1_000;
+
+/** Turnstile widget action and maximum token length for chat session creation. */
+export const CHAT_SESSION_CHALLENGE_ACTION = 'chat_session';
+export const CHALLENGE_TOKEN_MAX_LENGTH = 2_048;
+
+export interface ChatSessionRequest {
+  readonly turnstileToken: string;
+}
 
 /**
  * `POST /api/v1/chat/sessions`. The session ID travels only in an `HttpOnly` cookie scoped to

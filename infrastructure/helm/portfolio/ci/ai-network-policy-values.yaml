@@ -2,6 +2,11 @@
 api:
   image:
     tag: ci
+  turnstile:
+    existingSecret: portfolio-turnstile
+    hostnames: portfolio.example.com
+    # Documentation-only destination for schema and guardrail tests, not a working endpoint.
+    egressCidrs: [203.0.113.10/32]
   ai:
     enabled: true
     provider: openai-compatible

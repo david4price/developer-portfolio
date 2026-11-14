@@ -26,18 +26,25 @@ import {
 import { RegistryKnowledgeBase } from '../../src/modules/chat/registry-knowledge-base.js';
 import { testRegistry } from '../support/test-registry.js';
 import { createTestApp } from '../support/test-app.js';
+import {
+  CHALLENGE_REPLAY_STORE,
+  SESSION_CHALLENGE,
+} from '../../src/modules/chat/session-challenge.js';
+import { RedisChallengeReplayStore } from '../../src/modules/chat/redis-challenge-replay.store.js';
+import { FakeSessionChallenge, sessionPayload } from '../support/test-session-challenge.js';
 
 /** Capacity controls against a real Redis. Skipped when REDIS_URL is unset. */
 const redisUrl = process.env.REDIS_URL;
 
 /**
- * Only the limiter keys: test files run in parallel against one Redis, and the session-store
+ * Only capacity and challenge keys: test files run in parallel against one Redis, and the session-store
  * tests own `portfolio:chat:session:*` and `portfolio:chat:lock:*`.
  */
 async function clearChatKeys(redis: Redis): Promise<void> {
   const keys = [
     ...(await redis.keys('portfolio:chat:ai:*')),
     ...(await redis.keys('portfolio:chat:rate:*')),
+    ...(await redis.keys('portfolio:chat:challenge:*')),
   ];
   if (keys.length > 0) await redis.del(...keys);
 }
@@ -64,6 +71,23 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
       ...options,
     });
   const never = new AbortController().signal;
+
+  it('atomically redeems one token across replicas without storing the token', async () => {
+    const token = sessionPayload().turnstileToken;
+    const replicas = [new RedisChallengeReplayStore(redis), new RedisChallengeReplayStore(redis)];
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, index) => replicas[index % 2]?.claim(token)),
+    );
+    assert.equal(results.filter(Boolean).length, 1);
+    const keys = await redis.keys('portfolio:chat:challenge:*');
+    assert.equal(keys.length, 1);
+    const key = keys[0] ?? '';
+    assert.ok(!key.includes(token));
+    assert.match(key, /:[a-f0-9]{64}$/);
+    assert.equal(await redis.get(key), '1');
+    assert.ok((await redis.ttl(key)) > 290);
+    assert.equal(await replicas[0]?.claim(token), false);
+  });
 
   it('counts fixed windows and reports the time left', async () => {
     const rate = new RedisRateLimiter(redis);
@@ -216,6 +240,8 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
         controllers: [ChatController],
         providers: [
           ChatService,
+          { provide: SESSION_CHALLENGE, useValue: new FakeSessionChallenge() },
+          { provide: CHALLENGE_REPLAY_STORE, useValue: new RedisChallengeReplayStore(redis) },
           { provide: CHAT_SESSION_STORE, useValue: new RedisChatSessionStore(redis) },
           { provide: AI_PROVIDER, useValue: slowAi },
           { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry) },
@@ -241,7 +267,11 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
       const VISITORS = 12;
       const cookies = await Promise.all(
         Array.from({ length: VISITORS }, async () => {
-          const response = await app.inject({ method: 'POST', url: '/api/v1/chat/sessions' });
+          const response = await app.inject({
+            method: 'POST',
+            url: '/api/v1/chat/sessions',
+            payload: sessionPayload(),
+          });
           return String(response.headers['set-cookie']).split(';')[0] ?? '';
         }),
       );

@@ -60,6 +60,10 @@ default-deny NetworkPolicy and explicit allow rules:
 - `api` (AI adapter) → inference endpoint (rule **Confirmed** in the chart: rendered from
   `api.ai.egress` when AI is enabled, and rendering fails without it; connecting the reference
   runtime is Proposed, P5-06)
+- `api` → reviewed destination CIDRs for Turnstile Siteverify on TCP 443 (**Confirmed** in the
+  chart through `api.turnstile.egressCidrs`, required when AI and NetworkPolicies are enabled;
+  live configuration **Proposed**, P5-04). The adapter pins the HTTPS URL; standard NetworkPolicy
+  itself cannot restrict hosts or paths. See the [Turnstile guide](../deployment/turnstile.md).
 - `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount (Proposed,
   P6-01)
 

@@ -21,6 +21,7 @@ import { ChatController } from '../src/modules/chat/chat.controller.js';
 import { ChatService, FALLBACK_REPLY } from '../src/modules/chat/chat.service.js';
 import { promptHistory, SYSTEM_RULES } from '../src/modules/chat/chat-prompt.js';
 import { ClientDisconnectedError } from '../src/common/client-disconnected.error.js';
+import { DependencyUnavailableError } from '../src/common/dependency-unavailable.error.js';
 import { HeuristicMessageGuard } from '../src/modules/chat/heuristic-message-guard.js';
 import { KNOWLEDGE_BASE } from '../src/modules/chat/knowledge-base.js';
 import { MESSAGE_GUARD } from '../src/modules/chat/message-guard.js';
@@ -36,6 +37,18 @@ import {
   type RateLimiter,
 } from '../src/modules/chat/limits.js';
 import { createTestApp } from './support/test-app.js';
+import {
+  CHALLENGE_REPLAY_STORE,
+  ChallengeUnavailableError,
+  SESSION_CHALLENGE,
+  type SessionChallenge,
+  type ChallengeReplayStore,
+} from '../src/modules/chat/session-challenge.js';
+import {
+  FakeSessionChallenge,
+  InMemoryChallengeReplayStore,
+  sessionPayload,
+} from './support/test-session-challenge.js';
 
 /** One window per key that never expires; refunds must name it, as with the Redis adapter. */
 class InMemoryRateLimiter implements RateLimiter {
@@ -82,9 +95,13 @@ function chatProviders(
   limits: ChatConfig = generousLimits,
   concurrency: AiConcurrencyLimiter = new InMemoryConcurrency(),
   rateLimiter: RateLimiter = new InMemoryRateLimiter(),
+  challenge: SessionChallenge = new FakeSessionChallenge(),
+  replay: ChallengeReplayStore = new InMemoryChallengeReplayStore(),
 ) {
   return [
     ChatService,
+    { provide: SESSION_CHALLENGE, useValue: challenge },
+    { provide: CHALLENGE_REPLAY_STORE, useValue: replay },
     { provide: CHAT_SESSION_STORE, useValue: store },
     { provide: AI_PROVIDER, useValue: ai },
     { provide: RATE_LIMITER, useValue: rateLimiter },
@@ -157,14 +174,16 @@ describe('chat sessions and messages', () => {
   let app: NestFastifyApplication;
   let store: InMemoryChatStore;
   let ai: FakeAi;
+  let challenge: FakeSessionChallenge;
 
   beforeEach(async () => {
     await app?.close();
     store = new InMemoryChatStore();
     ai = new FakeAi();
+    challenge = new FakeSessionChallenge();
     app = await createTestApp({
       controllers: [ChatController],
-      providers: chatProviders(store, ai),
+      providers: chatProviders(store, ai, generousLimits, undefined, undefined, challenge),
     });
   });
 
@@ -173,7 +192,11 @@ describe('chat sessions and messages', () => {
   });
 
   async function startSession(): Promise<string> {
-    const response = await app.inject({ method: 'POST', url: '/api/v1/chat/sessions' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: sessionPayload(),
+    });
     assert.equal(response.statusCode, 201);
     const setCookie = response.headers['set-cookie'];
     const cookie = String(Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0] ?? '';
@@ -189,7 +212,11 @@ describe('chat sessions and messages', () => {
     });
 
   it('creates a session as a secure, HttpOnly cookie scoped to the chat routes', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/v1/chat/sessions' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: sessionPayload(),
+    });
     assert.equal(response.statusCode, 201);
 
     const cookie = String(response.headers['set-cookie']);
@@ -209,6 +236,88 @@ describe('chat sessions and messages', () => {
     const sessionId = sessionIdFromCookieHeader(cookie.split(';')[0]);
     assert.ok(sessionId && store.sessions.has(sessionId));
     assert.ok(!response.body.includes(sessionId), 'the session ID must not appear in the body');
+  });
+
+  it('rejects missing and invalid challenge tokens without sessions or cookies', async () => {
+    for (const payload of [undefined, {}, { turnstileToken: 'invalid' }]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/chat/sessions',
+        ...(payload === undefined ? {} : { payload }),
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(response.json<ApiErrorResponse>().error.code, 'challenge_failed');
+      assert.equal(response.headers['set-cookie'], undefined);
+    }
+    assert.equal(store.sessions.size, 0);
+    assert.deepEqual(challenge.tokens, ['invalid'], 'missing tokens never call the provider');
+  });
+
+  it('bounds and validates session request bodies before verification', async () => {
+    for (const payload of [
+      { turnstileToken: '' },
+      { turnstileToken: 42 },
+      { turnstileToken: 'x'.repeat(2049) },
+      { turnstileToken: 'valid', extra: true },
+    ]) {
+      const response = await app.inject({ method: 'POST', url: '/api/v1/chat/sessions', payload });
+      assert.equal(response.statusCode, 400);
+      assert.equal(response.headers['set-cookie'], undefined);
+    }
+    assert.equal(challenge.tokens.length, 0);
+    assert.equal(store.sessions.size, 0);
+  });
+
+  it('grants one session for concurrent or sequential uses of one verified token', async () => {
+    const payload = sessionPayload();
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        app.inject({ method: 'POST', url: '/api/v1/chat/sessions', payload }),
+      ),
+    );
+    assert.deepEqual(
+      responses.map(({ statusCode }) => statusCode).sort(),
+      [201, 403, 403, 403, 403],
+    );
+    assert.equal(
+      (await app.inject({ method: 'POST', url: '/api/v1/chat/sessions', payload })).statusCode,
+      403,
+    );
+    assert.equal(store.sessions.size, 1);
+  });
+
+  it('fails closed when verification is unavailable, without leaking details', async () => {
+    challenge.failWith = new ChallengeUnavailableError();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: sessionPayload(),
+    });
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.json<ApiErrorResponse>().error.code, 'challenge_unavailable');
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(store.sessions.size, 0);
+  });
+
+  it('fails closed when replay protection is unavailable', async () => {
+    await app.close();
+    app = await createTestApp({
+      controllers: [ChatController],
+      providers: chatProviders(store, ai, generousLimits, undefined, undefined, challenge, {
+        async claim() {
+          throw new DependencyUnavailableError('redis');
+        },
+      }),
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: sessionPayload(),
+    });
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.json<ApiErrorResponse>().error.code, 'not_ready');
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(store.sessions.size, 0);
   });
 
   it('issues a different 256-bit ID for every session', async () => {
@@ -525,6 +634,7 @@ describe('chat quotas and capacity', () => {
       method: 'POST',
       url: '/api/v1/chat/sessions',
       remoteAddress,
+      payload: sessionPayload(),
     });
     return { response, cookie: String(response.headers['set-cookie'] ?? '').split(';')[0] ?? '' };
   };
@@ -542,6 +652,19 @@ describe('chat quotas and capacity', () => {
       headers: { cookie, ...headers },
       payload: { message: 'hi' },
     });
+
+  it('charges rejected challenges against the quota before contacting the verifier', async () => {
+    const target = await boot({ ipSessionsPerHour: 1 });
+    const failed = await target.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      remoteAddress: '203.0.113.7',
+      payload: { turnstileToken: 'invalid' },
+    });
+    assert.equal(failed.statusCode, 403);
+    assert.equal((await session(target)).response.statusCode, 429);
+    assert.deepEqual(target.get<FakeSessionChallenge>(SESSION_CHALLENGE).tokens, ['invalid']);
+  });
 
   it('limits new sessions per client address with 429 and Retry-After', async () => {
     const target = await boot({ ipSessionsPerHour: 2 });
@@ -674,6 +797,7 @@ describe('chat quotas and capacity', () => {
       method: 'POST',
       url: '/api/v1/chat/sessions',
       remoteAddress: '203.0.113.7',
+      payload: sessionPayload(),
       headers: { 'cf-connecting-ip': '192.0.2.55' },
     });
     assert.equal(spoofed.statusCode, 429, 'a forged header must not open a new quota bucket');
@@ -684,6 +808,7 @@ describe('chat quotas and capacity', () => {
         method: 'POST',
         url: '/api/v1/chat/sessions',
         remoteAddress: '198.51.100.200',
+        payload: sessionPayload(),
         headers: { 'cf-connecting-ip': ip },
       });
     assert.equal((await viaTunnel('192.0.2.1')).statusCode, 201);

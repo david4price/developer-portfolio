@@ -42,7 +42,7 @@ spec:
           port: 53
 ---
 # api: reached only by the in-namespace cloudflared (Phase 4); talks to PostgreSQL and Redis, and
-# to the inference runtime when AI is enabled (api.ai.egress).
+# to the inference runtime and Turnstile verification when AI is enabled.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -86,6 +86,16 @@ spec:
         - protocol: TCP
           port: {{ .egress.port }}
     {{- end }}
+    {{- end }}
+    {{- if .Values.api.ai.enabled }}
+    - to:
+        {{- range .Values.api.turnstile.egressCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
     {{- end }}
 ---
 # worker: Redis only (BullMQ). No ingress.

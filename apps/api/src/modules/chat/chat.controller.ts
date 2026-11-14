@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Inject, Post, Req, Res } from '@nestjs/common';
 import {
   CHAT_MESSAGE_MAX_LENGTH,
+  CHALLENGE_TOKEN_MAX_LENGTH,
   type ChatMessageResponse,
   type ChatSessionResponse,
 } from '@portfolio/shared-types';
@@ -16,6 +17,11 @@ import { CHAT_SESSION_TTL_SECONDS, ChatService } from './chat.service.js';
 const messageBodySchema = z.strictObject({
   message: z.string().trim().min(1, 'message is empty').max(CHAT_MESSAGE_MAX_LENGTH),
 });
+const sessionBodySchema = z
+  .strictObject({
+    turnstileToken: z.string().trim().min(1).max(CHALLENGE_TOKEN_MAX_LENGTH).optional(),
+  })
+  .prefault({});
 
 @Controller('chat')
 export class ChatController {
@@ -39,8 +45,12 @@ export class ChatController {
   async createSession(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @Body(new ZodValidationPipe(sessionBodySchema)) body: z.infer<typeof sessionBodySchema>,
   ): Promise<ChatSessionResponse> {
-    const { sessionId, session } = await this.chat.createSession(this.bucketOf(request));
+    const { sessionId, session } = await this.chat.createSession(
+      this.bucketOf(request),
+      body.turnstileToken,
+    );
     void reply.header('set-cookie', sessionCookie(sessionId, CHAT_SESSION_TTL_SECONDS));
     return { expiresAt: session.expiresAt };
   }
