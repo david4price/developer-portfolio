@@ -22,13 +22,15 @@ export const INVISIBLE = /[\p{Cf}\p{Co}]|(?![\t\n])\p{Cc}/gu;
 /**
  * Text a model must never receive from content, because a reader can't see it: Unicode tag
  * characters (invisible ASCII used to smuggle instructions), supplementary variation selectors and
- * runs of basic ones (both can encode a payload), interlinear annotations (hidden by renderers),
- * bidi overrides and isolates, private-use code points, and control characters other than tab,
- * newline, and carriage return. Single variation selectors (emoji), joiners, soft hyphens, and
- * LRM/RLM marks (needed by right-to-left text, and they hide nothing) are allowed.
+ * runs of basic ones, and runs of zero-width characters (all three can encode a payload);
+ * interlinear annotations (hidden by renderers); bidi overrides and isolates; private-use code
+ * points; and control characters other than tab, newline, and carriage return. A single emoji
+ * selector, an ideographic variation selector after a CJK ideograph, a single joiner (emoji
+ * sequences, Persian), soft hyphens, and LRM/RLM marks (needed by right-to-left text, hiding
+ * nothing) are allowed.
  */
 const HIDDEN_TEXT =
-  /[\u{E0000}-\u{E007F}\uFFF9-\uFFFB\u202A-\u202E\u2066-\u2069\p{Co}]|(?=[\u{E0100}-\u{E01EF}])\p{Variation_Selector}|\p{Variation_Selector}{2,}|(?![\t\n\r])\p{Cc}/u;
+  /[\u{E0000}-\u{E007F}\uFFF9-\uFFFB\u202A-\u202E\u2066-\u2069\p{Co}]|(?<!\p{Ideographic})[\u{E0100}-\u{E01EF}]|\p{Variation_Selector}{2,}|[\u200B-\u200D\u2060-\u2064\uFEFF]{2,}|(?![\t\n\r])\p{Cc}/u;
 
 /** True when `text` contains characters that hide content from a reader (`HIDDEN_TEXT`). */
 export const containsHiddenText = (text: string) => HIDDEN_TEXT.test(text);
@@ -58,13 +60,16 @@ const ENTITIES: readonly (readonly [RegExp, string])[] = [
 
 /** The text as a model might read it, for detection only. */
 function normalizedView(text: string): string {
-  let view = text.replace(INVISIBLE, '');
+  // Line breaks stay line breaks (a lone CR must not glue a tag to the previous word).
+  let view = text.replace(/\r\n?/g, '\n').replace(INVISIBLE, '');
   for (const [pattern, replacement] of BEFORE_NFKC) view = view.replace(pattern, replacement);
   view = view.normalize('NFKC');
   for (const [pattern, replacement] of [...LOOKALIKES, ...ENTITIES]) {
     view = view.replace(pattern, replacement);
   }
-  return view.toLowerCase();
+  // Combining marks (accents, variation selectors, the dot `\u0130` leaves after lowercasing) can't
+  // hide a name either.
+  return view.toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '');
 }
 
 /**
@@ -72,7 +77,7 @@ function normalizedView(text: string): string {
  * Prose after a `<` ("load < system capacity -> add pods") isn't attribute-shaped, so it never
  * counts.
  */
-const ATTRIBUTES = String.raw`(?:\s+[a-z][\w-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s<>"']+))?){0,10}\s*\/?`;
+const ATTRIBUTES = String.raw`(?:\s+[a-z][\w-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s<>"']+))?){0,10}\s*\/?\s*`;
 
 const PATTERNS: readonly (readonly [ControlMarkupKind, RegExp])[] = [
   // The data block's tag. Its identifier forms (`portfolio_data`, `portfolio-data`) count after
@@ -82,19 +87,21 @@ const PATTERNS: readonly (readonly [ControlMarkupKind, RegExp])[] = [
   [
     'data_delimiter',
     new RegExp(
-      String.raw`<\s*\/?\s*portfolio[_-]+data(?![\w-])|<\s*\/?\s*portfolio\s+data(?![\w-])${ATTRIBUTES}>`,
+      String.raw`<\s*\/?\s*portfolio(?=[\s_-]*[_-])[\s_-]+data(?![\w-])|<\s*\/?\s*portfolio\s+data(?![\w-])[^\s<>]{0,20}${ATTRIBUTES}>`,
     ),
   ],
   // `<|im_start|>`, `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`, `《SYS》`. Token names have no
   // spaces, so pipe operators (Elm's `f <| g x |> h`) and shifts (`a << sys >> 2`) are code.
   ['template_token', /<\|[^\s|<>]{1,40}\|>|\[\/?inst\]|<<\/?sys>>|《\/?sys》/],
-  // `<system>`, `</system>`, `<system-reminder>`, `<assistant_response lang="en">`. Closing tags
-  // always count; an opening `<` glued to a word is a generic (`Task<Instructions>`,
-  // `Dictionary<System.String, int>`), but one after punctuation (`Thanks.<system>`) is a tag.
+  // `<system>`, `</system>`, `<system-reminder>`, `<system_v2>`, `<assistant_response lang="en">`.
+  // Suffixes come from a fixed list, so components such as `<system-status>` or
+  // `<developer-card>` aren't tags. Closing tags always count; an opening `<` glued to a word is a
+  // generic (`Task<Instructions>`, `Dictionary<System.String, int>`), but one after punctuation
+  // (`Thanks.<system>`) is a tag.
   [
     'role_tag',
     new RegExp(
-      String.raw`(?:(?<!\w)<|<\s*\/)\s*(?:system|assistant|developer|instructions?)(?:[_-][a-z]+)*(?![\w.-])${ATTRIBUTES}>`,
+      String.raw`(?:(?<!\w)<|<\s*\/)\s*(?:system|assistant|developer|instructions?)(?:[_:-]?(?:prompt|message|turn|reminder|response|instructions?|context|note|role|v?\d+))*(?![\w.-])${ATTRIBUTES}>`,
     ),
   ],
 ];

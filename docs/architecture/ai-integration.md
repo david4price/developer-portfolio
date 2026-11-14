@@ -120,9 +120,10 @@ Turnstile (P5-04).
    -> add pods" are not tags). One detector (`controlMarkupIn` in `@portfolio/project-registry`)
    defines it, looking through invisible characters, NFKC compatibility forms, look-alike
    brackets (not CJK title brackets), and HTML entities. Nor can data contain hidden text
-   (Unicode tag characters, supplementary or repeated variation selectors, interlinear
-   annotations, bidi overrides, private-use, controls other than tab and line breaks; emoji
-   selectors, joiners, soft hyphens, and LRM/RLM marks are fine). The registry schema rejects both in every content field,
+   (Unicode tag characters, repeated variation selectors or zero-width characters, supplementary
+   selectors outside CJK variants, interlinear annotations, bidi overrides, private-use, controls
+   other than tab and line breaks; a single emoji selector or joiner, soft hyphens, and LRM/RLM
+   marks are fine). The registry schema rejects both in every content field,
    so bad content fails in CI; as a safety net, a snippet that still contains either is left out
    of the prompt, never edited, and so is the whole block if joining snippets formed markup. Content is otherwise sent exactly as written
    (`Array<string>`, `10⁶`, `<PortfolioData />`). Then trimmed history and the new message. The
