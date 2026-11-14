@@ -148,7 +148,7 @@ export class HeuristicMessageGuard implements MessageGuard {
     for (const [reason, pattern] of FOLDED_RULES) {
       if (pattern.test(folded)) return { allowed: false, reason };
     }
-    const clauses = message.split(/[.!?;:\n]+/).map(fold);
+    const clauses = message.split(/[.!?;:,\n\u2013\u2014]+|\s-\s/).map(fold);
     if (clauses.some((clause) => DEMANDED_PROMPT.test(clause))) {
       return { allowed: false, reason: 'prompt_extraction' };
     }

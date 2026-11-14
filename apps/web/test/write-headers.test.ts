@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
@@ -97,25 +105,32 @@ describe('buildHeadersFile', () => {
 });
 
 describe('write-headers as a script', () => {
-  it('writes _headers when run directly, even through a symlinked path', () => {
+  it('writes ../out/_headers when run directly, even through a symlink, ignoring arguments', () => {
+    // A copy of the compiled script in a scripts/ + out/ layout, like apps/web.
     const work = mkdtempSync(join(tmpdir(), 'write-headers-'));
     try {
       const out = join(work, 'out');
       mkdirSync(out);
+      mkdirSync(join(work, 'scripts'));
       writeFileSync(join(out, 'index.html'), '<html><script>self.x=1</script></html>');
+      const script = join(work, 'scripts', 'write-headers.js');
+      copyFileSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), script);
       const link = join(work, 'linked-write-headers.js');
-      symlinkSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), link);
+      symlinkSync(script, link);
 
       const env: NodeJS.ProcessEnv = { ...process.env };
       delete env.NEXT_PUBLIC_API_BASE_URL;
-      // `--debug` stands in for an extra argument pnpm appends; only `--out=` picks the directory.
-      const run = spawnSync(process.execPath, [link, '--debug', `--out=${out}`], {
-        encoding: 'utf8',
-        env,
-      });
-      assert.equal(run.status, 0, run.stderr);
-      const headers = readFileSync(join(out, '_headers'), 'utf8');
-      assert.match(headers, /^\/\*\n {2}Content-Security-Policy: .*'sha256-/);
+      for (const entry of [script, link]) {
+        rmSync(join(out, '_headers'), { force: true });
+        // Extra arguments, as pnpm appends them to `build`, must change nothing.
+        const run = spawnSync(process.execPath, [entry, '--debug', '--out=elsewhere'], {
+          encoding: 'utf8',
+          env,
+        });
+        assert.equal(run.status, 0, run.stderr);
+        const headers = readFileSync(join(out, '_headers'), 'utf8');
+        assert.match(headers, /^\/\*\n {2}Content-Security-Policy: .*'sha256-/, entry);
+      }
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
