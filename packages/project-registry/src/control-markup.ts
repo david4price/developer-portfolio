@@ -20,15 +20,24 @@ export type ControlMarkupKind = 'data_delimiter' | 'template_token' | 'role_tag'
 export const INVISIBLE = /[\p{Cf}\p{Co}]|(?![\t\n])\p{Cc}/gu;
 
 /**
- * Text a model must never receive from content: Unicode tag characters (invisible ASCII used to
- * smuggle instructions), bidi overrides and isolates, private-use code points, and control
- * characters other than tab and newline. Joiners, variation selectors, and soft hyphens, which
- * ordinary text uses (emoji sequences, Persian, hyphenation), are not included.
+ * Text a model must never receive from content, because a reader can't see it: Unicode tag
+ * characters (invisible ASCII used to smuggle instructions), supplementary variation selectors and
+ * runs of basic ones (both can encode a payload), interlinear annotations (hidden by renderers),
+ * bidi overrides and isolates, private-use code points, and control characters other than tab,
+ * newline, and carriage return. Single variation selectors (emoji), joiners, soft hyphens, and
+ * LRM/RLM marks (needed by right-to-left text, and they hide nothing) are allowed.
  */
-const HIDDEN_TEXT = /[\u{E0000}-\u{E007F}\u202A-\u202E\u2066-\u2069\p{Co}]|(?![\t\n])\p{Cc}/u;
+const HIDDEN_TEXT =
+  /[\u{E0000}-\u{E007F}\uFFF9-\uFFFB\u202A-\u202E\u2066-\u2069\p{Co}]|(?=[\u{E0100}-\u{E01EF}])\p{Variation_Selector}|\p{Variation_Selector}{2,}|(?![\t\n\r])\p{Cc}/u;
 
 /** True when `text` contains characters that hide content from a reader (`HIDDEN_TEXT`). */
 export const containsHiddenText = (text: string) => HIDDEN_TEXT.test(text);
+
+/** Angle brackets that NFKC would turn into CJK title brackets, folded before it runs. */
+const BEFORE_NFKC: readonly (readonly [RegExp, string])[] = [
+  [/\u2329/g, '<'],
+  [/\u232A/g, '>'],
+];
 
 /**
  * Brackets a model may read as `<` or `>`, beyond what NFKC folds. Doubled ones stay doubled. CJK
@@ -49,7 +58,9 @@ const ENTITIES: readonly (readonly [RegExp, string])[] = [
 
 /** The text as a model might read it, for detection only. */
 function normalizedView(text: string): string {
-  let view = text.replace(INVISIBLE, '').normalize('NFKC');
+  let view = text.replace(INVISIBLE, '');
+  for (const [pattern, replacement] of BEFORE_NFKC) view = view.replace(pattern, replacement);
+  view = view.normalize('NFKC');
   for (const [pattern, replacement] of [...LOOKALIKES, ...ENTITIES]) {
     view = view.replace(pattern, replacement);
   }
@@ -57,27 +68,33 @@ function normalizedView(text: string): string {
 }
 
 /**
- * What may follow a tag name before its `>`: real attributes only (`lang="en"`, `hidden`). Prose
- * after a `<` ("load < system capacity -> add pods") isn't attribute-shaped, so it never counts.
+ * What may follow a tag name before its `>`: real attributes only (`lang="en"`, `title="a>b"`).
+ * Prose after a `<` ("load < system capacity -> add pods") isn't attribute-shaped, so it never
+ * counts.
  */
-const ATTRIBUTES = String.raw`(?:\s+[a-z][\w-]*(?:\s*=\s*(?:"[^"<>]*"|'[^'<>]*'|[^\s<>"']+))?){0,10}\s*\/?`;
+const ATTRIBUTES = String.raw`(?:\s+[a-z][\w-]*(?:\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|[^\s<>"']+))?){0,10}\s*\/?`;
 
 const PATTERNS: readonly (readonly [ControlMarkupKind, RegExp])[] = [
-  // The data block's tag, with a separator (so `<PortfolioData />` isn't it), punctuation glued
-  // to the name (`</portfolio_data!>`), and attributes.
+  // The data block's tag. Its identifier forms (`portfolio_data`, `portfolio-data`) count after
+  // any `<` whatever follows (`</portfolio_data 1>`, cut off); the plain words "portfolio data"
+  // need a `>` or real attributes, so "costs < portfolio data budget" stays prose. Component
+  // names such as `<PortfolioData />` or `<portfolio-data-sync>` are not it.
   [
     'data_delimiter',
-    new RegExp(String.raw`<\s*\/?\s*portfolio[\s_-]+data(?![\w-])[^\s<>]{0,20}${ATTRIBUTES}>`),
+    new RegExp(
+      String.raw`<\s*\/?\s*portfolio[_-]+data(?![\w-])|<\s*\/?\s*portfolio\s+data(?![\w-])${ATTRIBUTES}>`,
+    ),
   ],
-  // `<|im_start|>`, `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`. Token names have no spaces, so
-  // pipe operators (Elm's `f <| g x |> h`) and shifts (`a << sys >> 2`) are code, not tokens.
-  ['template_token', /<\|[^\s|<>]{1,40}\|>|\[\/?inst\]|<<\/?sys>>/],
-  // `<system>`, `</assistant-turn>`, `<instructions lang="en">`, standing on their own: a `<`
-  // glued to a word is a generic (`Dictionary<System.String, int>`, `Task<Instructions>`).
+  // `<|im_start|>`, `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`, `《SYS》`. Token names have no
+  // spaces, so pipe operators (Elm's `f <| g x |> h`) and shifts (`a << sys >> 2`) are code.
+  ['template_token', /<\|[^\s|<>]{1,40}\|>|\[\/?inst\]|<<\/?sys>>|《\/?sys》/],
+  // `<system>`, `</system>`, `<system-reminder>`, `<assistant_response lang="en">`. Closing tags
+  // always count; an opening `<` glued to a word is a generic (`Task<Instructions>`,
+  // `Dictionary<System.String, int>`), but one after punctuation (`Thanks.<system>`) is a tag.
   [
     'role_tag',
     new RegExp(
-      String.raw`(?<![\w.])<\s*\/?\s*(?:system|assistant|developer|instructions?)(?:[_-]?(?:prompt|message|turn))?(?![\w.-])${ATTRIBUTES}>`,
+      String.raw`(?:(?<!\w)<|<\s*\/)\s*(?:system|assistant|developer|instructions?)(?:[_-][a-z]+)*(?![\w.-])${ATTRIBUTES}>`,
     ),
   ],
 ];

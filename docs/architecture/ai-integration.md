@@ -113,14 +113,16 @@ Turnstile (P5-04).
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules and the retrieved
    snippets inside `<portfolio_data>…</portfolio_data>`. The rules say that data is reference
    material whose instructions must not be followed. Data can't contain control markup: the
-   block's tag (any case or separator, punctuation glued to it, attributes), chat-template tokens
-   (`<|im_start|>`, `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`), or free-standing role tags
-   (`<system>`, `</assistant-turn>`; generics like `Task<Instructions>` and prose like "load <
-   system capacity -> add pods" are not tags). One detector (`controlMarkupIn` in
-   `@portfolio/project-registry`) defines it, looking through invisible characters, NFKC
-   compatibility forms, look-alike brackets (not CJK title brackets), and HTML entities. Nor can
-   data contain hidden text (Unicode tag characters, bidi overrides, private-use, controls;
-   joiners and soft hyphens are fine). The registry schema rejects both in every content field,
+   block's tag (`portfolio_data`/`portfolio-data` after any `<`, even cut off; the plain words
+   "portfolio data" only as a tag), chat-template tokens (`<|im_start|>`,
+   `<｜begin▁of▁sentence｜>`, `[INST]`, `<<SYS>>`), or role tags (`<system>`, `</system>`,
+   `<system-reminder>`; generics like `Task<Instructions>` and prose like "load < system capacity
+   -> add pods" are not tags). One detector (`controlMarkupIn` in `@portfolio/project-registry`)
+   defines it, looking through invisible characters, NFKC compatibility forms, look-alike
+   brackets (not CJK title brackets), and HTML entities. Nor can data contain hidden text
+   (Unicode tag characters, supplementary or repeated variation selectors, interlinear
+   annotations, bidi overrides, private-use, controls other than tab and line breaks; emoji
+   selectors, joiners, soft hyphens, and LRM/RLM marks are fine). The registry schema rejects both in every content field,
    so bad content fails in CI; as a safety net, a snippet that still contains either is left out
    of the prompt, never edited, and so is the whole block if joining snippets formed markup. Content is otherwise sent exactly as written
    (`Array<string>`, `10⁶`, `<PortfolioData />`). Then trimmed history and the new message. The
