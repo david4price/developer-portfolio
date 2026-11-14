@@ -3,6 +3,11 @@
 {{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
 {{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
 {{- end }}
+{{- with .Values.api.ai }}
+{{- if and .enabled $.Values.networkPolicy.enabled (not (and .egress.cidr .egress.port)) }}
+{{- fail "api.ai.egress.cidr and api.ai.egress.port are required when AI and NetworkPolicies are enabled (otherwise the API can't reach the model)" }}
+{{- end }}
+{{- end }}
 {{- with .Values.api }}
 apiVersion: apps/v1
 kind: Deployment

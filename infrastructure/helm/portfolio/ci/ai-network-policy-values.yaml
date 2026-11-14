@@ -1,0 +1,15 @@
+# CI rendering only: AI enabled with NetworkPolicies on, so the API's inference egress rule renders.
+api:
+  image:
+    tag: ci
+  ai:
+    enabled: true
+    provider: openai-compatible
+    model: example-model
+    baseUrl: http://192.0.2.10:8080/v1
+    egress:
+      cidr: 192.0.2.10/32
+      port: 8080
+worker:
+  image:
+    tag: ci

@@ -57,7 +57,9 @@ default-deny NetworkPolicy and explicit allow rules:
 - `worker` → `redis` (**Confirmed**; the worker has no database access today)
 - `migrate` Job → `postgres` (**Confirmed**)
 - all pods → kube-dns (**Confirmed**)
-- `api` (AI adapter) → inference endpoint (Proposed, P5-06)
+- `api` (AI adapter) → inference endpoint (rule **Confirmed** in the chart: rendered from
+  `api.ai.egress` when AI is enabled, and rendering fails without it; connecting the reference
+  runtime is Proposed, P5-06)
 - `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount (Proposed,
   P6-01)
 
