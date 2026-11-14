@@ -37,14 +37,14 @@ If you change the web port, add the new origin to `CORS_ORIGINS` in `.env`.
 
 Useful endpoints:
 
-| Endpoint                     | Purpose                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `GET /api/v1/health`         | Liveness, which never touches dependencies                     |
-| `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503 |
-| `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)            |
-| `GET /api/v1/projects/:slug` | Project detail                                                 |
-| `POST /api/v1/chat/sessions` | Starts a chat session (cookie); `503 ai_disabled` while AI off |
-| `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                 |
+| Endpoint                     | Purpose                                                               |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `GET /api/v1/health`         | Liveness, which never touches dependencies                            |
+| `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503        |
+| `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)                   |
+| `GET /api/v1/projects/:slug` | Project detail                                                        |
+| `POST /api/v1/chat/sessions` | `{ turnstileToken }` → session cookie; `503 ai_disabled` while AI off |
+| `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                        |
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
@@ -54,6 +54,31 @@ returns `400 bad_request`.
 Chat needs `AI_ENABLED=true` and an AI provider. Replies are plain text; `links` lists pages the
 assistant suggested, each checked against the project registry (`kind`, `slug`, `title`, `path`).
 The design and limits are in [AI integration](../architecture/ai-integration.md#chat-design-phase-5).
+
+### Chat session verification
+
+Enabling AI also requires `TURNSTILE_SECRET_KEY` (no default) and `TURNSTILE_HOSTNAMES`, a
+comma-separated list of exact browser hostnames such as `portfolio.example.com,localhost`.
+Hostnames have no scheme, port, path, or wildcard. Supply the same variables for
+`compose.full.yaml`; it forwards AI and Turnstile settings while keeping AI off by default.
+
+The client completes a Turnstile widget configured with action `chat_session`, then posts
+`{ "turnstileToken": "<fresh-token>" }` to `/api/v1/chat/sessions` with credentials included.
+The sitekey is public; the secret key stays in API configuration. A missing or rejected token,
+wrong hostname/action, or replay returns `403 challenge_failed`; malformed input returns
+`400 bad_request`. Provider outages, invalid upstream credentials, malformed responses, and a
+5-second verification timeout return `503 challenge_unavailable`. No rejection sets a cookie or
+creates a session. Reset the widget and obtain a fresh token after an unsuccessful attempt.
+Session-attempt quotas apply before verification, including rejected attempts. Redis outages
+fail closed with `503 not_ready`.
+
+There is no environment flag that bypasses verification when AI is enabled. Unit and contract
+tests use an injected fake verifier or local HTTP server; they never contact Cloudflare. The
+published [Turnstile test keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)
+return a fixed hostname and omit the action, so they cannot exercise this adapter's complete
+hostname/action check. Use a development widget with real keys for that manual check; do not
+weaken the checks to accommodate dummy responses. AI-off development needs no Cloudflare account.
+The chat UI and embedded widget are not implemented yet; this step supplies the server boundary.
 
 Messages are screened before they reach the model: an injection attempt gets
 `422 message_rejected` and is not stored

@@ -3,6 +3,17 @@
 {{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
 {{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
 {{- end }}
+{{- if .Values.api.ai.enabled }}
+{{- if not .Values.api.turnstile.existingSecret }}
+{{- fail "api.turnstile.existingSecret is required when AI is enabled" }}
+{{- end }}
+{{- if not (or .Values.api.turnstile.hostnames .Values.api.envConfigMap .Values.api.envSecret) }}
+{{- fail "api.turnstile.hostnames or an environment source for TURNSTILE_HOSTNAMES is required when AI is enabled" }}
+{{- end }}
+{{- if and .Values.networkPolicy.enabled (not .Values.api.turnstile.egressCidrs) }}
+{{- fail "api.turnstile.egressCidrs is required when AI and NetworkPolicies are enabled" }}
+{{- end }}
+{{- end }}
 {{- with .Values.api.ai }}
 {{- if and .enabled $.Values.networkPolicy.enabled (not (and .egress.cidr .egress.port)) }}
 {{- fail "api.ai.egress.cidr and api.ai.egress.port are required when AI and NetworkPolicies are enabled (otherwise the API can't reach the model)" }}
@@ -71,6 +82,15 @@ spec:
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}
             {{- if .ai.enabled }}
+            - name: TURNSTILE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .turnstile.existingSecret | quote }}
+                  key: {{ required "api.turnstile.secretKey is required" .turnstile.secretKey | quote }}
+            {{- with .turnstile.hostnames }}
+            - name: TURNSTILE_HOSTNAMES
+              value: {{ . | quote }}
+            {{- end }}
             - name: AI_PROVIDER
               value: {{ required "api.ai.provider is required when AI is enabled" .ai.provider | quote }}
             - name: AI_MODEL

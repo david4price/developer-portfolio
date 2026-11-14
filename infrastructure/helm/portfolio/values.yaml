@@ -37,6 +37,16 @@ api:
   # Use CF-Connecting-IP as the client address for chat quotas. Requires cloudflared.enabled and
   # networkPolicy.enabled, so the API is reachable only through the tunnel.
   trustCloudflareClientIp: false
+  # Required when AI is enabled. Never put the secret key or a real hostname in public values.
+  turnstile:
+    existingSecret: ''
+    secretKey: secret-key
+    # Comma-separated exact site hostnames; can instead come from envConfigMap/envSecret as
+    # TURNSTILE_HOSTNAMES (e.g. the existing sealed API environment Secret).
+    hostnames: ''
+    # Operator-verified destination CIDRs for challenges.cloudflare.com. With NetworkPolicies,
+    # AI requires these; only TCP 443 is allowed. NetworkPolicy cannot filter hostname or URL.
+    egressCidrs: []
   ai:
     enabled: false
     provider: ''

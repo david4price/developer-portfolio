@@ -7,6 +7,9 @@ with GitOps.
 The site is fully static and stays online even when the API host is down. AI features are optional
 and provider-agnostic, and they are off by default.
 
+When AI is enabled, chat session creation requires server-verified Turnstile tokens. See the
+[Turnstile setup guide](docs/deployment/turnstile.md) for configuration and deployment status.
+
 **Progress and next steps:** [docs/implementation-roadmap.md](docs/implementation-roadmap.md)
 (start at "Resume Here").
 

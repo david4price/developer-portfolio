@@ -58,19 +58,19 @@ These numbers set the resource-protection defaults below. They are not general g
 All limits live in Redis, so they hold across API replicas. Each is configurable through the
 environment (`CHAT_*`); the defaults below apply when unset.
 
-| Control                      | Default                                                       | Where / setting                                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Global inference concurrency | 1 (the reference host allows at most 2)                       | Redis semaphore with expiring leases, so a crashed replica can't keep a slot (`CHAT_AI_MAX_CONCURRENCY`, 1–4)                                   |
-| Bounded wait queue           | 4 requests, FIFO, 10 s max wait                               | Redis; newcomers never jump waiters; full queue or timeout → `503 ai_overloaded` + `Retry-After` (`CHAT_AI_QUEUE_MAX`, `CHAT_AI_QUEUE_WAIT_MS`) |
-| Per-session quota            | 30 messages per session (24 h lifetime)                       | Redis fixed window (`CHAT_SESSION_MESSAGE_LIMIT`)                                                                                               |
-| Per-IP quotas                | 60 messages / hour and 10 new sessions / hour                 | Redis fixed window; IPv6 counted per /64 (`CHAT_IP_MESSAGES_PER_HOUR`, `CHAT_IP_SESSIONS_PER_HOUR`); `429 rate_limited` + `Retry-After`         |
-| Client IP                    | Socket address; `CF-Connecting-IP` only when trusted          | `CHAT_TRUST_CF_CONNECTING_IP=true` only where a NetworkPolicy admits nothing but `cloudflared` (P4-03)                                          |
-| Max input                    | 1,000 characters per message                                  | Request validation                                                                                                                              |
-| Message screening            | Every message, before the model                               | `MessageGuard` (P5-07); rejected → `422 message_rejected`, see [Message Screening](#message-screening-confirmed-p5-07)                          |
-| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)         | Prompt builder (P5-05): 6,000 characters in all; data ≤ 1,800; history ≤ 8 turns / 4,000 characters                                             |
-| Output limit                 | 400 tokens                                                    | Provider call                                                                                                                                   |
-| Response timeout             | 30 s                                                          | Provider call with abort                                                                                                                        |
-| Bot challenge                | Turnstile verified server-side on session creation (Proposed) | P5-04                                                                                                                                           |
+| Control                      | Default                                                                | Where / setting                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Global inference concurrency | 1 (the reference host allows at most 2)                                | Redis semaphore with expiring leases, so a crashed replica can't keep a slot (`CHAT_AI_MAX_CONCURRENCY`, 1–4)                                   |
+| Bounded wait queue           | 4 requests, FIFO, 10 s max wait                                        | Redis; newcomers never jump waiters; full queue or timeout → `503 ai_overloaded` + `Retry-After` (`CHAT_AI_QUEUE_MAX`, `CHAT_AI_QUEUE_WAIT_MS`) |
+| Per-session quota            | 30 messages per session (24 h lifetime)                                | Redis fixed window (`CHAT_SESSION_MESSAGE_LIMIT`)                                                                                               |
+| Per-IP quotas                | 60 messages / hour and 10 new sessions / hour                          | Redis fixed window; IPv6 counted per /64 (`CHAT_IP_MESSAGES_PER_HOUR`, `CHAT_IP_SESSIONS_PER_HOUR`); `429 rate_limited` + `Retry-After`         |
+| Client IP                    | Socket address; `CF-Connecting-IP` only when trusted                   | `CHAT_TRUST_CF_CONNECTING_IP=true` only where a NetworkPolicy admits nothing but `cloudflared` (P4-03)                                          |
+| Max input                    | 1,000 characters per message                                           | Request validation                                                                                                                              |
+| Message screening            | Every message, before the model                                        | `MessageGuard` (P5-07); rejected → `422 message_rejected`, see [Message Screening](#message-screening-confirmed-p5-07)                          |
+| Prompt budget                | ≤ 1,500 tokens (system + retrieved context + history)                  | Prompt builder (P5-05): 6,000 characters in all; data ≤ 1,800; history ≤ 8 turns / 4,000 characters                                             |
+| Output limit                 | 400 tokens                                                             | Provider call                                                                                                                                   |
+| Response timeout             | 30 s                                                                   | Provider call with abort                                                                                                                        |
+| Bot challenge                | Turnstile verified server-side on session creation (Confirmed in code) | Hostname/action bound; Redis prevents token reuse across replicas; live widget pending (P5-04)                                                  |
 
 Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing.
 A `503` is refunded only when the request certainly used no capacity: the queue was already full,
@@ -86,17 +86,25 @@ of 2 get 3 answers and 9 immediate `503 ai_overloaded` responses; none hang.
 
 ## Chat Design (Phase 5)
 
-Implemented (P5-02, P5-03, P5-05): `POST /api/v1/chat/sessions` (201, sets the session cookie;
+Implemented (P5-02, P5-03, P5-04 server boundary, P5-05): `POST /api/v1/chat/sessions`
+(`{ turnstileToken }` → 201, sets the session cookie;
 `503 ai_disabled` while AI is off) and `POST /api/v1/chat/messages` (`{ "message": string }` →
 `{ "reply": string, "links": ChatLink[] }`) with the per-session lock, quotas, message screening,
 registry retrieval, and validated links. Errors: `401 chat_session_required`, `409 chat_busy`,
-`422 message_rejected`, `429 rate_limited`, `503 ai_disabled | ai_overloaded | ai_unavailable`.
-Session details are in [security](security.md#sessions-confirmed-p5-02). Still Proposed:
-Turnstile (P5-04).
+`403 challenge_failed`, `422 message_rejected`, `429 rate_limited`,
+`503 ai_disabled | ai_overloaded | ai_unavailable | challenge_unavailable`.
+Session details are in [security](security.md#sessions-confirmed-p5-02). Creating the live widget
+and embedding it in the browser remain **Proposed** (P5-04).
 
-1. **Session (Confirmed; Turnstile Proposed, P5-04):** `POST /api/v1/chat/sessions` sets an
+1. **Session (Confirmed; live widget Proposed, P5-04):** `POST /api/v1/chat/sessions` sets an
    opaque, random session cookie (`HttpOnly; Secure; SameSite=Lax`). State lives in Redis under a
-   namespaced key with a TTL. Turnstile verification arrives with P5-04.
+   namespaced key with a TTL. The `SessionChallenge` port verifies Turnstile, requiring the
+   configured hostname and `chat_session` action. Verification times out after 5 seconds and
+   fails closed. After verification, `ChallengeReplayStore` claims a SHA-256 token digest in
+   Redis for 300 seconds so even concurrent remote validation successes grant only one session.
+   Session-attempt quotas count failures and run before Siteverify. AI-on configuration requires
+   `TURNSTILE_SECRET_KEY` and `TURNSTILE_HOSTNAMES`, with no bypass flag. See the
+   [Turnstile guide](../deployment/turnstile.md) for setup and failure behavior.
 2. **Per-session lock (Confirmed):** a Redis lock with a short TTL. A second message while one is
    in flight returns `409 chat_busy`, so the conversation can't interleave.
 3. **Retrieval (Confirmed, P5-05):** in-memory keyword search over the project registry, behind a

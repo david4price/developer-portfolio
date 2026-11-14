@@ -12,6 +12,11 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-04 server boundary implemented: session creation requires a Turnstile token, hostname/action
+  checks, a verification timeout, and an atomic Redis replay claim. Missing/invalid tokens never
+  create sessions or cookies. AI-on configuration requires a secret and allowed hostnames;
+  Compose and Helm support the settings, including explicit API-only verification egress.
+  Widget creation, browser integration, and the live drill are still pending approval/setup.
 - Review fixes to P5-07: role tags are rejected even when attached to a word (ambiguous
   `Task<Instructions>` syntax is reserved too); messages are checked before and after
   normalization so disguised bracket forms cannot bypass the shared detector. Regression tests
@@ -87,13 +92,15 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
+1. **P5-04:** 🔒 finish Turnstile setup: the server boundary is ready; create the dedicated
+   Cloudflare widget, integrate it in the browser, provision the secret and egress, and run a
+   live drill ([guide](deployment/turnstile.md)).
 2. **P5-06:** 🔒 connect the API to the reference inference runtime (NetworkPolicy egress rule).
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Open pull requests:** follow-ups to P5-05/P5-07 (control markup, refund windows). Open every PR
-against `main`.
+**Open pull requests:** none; #29 (control markup, refund windows) is merged. P5-04 implementation
+is on `feat/p5-04-turnstile`. Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -254,7 +261,11 @@ Read-only inventory of the reference host. Findings:
       Load test (real Redis): 12 concurrent visitors, capacity 1 + queue 2 → 3 answered, 9
       immediate `503 ai_overloaded`, none hung.
 - [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
-      rejected server-side. Creates a Cloudflare widget.
+      rejected server-side. Server boundary implemented with hostname/action binding, bounded
+      Siteverify calls, rate limits before verification, and Redis single-use token claims.
+      Tests cover failure paths and concurrent replay. _Pending:_ create the Cloudflare widget,
+      embed it in the browser, provision production settings, and run the live drill. See the
+      [setup guide](deployment/turnstile.md).
 - [x] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done
       when:_ unknown slugs never reach the client. Done 2026-11-14: unit tests drop unknown,
       wrong-kind, and malformed markers (none of their text reaches the response) and check that

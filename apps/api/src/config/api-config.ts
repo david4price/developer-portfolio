@@ -52,9 +52,26 @@ export interface ApiConfig {
   readonly corsOrigins: readonly string[];
   readonly ai: AiConfig;
   readonly chat: ChatConfig;
+  readonly turnstile:
+    | { readonly enabled: false }
+    | { readonly enabled: true; readonly secretKey: string; readonly hostnames: readonly string[] };
 }
 
 const count = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
+/** Compose passes unset optional settings as empty strings. Required enabled settings still fail. */
+const optionalSetting = <Schema extends z.ZodType>(schema: Schema) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+const hostname = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  );
+const hostnames = z
+  .string()
+  .transform((value) => value.split(','))
+  .pipe(z.array(hostname).min(1));
 
 const apiEnvironmentSchema = z
   .object({
@@ -66,9 +83,11 @@ const apiEnvironmentSchema = z
     REDIS_URL: connectionUrl('redis:', 'rediss:'),
     CORS_ORIGINS: originList,
     AI_ENABLED: booleanFromEnv.default(false),
-    AI_PROVIDER: z.enum(aiProviderNames).optional(),
-    AI_MODEL: z.string().min(1).optional(),
-    AI_BASE_URL: z.url().optional(),
+    AI_PROVIDER: optionalSetting(z.enum(aiProviderNames)),
+    AI_MODEL: optionalSetting(z.string().min(1)),
+    AI_BASE_URL: optionalSetting(z.url()),
+    TURNSTILE_SECRET_KEY: optionalSetting(z.string().trim().min(1)),
+    TURNSTILE_HOSTNAMES: optionalSetting(hostnames),
     CHAT_AI_MAX_CONCURRENCY: count(1, 4).default(1),
     CHAT_AI_QUEUE_MAX: count(0, 20).default(4),
     CHAT_AI_QUEUE_WAIT_MS: count(0, 30_000).default(10_000),
@@ -79,6 +98,11 @@ const apiEnvironmentSchema = z
   })
   .superRefine((environment, context) => {
     if (!environment.AI_ENABLED) return;
+    for (const key of ['TURNSTILE_SECRET_KEY', 'TURNSTILE_HOSTNAMES'] as const) {
+      if (environment[key] === undefined) {
+        context.addIssue({ code: 'custom', path: [key], message: 'required when AI_ENABLED=true' });
+      }
+    }
     if (environment.AI_PROVIDER === undefined) {
       context.addIssue({
         code: 'custom',
@@ -138,5 +162,15 @@ export function loadApiConfig(
       ipSessionsPerHour: parsed.CHAT_IP_SESSIONS_PER_HOUR,
       trustCfConnectingIp: parsed.CHAT_TRUST_CF_CONNECTING_IP,
     },
+    turnstile:
+      parsed.AI_ENABLED &&
+      parsed.TURNSTILE_SECRET_KEY !== undefined &&
+      parsed.TURNSTILE_HOSTNAMES !== undefined
+        ? {
+            enabled: true,
+            secretKey: parsed.TURNSTILE_SECRET_KEY,
+            hostnames: parsed.TURNSTILE_HOSTNAMES,
+          }
+        : { enabled: false },
   };
 }

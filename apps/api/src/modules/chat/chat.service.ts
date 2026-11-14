@@ -30,6 +30,13 @@ import {
 } from './limits.js';
 import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
 import { resolveNavigationLinks } from './navigation-links.js';
+import {
+  CHALLENGE_REPLAY_STORE,
+  type ChallengeReplayStore,
+  ChallengeUnavailableError,
+  SESSION_CHALLENGE,
+  type SessionChallenge,
+} from './session-challenge.js';
 
 /** Conversations live for 24 hours (security.md). */
 export const CHAT_SESSION_TTL_SECONDS = 24 * 60 * 60;
@@ -125,6 +132,8 @@ export class ChatService {
     @Inject(AI_CONCURRENCY) private readonly concurrency: AiConcurrencyLimiter,
     @Inject(KNOWLEDGE_BASE) private readonly knowledge: KnowledgeBase,
     @Inject(MESSAGE_GUARD) private readonly guard: MessageGuard,
+    @Inject(SESSION_CHALLENGE) private readonly challenge: SessionChallenge,
+    @Inject(CHALLENGE_REPLAY_STORE) private readonly challengeReplay: ChallengeReplayStore,
     @Inject(API_CONFIG) config: ApiConfig,
   ) {
     this.limits = config.chat;
@@ -141,10 +150,34 @@ export class ChatService {
     return { key, window: result.window };
   }
 
-  async createSession(clientBucket: string): Promise<{ sessionId: string; session: ChatSession }> {
+  async createSession(
+    clientBucket: string,
+    token: string | undefined,
+  ): Promise<{ sessionId: string; session: ChatSession }> {
     // Don't hand out sessions for a chat that can't answer.
     if (!this.ai.enabled) throw aiDisabled();
     await this.enforce(`ip:${clientBucket}:sessions`, this.limits.ipSessionsPerHour, HOUR_SECONDS);
+    // Failed attempts cost quota too, and rate-limited requests never call Siteverify.
+    let verified = false;
+    if (token !== undefined) {
+      try {
+        verified = await this.challenge.verify(token);
+      } catch (error) {
+        if (!(error instanceof ChallengeUnavailableError)) throw error;
+        throw new ApiException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          'challenge_unavailable',
+          'Verification is temporarily unavailable. Try again with a new challenge.',
+        );
+      }
+    }
+    if (!verified || token === undefined || !(await this.challengeReplay.claim(token))) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        'challenge_failed',
+        'Complete a new verification challenge to start a chat.',
+      );
+    }
     const sessionId = newSessionId();
     const session = await this.store.create(sessionId, CHAT_SESSION_TTL_SECONDS);
     return { sessionId, session };
