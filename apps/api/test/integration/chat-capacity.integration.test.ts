@@ -76,12 +76,40 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     assert.ok((results[3]?.retryAfterSeconds ?? 0) > 50);
     assert.equal((await rate.hit('test:b', 3, 60)).allowed, true, 'keys are independent');
 
-    await rate.refund('test:a');
-    await rate.refund('test:a');
+    const window = results[0]?.window ?? '';
+    assert.ok(
+      results.every((result) => result.window === window),
+      'one window, one ID',
+    );
+    await rate.refund('test:a', window);
+    await rate.refund('test:a', window);
     assert.equal((await rate.hit('test:a', 3, 60)).allowed, true, 'refunds free a place');
     assert.ok((await redis.ttl('portfolio:chat:rate:test:a')) > 0, 'the window keeps its TTL');
-    await rate.refund('test:missing');
+    assert.ok((await redis.pttl('portfolio:chat:rate:test:a:w')) > 0, 'the ID expires with it');
+    await rate.refund('test:missing', window);
     assert.equal(await redis.exists('portfolio:chat:rate:test:missing'), 0, 'no window is created');
+  });
+
+  it('refunds only into the window the hit was counted in', async () => {
+    const rate = new RedisRateLimiter(redis);
+    const first = await rate.hit('test:w', 2, 60);
+    // The window expires and a new one starts before the refund arrives.
+    await redis.del('portfolio:chat:rate:test:w', 'portfolio:chat:rate:test:w:w');
+    const second = await rate.hit('test:w', 2, 60);
+    assert.notEqual(second.window, first.window);
+    await rate.refund('test:w', first.window);
+    assert.equal(await redis.get('portfolio:chat:rate:test:w'), '1', 'the new window is untouched');
+    await rate.refund('test:w', second.window);
+    assert.equal(await redis.get('portfolio:chat:rate:test:w'), '0');
+  });
+
+  it('gives a counter left by an older replica a window ID on its next hit', async () => {
+    const rate = new RedisRateLimiter(redis);
+    await redis.set('portfolio:chat:rate:test:old', '1', 'EX', 60);
+    const hit = await rate.hit('test:old', 5, 60);
+    assert.equal(await redis.get('portfolio:chat:rate:test:old:w'), hit.window);
+    await rate.refund('test:old', hit.window);
+    assert.equal(await redis.get('portfolio:chat:rate:test:old'), '1');
   });
 
   it('never runs more tasks at once than the limit, serving waiters in FIFO order', async () => {

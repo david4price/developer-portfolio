@@ -105,6 +105,12 @@ function toApiError(error: unknown): unknown {
   return error;
 }
 
+/** One counted quota hit: its key and the window it was counted in. */
+interface QuotaHit {
+  readonly key: string;
+  readonly window: string;
+}
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger('ChatService');
@@ -125,10 +131,14 @@ export class ChatService {
     this.lockTtlMs = config.chat.queueWaitMs + AI_LEASE_MS;
   }
 
-  /** Counts a hit and throws `429 rate_limited` once the window's limit is passed. */
-  private async enforce(key: string, limit: number, windowSeconds: number): Promise<void> {
+  /**
+   * Counts a hit and throws `429 rate_limited` once the window's limit is passed. Returns what a
+   * refund needs to take back exactly this hit.
+   */
+  private async enforce(key: string, limit: number, windowSeconds: number): Promise<QuotaHit> {
     const result = await this.rateLimiter.hit(key, limit, windowSeconds);
     if (!result.allowed) throw rateLimited(result.retryAfterSeconds);
+    return { key, window: result.window };
   }
 
   async createSession(clientBucket: string): Promise<{ sessionId: string; session: ChatSession }> {
@@ -162,10 +172,18 @@ export class ChatService {
 
       // Quotas count messages that would reach the model (not 409s or 401s); `generate()` says
       // which 503s are refunded.
-      const ipKey = `ip:${clientBucket}:messages`;
-      const sessionKey = `session:${sessionId}:messages`;
-      await this.enforce(ipKey, this.limits.ipMessagesPerHour, HOUR_SECONDS);
-      await this.enforce(sessionKey, this.limits.sessionMessageLimit, CHAT_SESSION_TTL_SECONDS);
+      const quota = [
+        await this.enforce(
+          `ip:${clientBucket}:messages`,
+          this.limits.ipMessagesPerHour,
+          HOUR_SECONDS,
+        ),
+        await this.enforce(
+          `session:${sessionId}:messages`,
+          this.limits.sessionMessageLimit,
+          CHAT_SESSION_TTL_SECONDS,
+        ),
+      ];
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
@@ -183,7 +201,7 @@ export class ChatService {
       const messages = buildPrompt(snippets, session.history, question);
       const { reply, links } = this.screenReply(
         requestId,
-        await this.generate(messages, signal, [ipKey, sessionKey]),
+        await this.generate(messages, signal, quota),
       );
 
       const history = [
@@ -223,7 +241,7 @@ export class ChatService {
   private async generate(
     messages: AiMessage[],
     signal: AbortSignal,
-    quotaKeys: readonly string[],
+    quota: readonly QuotaHit[],
   ): Promise<string> {
     try {
       const completion = await this.concurrency.run(
@@ -233,7 +251,9 @@ export class ChatService {
       return completion.content;
     } catch (error) {
       if ((error instanceof AiCapacityError && !error.waited) || error instanceof AiDisabledError) {
-        await Promise.allSettled(quotaKeys.map((key) => this.rateLimiter.refund(key)));
+        await Promise.allSettled(
+          quota.map(({ key, window }) => this.rateLimiter.refund(key, window)),
+        );
       }
       throw toApiError(error);
     }

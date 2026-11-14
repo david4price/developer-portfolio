@@ -37,16 +37,17 @@ import {
 } from '../src/modules/chat/limits.js';
 import { createTestApp } from './support/test-app.js';
 
+/** One window per key that never expires; refunds must name it, as with the Redis adapter. */
 class InMemoryRateLimiter implements RateLimiter {
   readonly counts = new Map<string, number>();
   async hit(key: string, limit: number) {
     const count = (this.counts.get(key) ?? 0) + 1;
     this.counts.set(key, count);
-    return { allowed: count <= limit, retryAfterSeconds: 1_234 };
+    return { allowed: count <= limit, retryAfterSeconds: 1_234, window: `${key}#1` };
   }
-  async refund(key: string) {
+  async refund(key: string, window: string) {
     const count = this.counts.get(key) ?? 0;
-    if (count > 0) this.counts.set(key, count - 1);
+    if (window === `${key}#1` && count > 0) this.counts.set(key, count - 1);
   }
 }
 
