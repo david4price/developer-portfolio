@@ -5,6 +5,7 @@
 The public surface is a static site and a small REST API. The main risks:
 
 - abuse of the expensive AI endpoint
+- prompt injection against the chat assistant (screened before and after the model, P5-07)
 - data leaks from the Infrastructure Explorer
 - injection or XSS through rendered content
 - credentials leaked into the public repository
@@ -36,8 +37,12 @@ The public surface is a static site and a small REST API. The main risks:
 - Headers come from `apps/web/out/_headers`, which `apps/web/scripts/write-headers.ts` writes after
   every `next build`. Cloudflare Pages applies them to every response.
 - Content Security Policy, with no `unsafe-inline` and no `unsafe-eval`:
-  - `script-src 'self'` plus the SHA-256 hash of every inline script in every exported page. The
-    build fails if a script is left uncovered or the policy outgrows a `_headers` line.
+  - `script-src 'self'` plus SHA-256 hashes of inline scripts, per path: `/*` allows the scripts
+    every page shares plus the not-found page's (unknown URLs match only `/*`), and each page
+    with a script of its own gets a rule for its URL that detaches the `/*` policy and allows
+    exactly its own hashes. Without the detach, Cloudflare joins both values and browsers enforce
+    both. The build fails if a line passes 2,000 characters or the file passes 100 rules
+    (Cloudflare's limits; about 98 pages).
   - `style-src 'self'` (the export has no inline styles), `img-src 'self' data:`,
     `font-src 'self'`.
   - `connect-src 'self'` plus the API origin from `NEXT_PUBLIC_API_BASE_URL`. Previews have none, so
@@ -76,6 +81,9 @@ The public surface is a static site and a small REST API. The main risks:
   one.
 - No user accounts and no personal data. Visitors can't choose the model, prompt, or provider: the
   message body is `{ "message": string }` (≤ 1,000 characters) and nothing else.
+- Every message is normalized and screened for injection before it reaches the model, and every
+  reply is checked for system-prompt leaks
+  ([Message Screening](ai-integration.md#message-screening-confirmed-p5-07)).
 - While `AI_ENABLED=false`, no sessions are issued (`503 ai_disabled`). Per-IP and per-session
   quotas plus a global AI semaphore apply (P5-03, see
   [AI integration](ai-integration.md#resource-protection-implemented-in-p5-03-unless-noted)).

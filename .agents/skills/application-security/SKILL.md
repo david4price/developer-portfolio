@@ -33,8 +33,9 @@ Reference: `docs/architecture/security.md` and `docs/architecture/networking.md`
 - Client IP: trust `CF-Connecting-IP` only when traffic provably arrives through the tunnel; never
   trust arbitrary `X-Forwarded-For`.
 - Tunnel: a dedicated tunnel whose ingress maps only the API hostname plus a catch-all 404.
-- CSP via Cloudflare Pages `_headers`: hash-based scripts, `connect-src` limited to the API and
-  Turnstile, `frame-ancestors 'none'`, HSTS.
+- CSP via Cloudflare Pages `_headers`: hash-based scripts per path (`apps/web/scripts/write-headers.ts`;
+  page rules must detach the `/*` CSP before setting their own), `connect-src` limited to the API
+  and Turnstile, `frame-ancestors 'none'`, HSTS.
 
 ## Sessions
 

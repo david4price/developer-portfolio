@@ -42,6 +42,12 @@ api:
     provider: ''
     model: ''
     baseUrl: ''
+    # With networkPolicy.enabled, the only place the API may connect for inference (P5-06):
+    # the runtime's address as a CIDR (e.g. <inference-host-ip>/32; NetworkPolicies match IPs,
+    # not hostnames) and its TCP port. Required when AI and NetworkPolicies are both on.
+    egress:
+      cidr: ''
+      port: 0
   resources:
     requests:
       cpu: 50m

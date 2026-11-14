@@ -11,11 +11,17 @@ export interface RateLimitResult {
 export interface RateLimiter {
   /** Counts one hit against `key`; allowed while the window's count is at most `limit`. */
   hit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult>;
+  /** Takes back one hit from the current window, if the window still exists and isn't empty. */
+  refund(key: string): Promise<void>;
 }
 
 /** No slot became free in time, or the wait queue was full. */
 export class AiCapacityError extends Error {
-  constructor(readonly retryAfterSeconds: number) {
+  constructor(
+    readonly retryAfterSeconds: number,
+    /** True when the request held a queue place until the wait ran out (it used capacity). */
+    readonly waited = false,
+  ) {
     super('AI capacity exhausted');
     this.name = 'AiCapacityError';
   }

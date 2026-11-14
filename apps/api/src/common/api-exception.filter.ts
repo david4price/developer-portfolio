@@ -9,7 +9,11 @@ import {
 import type { ApiErrorCode, ApiErrorResponse } from '@portfolio/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiException } from './api-exception.js';
+import { ClientDisconnectedError } from './client-disconnected.error.js';
 import { DependencyUnavailableError } from './dependency-unavailable.error.js';
+
+/** Non-standard "client closed request" status (as in nginx logs); the client never sees it. */
+const CLIENT_CLOSED_REQUEST = 499;
 
 const codeByStatus: Readonly<Record<number, ApiErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: 'bad_request',
@@ -36,6 +40,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
     let code: ApiErrorCode = 'internal_error';
     let message = 'Internal server error';
 
+    if (exception instanceof ClientDisconnectedError) {
+      // Routine (a visitor closed the tab): not an error, and there's no one to answer.
+      this.logger.debug({ message: 'Client disconnected', requestId: request.id });
+      void reply.status(CLIENT_CLOSED_REQUEST).send();
+      return;
+    }
     if (exception instanceof DependencyUnavailableError) {
       status = HttpStatus.SERVICE_UNAVAILABLE;
       code = 'not_ready';

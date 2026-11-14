@@ -6,6 +6,7 @@ import {
 } from '@portfolio/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { ClientDisconnectedError } from '../../common/client-disconnected.error.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { API_CONFIG, type ApiConfig } from '../../config/api-config.js';
 import { clientAddress, clientBucket } from './client-address.js';
@@ -54,13 +55,14 @@ export class ChatController {
     // Stop generating if the visitor goes away before the reply is sent.
     const disconnected = new AbortController();
     reply.raw.once('close', () => {
-      if (!reply.raw.writableFinished) disconnected.abort(new Error('client disconnected'));
+      if (!reply.raw.writableFinished) disconnected.abort(new ClientDisconnectedError());
     });
     return this.chat.sendMessage(
       sessionIdFromCookieHeader(request.headers.cookie),
       body.message,
       this.bucketOf(request),
       disconnected.signal,
+      request.id,
     );
   }
 }

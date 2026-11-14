@@ -51,7 +51,8 @@ pnpm helm:check   # infrastructure/helm/check-chart.sh
 
 It lints the chart, renders every `ci/*-values.yaml` through `kubeconform -strict`, rejects
 rendered Secrets, and asserts the guardrails fail with their messages (missing image reference,
-malformed digest, AI without a model, missing Secret name). Add a `ci/*-values.yaml` fixture for
+malformed digest, AI without a model, AI with NetworkPolicies but no `api.ai.egress`, missing
+Secret name). Add a `ci/*-values.yaml` fixture for
 new options and an `expect_failure` case for new `required`/`fail` guards. CI's `helm` job runs
 the same script with pinned tools. Install `helm`/`kubeconform` locally only with approval
 (a checksum-verified download into a temporary directory is enough).

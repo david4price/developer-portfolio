@@ -58,6 +58,8 @@ expect_failure 'digest must look like sha256' \
   -f "$chart/ci/digests-values.yaml" --set api.image.digest=sha256:abc
 expect_failure 'api.ai.model is required' \
   -f "$chart/ci/ai-enabled-values.yaml" --set api.ai.model=
+expect_failure 'api.ai.egress.cidr and api.ai.egress.port are required' \
+  -f "$chart/ci/ai-network-policy-values.yaml" --set api.ai.egress.port=0
 expect_failure 'api.trustCloudflareClientIp requires cloudflared.enabled' \
   -f "$chart/ci/digests-values.yaml" --set cloudflared.enabled=false
 expect_failure 'api.trustCloudflareClientIp requires cloudflared.enabled' \

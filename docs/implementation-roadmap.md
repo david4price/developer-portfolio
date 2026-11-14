@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-13_
+_Last updated: 2026-11-14_
 
 **Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,17 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-07: chat messages are screened before the model (Unicode normalization; instruction
+  override, prompt extraction, role markup, jailbreak, and hidden-payload patterns →
+  `422 message_rejected`), and replies that leak the system rules are withheld. Full-repo review
+  fixes: quota refunded when an overload rejection used no capacity, link markers by title and code-safe, planned mini-apps labelled
+  in grounding data, quiet client disconnects, nginx security headers on static assets, a chart
+  guard so AI with NetworkPolicies requires an inference egress rule, and a per-page CSP in
+  `_headers` so adding projects can't outgrow Cloudflare's 2,000-character line limit.
+- P5-05: chat answers are grounded in the project registry (in-memory keyword search, top 3
+  snippets in a delimited data block, whole prompt held to ~1,500 tokens). The model links pages
+  only through `[[project:<slug>]]` markers; the API validates them and returns `links`, and
+  unknown slugs never reach the client.
 - P3-06: the API autoscales on CPU (1–3 pods). Under synthetic load it scaled 1→2→3, served
   950k requests with zero errors, and scaled back to 1; Argo CD stayed Synced with no extra syncs.
 - P3-05: nightly PostgreSQL backups, restore drilled: the dump restored cleanly, migrations had
@@ -66,11 +77,12 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-05:** registry-grounded retrieval and validated navigation links (repository-only).
-2. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
-3. **P2-12:** replace the placeholder profile and experience content (owner will send the text later).
+1. **P5-04:** 🔒 Turnstile on chat session creation (creates a Cloudflare widget).
+2. **P5-06:** 🔒 connect the API to the reference inference runtime (NetworkPolicy egress rule).
+3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
+   later). Moving the profile into a shared package lets the chat index it too.
 
-**Open pull requests:** #27 (backup waits for PostgreSQL; P3-05/P3-06 records). Open every PR against `main`.
+**Open pull requests:** P5-05 (registry grounding). Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
 
@@ -214,7 +226,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (3/6)
+## Phase 5: AI Chatbot (5/7)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -232,11 +244,21 @@ Read-only inventory of the reference host. Findings:
       immediate `503 ai_overloaded`, none hung.
 - [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
       rejected server-side. Creates a Cloudflare widget.
-- [ ] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done
-      when:_ unknown slugs never reach the client.
+- [x] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done
+      when:_ unknown slugs never reach the client. Done 2026-11-14: unit tests drop unknown,
+      wrong-kind, and malformed markers (none of their text reaches the response) and check that
+      the prompt stays within budget at the worst case. Profile text is not indexed yet: it lives
+      in the web app until P2-12.
 - [ ] **P5-06** 🔒 Connect to the reference inference runtime with a NetworkPolicy egress rule.
       _Needs:_ P3-03. _Done when:_ only the API pod can reach it; the private assistant is
-      unaffected.
+      unaffected. The chart side exists: set `api.ai.egress.cidr`/`port` (rendering fails without
+      them when AI and NetworkPolicies are on).
+- [x] **P5-07** Screen messages to and from the model. _Needs:_ P5-05. _Done when:_ injection
+      attempts are rejected before the model, hidden characters never reach it, and replies that
+      leak the system rules are withheld. Done 2026-11-14: `MessageGuard` port with a rule-based
+      adapter; unit tests cover each rejection class, obfuscated variants, legitimate questions
+      that must pass, and leak detection; service tests show rejected messages never reach the
+      model or history and still cost quota.
 
 ## Phase 6: Infrastructure Explorer (0/4)
 

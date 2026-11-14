@@ -43,11 +43,21 @@ Useful endpoints:
 | `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503 |
 | `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)            |
 | `GET /api/v1/projects/:slug` | Project detail                                                 |
+| `POST /api/v1/chat/sessions` | Starts a chat session (cookie); `503 ai_disabled` while AI off |
+| `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                 |
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
 `?cursor=`; it is `null` on the last page. Cursors are opaque, and a malformed `limit` or `cursor`
 returns `400 bad_request`.
+
+Chat needs `AI_ENABLED=true` and an AI provider. Replies are plain text; `links` lists pages the
+assistant suggested, each checked against the project registry (`kind`, `slug`, `title`, `path`).
+The design and limits are in [AI integration](../architecture/ai-integration.md#chat-design-phase-5).
+
+Messages are screened before they reach the model: an injection attempt gets
+`422 message_rejected` and is not stored
+([Message Screening](../architecture/ai-integration.md#message-screening-confirmed-p5-07)).
 
 Errors use the `ApiErrorResponse` shape (`error.code`, `error.message`, `error.requestId`). When
 PostgreSQL is unreachable, data endpoints return `503` with code `not_ready` so clients can retry;

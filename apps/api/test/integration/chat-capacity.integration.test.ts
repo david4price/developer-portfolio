@@ -14,12 +14,17 @@ import {
 import { CHAT_SESSION_STORE } from '../../src/modules/chat/chat-session.store.js';
 import { ChatController } from '../../src/modules/chat/chat.controller.js';
 import { ChatService } from '../../src/modules/chat/chat.service.js';
+import { HeuristicMessageGuard } from '../../src/modules/chat/heuristic-message-guard.js';
+import { KNOWLEDGE_BASE } from '../../src/modules/chat/knowledge-base.js';
 import { AI_CONCURRENCY, AiCapacityError, RATE_LIMITER } from '../../src/modules/chat/limits.js';
+import { MESSAGE_GUARD } from '../../src/modules/chat/message-guard.js';
 import { RedisChatSessionStore } from '../../src/modules/chat/redis-chat-session.store.js';
 import {
   RedisAiConcurrencyLimiter,
   RedisRateLimiter,
 } from '../../src/modules/chat/redis-limits.js';
+import { RegistryKnowledgeBase } from '../../src/modules/chat/registry-knowledge-base.js';
+import { testRegistry } from '../support/test-registry.js';
 import { createTestApp } from '../support/test-app.js';
 
 /** Capacity controls against a real Redis. Skipped when REDIS_URL is unset. */
@@ -70,6 +75,13 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     );
     assert.ok((results[3]?.retryAfterSeconds ?? 0) > 50);
     assert.equal((await rate.hit('test:b', 3, 60)).allowed, true, 'keys are independent');
+
+    await rate.refund('test:a');
+    await rate.refund('test:a');
+    assert.equal((await rate.hit('test:a', 3, 60)).allowed, true, 'refunds free a place');
+    assert.ok((await redis.ttl('portfolio:chat:rate:test:a')) > 0, 'the window keeps its TTL');
+    await rate.refund('test:missing');
+    assert.equal(await redis.exists('portfolio:chat:rate:test:missing'), 0, 'no window is created');
   });
 
   it('never runs more tasks at once than the limit, serving waiters in FIFO order', async () => {
@@ -105,12 +117,27 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     const started = Date.now();
     await assert.rejects(
       limit.run(async () => 'x', never),
-      AiCapacityError,
+      (error) => error instanceof AiCapacityError && !error.waited,
     );
     assert.ok(Date.now() - started < 200, 'a full queue rejects immediately');
 
-    await assert.rejects(queued, AiCapacityError, 'the waiter gives up after queueWaitMs');
+    await assert.rejects(
+      queued,
+      (error) => error instanceof AiCapacityError && error.waited,
+      'the waiter gives up after queueWaitMs, and is marked as having waited',
+    );
     assert.equal(await redis.zcard('portfolio:chat:ai:waiters'), 0, 'a timed-out waiter leaves');
+    await hold;
+  });
+
+  it('does not mark a request as having waited when no queue wait is configured', async () => {
+    const limit = limiter({ limit: 1, queueMax: 1, queueWaitMs: 0 });
+    const hold = limit.run(() => sleep(300), never);
+    await sleep(20);
+    await assert.rejects(
+      limit.run(async () => 'x', never),
+      (error) => error instanceof AiCapacityError && !error.waited,
+    );
     await hold;
   });
 
@@ -161,6 +188,8 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
           ChatService,
           { provide: CHAT_SESSION_STORE, useValue: new RedisChatSessionStore(redis) },
           { provide: AI_PROVIDER, useValue: slowAi },
+          { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry) },
+          { provide: MESSAGE_GUARD, useValue: new HeuristicMessageGuard() },
           { provide: RATE_LIMITER, useValue: new RedisRateLimiter(redis) },
           {
             provide: AI_CONCURRENCY,

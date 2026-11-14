@@ -97,6 +97,20 @@ Plus `docker compose --env-file .env.example -f compose.yaml config --quiet` (an
 and `kubeconform`), and `git diff --check`. Report anything that could not
 run, such as integration tests that need PostgreSQL and Redis.
 
+### Before Every Push
+
+Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
+is given, and before running `git push`:
+
+1. Run `/code-review` on everything the push would publish: the commits in `@{upstream}..HEAD`,
+   or the branch against `main` when it has no upstream yet. Uncommitted changes are not pushed;
+   commit or exclude them first.
+2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
+   open findings only after the user accepts them.
+3. After fixes, re-run the quality gates above and the `verify` skill, then review the new commits
+   again.
+4. In the handoff, say that the review ran, at which level, and what it found.
+
 ## Working Agreements
 
 - Inspect `git status --short` first and preserve unrelated work.
