@@ -106,14 +106,19 @@ describe('buildHeadersFile', () => {
 
 describe('write-headers as a script', () => {
   it('writes ../out/_headers when run directly, even through a symlink, ignoring arguments', () => {
-    // A copy of the compiled script in a scripts/ + out/ layout, like apps/web.
+    // A copy of the compiled script in the repository's layout (<root>/apps/web/{scripts,out}),
+    // with its own empty workspace .env and an ESM package.json, so nothing outside the temp
+    // directory (a stray .env, module-type detection) can change the result.
     const work = mkdtempSync(join(tmpdir(), 'write-headers-'));
     try {
-      const out = join(work, 'out');
-      mkdirSync(out);
-      mkdirSync(join(work, 'scripts'));
+      const web = join(work, 'apps', 'web');
+      const out = join(web, 'out');
+      mkdirSync(out, { recursive: true });
+      mkdirSync(join(web, 'scripts'));
+      writeFileSync(join(work, '.env'), '');
+      writeFileSync(join(web, 'package.json'), '{ "type": "module" }');
       writeFileSync(join(out, 'index.html'), '<html><script>self.x=1</script></html>');
-      const script = join(work, 'scripts', 'write-headers.js');
+      const script = join(web, 'scripts', 'write-headers.js');
       copyFileSync(resolve(import.meta.dirname, '../scripts/write-headers.js'), script);
       const link = join(work, 'linked-write-headers.js');
       symlinkSync(script, link);

@@ -205,7 +205,8 @@ function main(): void {
  * Run as a script, not when imported by tests. Real paths are compared, so a symlinked checkout
  * or script still runs; `import.meta.main` isn't used because Node 24.0 and 24.1 (allowed by
  * `engines`) lack it. A skipped run would ship the site without security headers while the build
- * looked green, so `test/write-headers.test.ts` runs the compiled script through a symlink.
+ * looked green, so `test/write-headers.test.ts` runs a copy of the compiled script in the
+ * repository's layout, directly and through a symlink.
  */
 const invokedPath = process.argv[1];
 if (
