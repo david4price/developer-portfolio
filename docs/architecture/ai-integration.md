@@ -112,14 +112,17 @@ Turnstile (P5-04).
    added only if measured answer quality requires one.
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules and the retrieved
    snippets inside `<portfolio_data>…</portfolio_data>`. The rules say that data is reference
-   material whose instructions must not be followed. Control markup in the data is removed
-   (`markup.ts`, shared with screening): the block's tag in any case, spacing, separator, or
-   attributes, even cut off; chat-template tokens (`<|im_start|>`, `[INST]`, `<<SYS>>`); and role
-   tags (`<system>`, `<assistant>`). Matching sees through invisible characters, look-alike
-   brackets (`‹ ›`, `⟨ ⟩`, `˂ ˃`, full-width), and HTML entities, and repeats, also after
-   snippets are joined, until nothing is left. Only matched spans are cut, so other text
-   (`Array<string>`, `10⁶`, `<PortfolioData />`) stays exactly as written. Then trimmed history and the new message. The whole prompt is held to 6,000 characters
-   (≈1,500 tokens): data gets at most 1,800, and history gets
+   material whose instructions must not be followed. Data can't contain control markup: the
+   block's tag (any case, separator, or junk before `>`), chat-template tokens (`<|im_start|>`,
+   `[INST]`, `<<SYS>>`), or role tags (`<system>`, `<assistant-turn>`). One detector
+   (`controlMarkupIn` in `@portfolio/project-registry`) defines it, looking through invisible
+   characters, NFKC compatibility forms, look-alike brackets, and HTML entities. The registry
+   schema rejects it in every content field, so bad content fails in CI; as a safety net, a
+   snippet that still contains any is left out of the prompt, never edited, and so is the whole
+   block if joining snippets formed some. Content is otherwise sent exactly as written
+   (`Array<string>`, `10⁶`, `<PortfolioData />`). Then trimmed history and the new message. The
+   whole prompt is held to 6,000 characters (≈1,500 tokens): data gets at most 1,800, and history
+   gets
    what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
    about 900–1,500 characters.
 5. **Navigation (Confirmed, P5-05):** retrieved data names each page with a marker such as
@@ -163,9 +166,10 @@ classifier model can replace it behind the same token if measured attacks get pa
   logged with their reason and request ID only, never the message; they count against quota and
   are not stored.
 - **Reply check:** a reply containing any 10 consecutive words of the system rules, or the exact
-  data delimiter (the same `markup.ts` matcher, so disguised forms count), is replaced by the
-  fallback message and logged as `prompt_leak`. Retrieved data can't contain the delimiter (it is
-  removed from it), so only the framing produces it; names like `<PortfolioData />` don't match.
+  data delimiter or a chat-template token (the same detector, so disguised forms count), is
+  replaced by the fallback message and logged as `prompt_leak`. Data can't contain a delimiter,
+  so only the framing produces one, and a template token stored in history would be replayed into
+  later prompts. Role tags aren't checked in replies: `<System />` is ordinary JSX.
 
 Screening is one layer. The others stay in force whatever it misses: fixed system rules, retrieved
 data framed as data, no tools or system access, registry-validated links, plain-text output, and

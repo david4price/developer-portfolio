@@ -12,10 +12,11 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
-- Follow-ups to P5-05/P5-07: one control-markup matcher (`markup.ts`) for data, messages, and
-  replies removes delimiters, template tokens, and role tags however disguised, while other text
-  (`Array<string>`, `10⁶`) stays as written; quota refunds are bound to their window by its
-  expiry time. The guard's phrasing limit is recorded as P5-08.
+- Follow-ups to P5-05/P5-07: one control-markup detector (`controlMarkupIn` in the registry
+  package) screens messages and replies, and the registry schema rejects it in content, so data
+  reaches the model exactly as written (`Array<string>`, `10⁶`) yet can never pose as prompt
+  structure; quota refunds are bound to their window by its expiry time. The guard's phrasing
+  limit is recorded as P5-08.
 - P5-07: chat messages are screened before the model (Unicode normalization; instruction
   override, prompt extraction, role markup, jailbreak, and hidden-payload patterns →
   `422 message_rejected`), and replies that leak the system rules are withheld. Full-repo review

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { controlMarkupIn } from './control-markup.js';
 
 export const slug = z
   .string()
@@ -9,13 +10,27 @@ const httpsUrl = z.url().refine((value) => new URL(value).protocol === 'https:',
   message: 'must use https',
 });
 
+/**
+ * Text that reaches the chat assistant's prompt. Control markup (`control-markup.ts`) is
+ * rejected here, at the source, so content can never pose as prompt structure.
+ */
+const content = (max: number) =>
+  z
+    .string()
+    .min(1)
+    .max(max)
+    .refine((value) => controlMarkupIn(value).size === 0, {
+      message:
+        'must not contain prompt control markup (data delimiters, template tokens, role tags)',
+    });
+
 export const projectSchema = z.object({
   slug,
-  title: z.string().min(1).max(80),
-  summary: z.string().min(1).max(200),
-  description: z.string().min(1).max(4_000),
+  title: content(80),
+  summary: content(200),
+  description: content(4_000),
   kind: z.enum(['portfolio-app', 'external-repository']),
-  technologies: z.array(z.string().min(1).max(40)).min(1).max(20),
+  technologies: z.array(content(40)).min(1).max(20),
   featured: z.boolean(),
   repositoryUrl: httpsUrl.nullable(),
   liveUrl: httpsUrl.nullable(),
@@ -24,8 +39,8 @@ export const projectSchema = z.object({
 
 export const miniAppSchema = z.object({
   slug,
-  title: z.string().min(1).max(80),
-  summary: z.string().min(1).max(200),
+  title: content(80),
+  summary: content(200),
   status: z.enum(['available', 'planned']),
 });
 

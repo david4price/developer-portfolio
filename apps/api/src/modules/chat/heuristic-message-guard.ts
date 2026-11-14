@@ -1,5 +1,5 @@
+import { controlMarkupIn, INVISIBLE } from '@portfolio/project-registry';
 import { SYSTEM_RULES } from './chat-prompt.js';
-import { containsControlMarkup, containsDataDelimiter, INVISIBLE } from './markup.js';
 import type {
   MessageGuard,
   MessageRejection,
@@ -123,8 +123,8 @@ export class HeuristicMessageGuard implements MessageGuard {
       .trim();
     if (message === '') return { allowed: false, reason: 'empty' };
 
-    // Delimiters, template tokens, and role tags, however disguised (shared with data cleaning).
-    if (containsControlMarkup(message)) return { allowed: false, reason: 'role_injection' };
+    // Delimiters, template tokens, and role tags, however disguised (the registry's definition).
+    if (controlMarkupIn(message).size > 0) return { allowed: false, reason: 'role_injection' };
     for (const [reason, pattern] of RAW_RULES) {
       if (pattern.test(message)) return { allowed: false, reason };
     }
@@ -143,8 +143,11 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    // Retrieved data can't contain the delimiter (it is stripped), so only the framing does.
-    if (containsDataDelimiter(reply)) return 'prompt_leak';
+    // Data can't contain a delimiter (the registry schema rejects it), so only the framing does;
+    // a template token in a reply would be replayed from history into later prompts. Role tags
+    // aren't checked here: `<System />` is ordinary JSX in an answer about React.
+    const markup = controlMarkupIn(reply);
+    if (markup.has('data_delimiter') || markup.has('template_token')) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );

@@ -1,6 +1,6 @@
+import { controlMarkupIn } from '@portfolio/project-registry';
 import type { AiMessage } from '../ai/ai-provider.js';
 import type { ChatTurn } from './chat-session.store.js';
-import { stripControlMarkup } from './markup.js';
 import { linkMarker } from './navigation-links.js';
 
 /**
@@ -52,24 +52,25 @@ export function promptHistory(
   return selected;
 }
 
+const NO_DATA = 'No portfolio data matched this question.';
+
 /**
- * Best snippets first while they fit. Control markup (`markup.ts`) is removed from each snippet,
- * for its budget, and from the joined body again, so a tag split across two snippets can't form.
+ * Best snippets first while they fit. The registry schema already rejects control markup in
+ * content; as a safety net, a snippet that still contains any is left out (never edited), and so
+ * is the whole block if joining snippets ever formed some.
  */
 function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = stripControlMarkup(snippet);
-    const cost = clean.length + (kept.length > 0 ? 2 : 0);
+    if (controlMarkupIn(snippet).size > 0) continue;
+    const cost = snippet.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
-    kept.push(clean);
+    kept.push(snippet);
     characters += cost;
   }
-  const body =
-    kept.length > 0
-      ? stripControlMarkup(kept.join('\n\n'))
-      : 'No portfolio data matched this question.';
+  const joined = kept.join('\n\n');
+  const body = joined === '' || controlMarkupIn(joined).size > 0 ? NO_DATA : joined;
   return `${DATA_OPEN}\n${body}\n${DATA_CLOSE}`;
 }
 
