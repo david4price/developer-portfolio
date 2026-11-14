@@ -49,7 +49,9 @@ Build variables (plain text, not secrets):
 `pnpm build` writes `apps/web/out/_headers` (see
 [security](../architecture/security.md#frontend-confirmed-p4-02)). Pages applies it on deploy;
 nothing is configured in the dashboard. Check a deployment with
-`curl -sI https://<deployment>/ | grep -i -E 'content-security|strict-transport'`.
+`curl -sI https://<deployment>/ | grep -i -E 'content-security|strict-transport'`. Each page has
+its own CSP, so check a page such as `/about/` too: it must show exactly one
+`Content-Security-Policy` header, not two joined with a comma.
 
 ## Custom Domain
 
