@@ -78,7 +78,16 @@ published [Turnstile test keys](https://developers.cloudflare.com/turnstile/trou
 return a fixed hostname and omit the action, so they cannot exercise this adapter's complete
 hostname/action check. Use a development widget with real keys for that manual check; do not
 weaken the checks to accommodate dummy responses. AI-off development needs no Cloudflare account.
-The chat UI and embedded widget are not implemented yet; this step supplies the server boundary.
+Open the chat UI with the floating artwork button in the bottom-right corner of any page. It
+opens a small overlay; Escape, the close button, or clicking outside closes it. Closing and
+reopening preserves the conversation, including across site navigation. Set the public
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` alongside `NEXT_PUBLIC_API_BASE_URL` before starting or building
+the web app. The popup says "not configured" and loads no verification script if either is absent.
+The same public sitekey is a build argument in `compose.full.yaml`. Changing it requires a new
+static build. The secret stays in API configuration. After successful verification, select
+**Start chat**, then send a question; blocked cookies or an expired session require fresh
+verification. Browser and live acceptance checks are still pending; see the
+[Turnstile guide](turnstile.md).
 
 Messages are screened before they reach the model: an injection attempt gets
 `422 message_rejected` and is not stored

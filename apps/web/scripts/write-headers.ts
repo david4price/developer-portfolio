@@ -39,6 +39,7 @@ export const MAX_RULES = 100;
 /** Cloudflare Web Analytics: the beacon script and the endpoint it reports to. */
 const ANALYTICS_SCRIPT = 'https://static.cloudflareinsights.com';
 const ANALYTICS_REPORT = 'https://cloudflareinsights.com';
+const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
 
 export interface ExportedPage {
   /** The URL path the page is served at, such as `/` or `/projects/example/`. */
@@ -63,14 +64,20 @@ export function urlPath(relativeHtmlPath: string): string {
   return `/${path}`;
 }
 
-function contentSecurityPolicy(hashes: ReadonlySet<string>, apiOrigin: string | null): string {
+function contentSecurityPolicy(
+  hashes: ReadonlySet<string>,
+  apiOrigin: string | null,
+  turnstile: boolean,
+): string {
+  const challenge = turnstile ? ` ${TURNSTILE_ORIGIN}` : '';
   return [
     "default-src 'self'",
-    `script-src 'self' ${ANALYTICS_SCRIPT} ${[...hashes].sort().join(' ')}`.trim(),
+    `script-src 'self' ${ANALYTICS_SCRIPT}${challenge} ${[...hashes].sort().join(' ')}`.trim(),
     "style-src 'self'",
     "img-src 'self' data:",
     "font-src 'self'",
-    `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ''} ${ANALYTICS_REPORT}`,
+    `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ''} ${ANALYTICS_REPORT}${challenge}`,
+    `frame-src ${turnstile ? TURNSTILE_ORIGIN : "'none'"}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -82,6 +89,7 @@ function contentSecurityPolicy(hashes: ReadonlySet<string>, apiOrigin: string | 
 export function buildHeadersFile(
   pages: readonly ExportedPage[],
   apiOrigin: string | null,
+  turnstile = false,
 ): HeadersFile {
   if (pages.length === 0) throw new Error('No exported pages');
 
@@ -96,7 +104,7 @@ export function buildHeadersFile(
 
   const lines = [
     '/*',
-    `  Content-Security-Policy: ${contentSecurityPolicy(siteWide, apiOrigin)}`,
+    `  Content-Security-Policy: ${contentSecurityPolicy(siteWide, apiOrigin, turnstile)}`,
     // No includeSubDomains: other hosts under the domain may not all serve HTTPS.
     '  Strict-Transport-Security: max-age=31536000',
     '  X-Content-Type-Options: nosniff',
@@ -121,7 +129,7 @@ export function buildHeadersFile(
     lines.push(
       page.path,
       '  ! Content-Security-Policy',
-      `  Content-Security-Policy: ${contentSecurityPolicy(hashes, apiOrigin)}`,
+      `  Content-Security-Policy: ${contentSecurityPolicy(hashes, apiOrigin, turnstile)}`,
       '',
     );
     pageRules += 1;
@@ -193,7 +201,8 @@ function main(): void {
   });
 
   const api = apiOrigin();
-  const headers = buildHeadersFile(pages, api);
+  const turnstile = api !== null && Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
+  const headers = buildHeadersFile(pages, api, turnstile);
   writeFileSync(join(outDir, '_headers'), headers.text);
   console.log(
     `_headers: ${pages.length} pages, ${headers.rules} rules (${headers.pageRules} per-page CSPs); ` +

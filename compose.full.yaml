@@ -85,6 +85,7 @@ services:
       dockerfile: infrastructure/docker/web.Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:3001}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     environment:
       API_ORIGIN: ${PUBLIC_API_BASE_URL:-http://localhost:3001}
     ports:

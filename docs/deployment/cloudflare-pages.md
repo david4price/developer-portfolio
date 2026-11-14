@@ -29,13 +29,14 @@ requests from forks.
 
 Build variables (plain text, not secrets):
 
-| Variable                          | Production             | Preview |
-| --------------------------------- | ---------------------- | ------- |
-| `NODE_VERSION`                    | `24`                   | `24`    |
-| `SKIP_DEPENDENCY_INSTALL`         | `1`                    | `1`     |
-| `NEXT_TELEMETRY_DISABLED`         | `1`                    | `1`     |
-| `COREPACK_ENABLE_DOWNLOAD_PROMPT` | `0`                    | `0`     |
-| `NEXT_PUBLIC_API_BASE_URL`        | `https://api.<domain>` | _unset_ |
+| Variable                          | Production                                 | Preview |
+| --------------------------------- | ------------------------------------------ | ------- |
+| `NODE_VERSION`                    | `24`                                       | `24`    |
+| `SKIP_DEPENDENCY_INSTALL`         | `1`                                        | `1`     |
+| `NEXT_TELEMETRY_DISABLED`         | `1`                                        | `1`     |
+| `COREPACK_ENABLE_DOWNLOAD_PROMPT` | `0`                                        | `0`     |
+| `NEXT_PUBLIC_API_BASE_URL`        | `https://api.<domain>`                     | _unset_ |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`  | dedicated public sitekey, once provisioned | _unset_ |
 
 - `SKIP_DEPENDENCY_INSTALL` turns off the builder's own install, so pnpm (the version pinned in
   `packageManager`, via Corepack) installs with `--frozen-lockfile` and the workspace's
@@ -43,6 +44,9 @@ Build variables (plain text, not secrets):
 - Previews have no API URL, so their API badge says "not configured" and they never call the
   production API. Production points at the API hostname that the tunnel serves from P4-03; until
   then its badge honestly says "unavailable".
+- Set the public Turnstile sitekey only after the dedicated widget is provisioned
+  ([setup guide](turnstile.md)). Both public settings are required for the chat widget; previews
+  stay disconnected. Changing these build variables requires a new Pages build.
 
 ## Security Headers
 
