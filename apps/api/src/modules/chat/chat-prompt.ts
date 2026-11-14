@@ -17,11 +17,31 @@ const HISTORY_MAX_CHARS = 4_000;
 export const DATA_OPEN = '<portfolio_data>';
 export const DATA_CLOSE = '</portfolio_data>';
 
+/** Brackets a model may read as `<` or `>`; NFKC already folds the full-width and small forms. */
+const LOOKALIKE_OPEN = /[‹〈⟨❮❬⧼]/g;
+const LOOKALIKE_CLOSE = /[›〉⟩❯❭⧽]/g;
+
+/** Text with look-alike angle brackets folded to `<` and `>`, so a disguised tag is a plain one. */
+export const foldBrackets = (text: string) =>
+  text.normalize('NFKC').replace(LOOKALIKE_OPEN, '<').replace(LOOKALIKE_CLOSE, '>');
+
 /**
- * Angle brackets in retrieved data become look-alike guillemets, so no snippet, alone or joined
- * to the next, can form a tag that closes the data block early. No pattern to keep up to date.
+ * Anything tag-like naming the data block, even cut off: `<portfolio_data`, `</ Portfolio Data >`.
+ * Attributes go with it only when a `>` closes them within 100 characters, so an unterminated tag
+ * loses just its head, not the prose after it.
  */
-const neutralizeMarkup = (text: string) => text.replaceAll('<', '‹').replaceAll('>', '›');
+const DATA_TAG_LIKE = /<\s*\/?\s*portfolio[\s_-]*data\b(?:[^<>]{0,100}>)?/i;
+const ALL_DATA_TAGS_LIKE = new RegExp(DATA_TAG_LIKE, 'gi');
+
+/**
+ * Retrieved data with every form of the block's delimiter removed, repeated until none is left so
+ * nested pieces can't reassemble one. Other markup (`Array<string>`, `a -> b`) is kept as written.
+ */
+function neutralizeData(text: string): string {
+  let current = foldBrackets(text);
+  while (DATA_TAG_LIKE.test(current)) current = current.replace(ALL_DATA_TAGS_LIKE, '');
+  return current;
+}
 
 /** Fixed rules. Visitors can't change them; retrieved data and history are framed as data. */
 export const SYSTEM_RULES = [
@@ -57,18 +77,24 @@ export function promptHistory(
   return selected;
 }
 
-/** Best snippets first while they fit; markup is neutralized so data can't close the block. */
+/**
+ * Best snippets first while they fit. Each snippet is neutralized for its budget, and the joined
+ * body again, so a tag split across two snippets can't form either.
+ */
 function dataBlock(snippets: readonly string[]): string {
   const kept: string[] = [];
   let characters = 0;
   for (const snippet of snippets) {
-    const clean = neutralizeMarkup(snippet);
+    const clean = neutralizeData(snippet);
     const cost = clean.length + (kept.length > 0 ? 2 : 0);
     if (characters + cost > CONTEXT_MAX_CHARS) continue;
     kept.push(clean);
     characters += cost;
   }
-  const body = kept.length > 0 ? kept.join('\n\n') : 'No portfolio data matched this question.';
+  const body =
+    kept.length > 0
+      ? neutralizeData(kept.join('\n\n'))
+      : 'No portfolio data matched this question.';
   return `${DATA_OPEN}\n${body}\n${DATA_CLOSE}`;
 }
 

@@ -1,4 +1,4 @@
-import { DATA_CLOSE, DATA_OPEN, SYSTEM_RULES } from './chat-prompt.js';
+import { DATA_CLOSE, DATA_OPEN, foldBrackets, SYSTEM_RULES } from './chat-prompt.js';
 import type {
   MessageGuard,
   MessageRejection,
@@ -105,11 +105,14 @@ const DEMANDED_PROMPT =
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
 
 /**
- * The data block's exact delimiters, echoed back. Retrieved data can't contain them (its markup is
- * neutralized), so only the framing itself produces them; near-misses such as `PortfolioData` or
- * `portfolio-data-sync` are ordinary names, not leaks.
+ * True when `reply` echoes the data block's exact delimiters, in any case or with look-alike
+ * brackets. Retrieved data can't contain them (it is neutralized), so only the framing produces
+ * them; near-misses such as `PortfolioData` or `portfolio-data-sync` are ordinary names.
  */
-const DELIMITERS = [DATA_OPEN, DATA_CLOSE].map((tag) => tag.toLowerCase());
+function echoesDelimiters(reply: string): boolean {
+  const folded = foldBrackets(reply).toLowerCase();
+  return [DATA_OPEN, DATA_CLOSE].some((tag) => folded.includes(tag.toLowerCase()));
+}
 
 /** Consecutive words of the system rules that a reply may not repeat. */
 const LEAK_SHINGLE_WORDS = 10;
@@ -159,8 +162,7 @@ export class HeuristicMessageGuard implements MessageGuard {
   }
 
   screenReply(reply: string): ReplyRejection | undefined {
-    const lower = reply.toLowerCase();
-    if (DELIMITERS.some((tag) => lower.includes(tag))) return 'prompt_leak';
+    if (echoesDelimiters(reply)) return 'prompt_leak';
     const leaked = shingles(fold(reply), LEAK_SHINGLE_WORDS).some((shingle) =>
       this.ruleShingles.has(shingle),
     );

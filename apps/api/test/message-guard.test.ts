@@ -148,7 +148,12 @@ describe('HeuristicMessageGuard.screenReply', () => {
     const sentence = SYSTEM_RULES.split('. ')[3] ?? '';
     assert.ok(sentence.split(' ').length >= 10, 'the probe sentence is long enough');
     assert.equal(guard.screenReply(`Sure. ${sentence.toUpperCase()}!`), 'prompt_leak');
-    for (const leak of ['Inside <portfolio_data> tags.', 'It ends at </PORTFOLIO_DATA>.']) {
+    for (const leak of [
+      'Inside <portfolio_data> tags.',
+      'It ends at </PORTFOLIO_DATA>.',
+      'Disguised as ‹/portfolio_data›.',
+      'Full-width ＜portfolio_data＞.',
+    ]) {
       assert.equal(guard.screenReply(leak), 'prompt_leak', leak);
     }
   });
