@@ -1,9 +1,22 @@
 # Chat Session Verification (P5-04)
 
 **Confirmed:** the API verifies Turnstile before creating a session; the browser integration is
-implemented as a floating popup available on every page. **Proposed:** creation of the reference deployment's
-widget, production settings, and a live verification drill. Browser interaction has not yet been
-verified; no browser was connected during implementation. No operational changes were performed.
+implemented as a floating popup available on every page. On 2026-11-14, the reference deployment's
+dedicated managed widget was provisioned for its production hostname, without pre-clearance.
+The public sitekey was added only to Pages Production and a rebuild completed successfully.
+The API secret and hostname allowlist are stored as SealedSecrets; production values reference
+the secret and pin the two public Siteverify destination addresses observed from the API pod.
+The chart activates that verification egress only when AI is enabled.
+
+Deployment checks passed for the homepage and `/about/` (HTTP 200, one CSP allowing Turnstile),
+public API readiness (HTTP 200), and an invalid-token Siteverify request from the API pod. A
+temporary API-only egress policy allowed only the two resolved destinations on TCP 443 for that
+probe and was removed afterward. The session endpoint returned `503 ai_disabled` without a
+cookie, matching the current AI-off configuration.
+
+**Pending:** AI remains disabled until the inference connection (P5-06) is configured. A successful
+chat session, real-token replay/concurrency checks, and browser interaction remain unverified;
+no browser was connected during setup. Provisioning Turnstile does not enable model replies.
 
 ## Browser Configuration
 

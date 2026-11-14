@@ -117,11 +117,16 @@ Sealed Secrets controller runs in `kube-system`, installed by the Argo CD Applic
 renewal off) under the `platform` AppProject. The `portfolio` Application syncs
 `infrastructure/environments/production/secrets/` as a second source, at sync wave −1.
 
-| SealedSecret         | Keys           | Used by                                        |
-| -------------------- | -------------- | ---------------------------------------------- |
-| `portfolio-postgres` | `password`     | PostgreSQL and the API (`DATABASE_URL`)        |
-| `portfolio-tunnel`   | `token`        | cloudflared (`TUNNEL_TOKEN`)                   |
-| `portfolio-api-env`  | `CORS_ORIGINS` | API environment (`api.envSecret`); real domain |
+| SealedSecret          | Keys           | Used by                                        |
+| --------------------- | -------------- | ---------------------------------------------- |
+| `portfolio-postgres`  | `password`     | PostgreSQL and the API (`DATABASE_URL`)        |
+| `portfolio-tunnel`    | `token`        | cloudflared (`TUNNEL_TOKEN`)                   |
+| `portfolio-api-env`   | `CORS_ORIGINS` | API environment (`api.envSecret`); real domain |
+| `portfolio-turnstile` | `secret-key`   | API session verification when AI is enabled    |
+
+The API environment Secret also supplies `TURNSTILE_HOSTNAMES`; keeping the hostname allowlist
+sealed preserves the public repository boundary. Turnstile's reference setup is recorded in the
+[verification guide](turnstile.md).
 
 **Seal a new or changed value** offline with the committed certificate; the plaintext goes through
 a pipe only, never a file in the repository:

@@ -12,6 +12,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-04 production provisioning: created the hostname-restricted managed Turnstile widget with
+  pre-clearance off, set only the Pages Production public sitekey, and completed a rebuild with
+  both public chat settings. Added the sealed API credential and hostname allowlist plus the
+  public Siteverify destinations to GitOps. AI stays disabled until P5-06; successful sessions,
+  real-token replay/concurrency, and browser acceptance remain pending.
+  Live checks passed for Pages CSP, API readiness, and invalid-token rejection by Siteverify
+  from the API pod; temporary verification-only egress was removed afterward.
 - P5-04 browser integration uses a resting dog on every page, opening a comic-style speech
   bubble with a tail pointing toward the dog in a native dialog. It sits while open, stands
   during a message request with a textual "Thinking…" status, and sits again after replies or
@@ -35,7 +42,8 @@ Phase 2 lacks only the owner's content (P2-12).
   checks, a verification timeout, and an atomic Redis replay claim. Missing/invalid tokens never
   create sessions or cookies. AI-on configuration requires a secret and allowed hostnames;
   Compose and Helm support the settings, including explicit API-only verification egress.
-  Widget creation, production settings, and the live drill are still pending approval/setup.
+  Widget and Pages provisioning are complete; the live drill remains pending the inference
+  connection and a connected browser.
 - Review fixes to P5-07: role tags are rejected even when attached to a word (ambiguous
   `Task<Instructions>` syntax is reserved too); messages are checked before and after
   normalization so disguised bracket forms cannot bypass the shared detector. Regression tests
@@ -111,15 +119,15 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-04:** 🔒 finish Turnstile setup: server and browser code are ready; create the dedicated
-   Cloudflare widget, configure the public sitekey, provision the secret and egress, and run
-   browser acceptance plus the live drill ([guide](deployment/turnstile.md)).
-2. **P5-06:** 🔒 connect the API to the reference inference runtime (NetworkPolicy egress rule).
+1. **P5-06:** 🔒 connect the API to the reference inference runtime and enable AI with reviewed
+   model and verification egress. Turnstile and Pages are provisioned; AI is currently disabled.
+2. **P5-04:** finish browser acceptance and the real-token live drill once P5-06 is ready
+   ([guide](deployment/turnstile.md)). Do not mark P5-04 complete from provisioning alone.
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Branch in progress:** P5-04 browser integration and the dog speech bubble are on
-`feat/p5-04-turnstile`; the server-side Turnstile boundary is merged (#30).
+**Branch in progress:** P5-04 production provisioning is on `ops/p5-04-production-turnstile`;
+the server boundary (#30) and dog speech bubble (#31) are merged.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)

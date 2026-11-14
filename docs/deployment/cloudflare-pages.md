@@ -47,6 +47,9 @@ Build variables (plain text, not secrets):
 - Set the public Turnstile sitekey only after the dedicated widget is provisioned
   ([setup guide](turnstile.md)). Both public settings are required for the chat widget; previews
   stay disconnected. Changing these build variables requires a new Pages build.
+- **Confirmed, 2026-11-14:** the dedicated production widget and public sitekey are provisioned,
+  and the production rebuild completed with both public chat settings. API AI remains disabled
+  pending the inference connection; this setup makes verification available without enabling replies.
 
 ## Security Headers
 
