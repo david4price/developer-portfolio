@@ -83,7 +83,7 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
 
 /** How a demanding clause may open before its verb: "ok so", "can you kindly just". */
 const CLAUSE_LEAD_IN =
-  '(?:(?:please|kindly|now|just|ok|okay|so|hi|hey|then|first|and) )*(?:(?:can|could|would|will) you (?:(?:please|kindly|just|now|first) )*)?';
+  '(?:(?:please|kindly|now|just|ok|okay|so|hi|hey|there|then|first|and|also|maybe|perhaps) )*(?:(?:can|could|would|will) you (?:(?:please|kindly|just|now|first|also|maybe|perhaps) )*)?';
 
 /**
  * A clause that opens by demanding an initial, original, or developer prompt ("show me the
@@ -99,17 +99,20 @@ const DESCRIBING_NOUN = `(?:${DIRECTIVE}|messages?|texts?|words|setups?|configur
 const SHAPING_VERB =
   '(?:define[sd]?|control(?:s|led)?|govern(?:s|ed)?|shape[sd]?|sets?|determine[sd]?|configure[sd]?|specif(?:y|ies|ied)|explain(?:s|ed)?|describe[sd]?)';
 const CONDUCT_VERB = '(?:behave|act|respond|reply|talk|speak|answer)';
-const MODAL =
-  '(?:(?:should|must|will|would|can|could|ll|d|re|are|have|need|ought)(?: (?:not|supposed|meant|going|expected|allowed))*|supposed|meant|going|expected|allowed)(?: to)?';
-/** "how to act", "how not to reply", "how you should respond", "how you're supposed to behave". */
-const ADVERB = '(?:always|never|properly|exactly|really|actually|best)';
-const CONDUCT = `(?:exactly )?how (?:not )?(?:to|(?:you|youre|youll|youd)(?: ${MODAL})?)(?: ${ADVERB})? ${CONDUCT_VERB}`;
+/** Modal, negation, and adverb words that may sit between "how (you)" and the conduct verb. */
+const HOW_WORD =
+  '(?:to|not|ever|never|always|properly|exactly|really|actually|best|should|must|will|would|can|could|ll|d|re|are|have|need|ought|supposed|meant|going|expected|allowed|and|forever|be)';
+/**
+ * "how to act", "how not to reply", "how you should respond", "how you're always supposed to
+ * behave": a closed set of words in any order, never an arbitrary one ("how to deploy" passes).
+ */
+const CONDUCT = `(?:exactly )?how (?:(?:you|youre|youll|youd) )?(?:${HOW_WORD} ){0,5}${CONDUCT_VERB}`;
 /** What the described text is said to shape: this assistant's traits or conduct. */
-const SHAPED = `(?:your (?:behaviou?rs?|personality|persona|character|replies|responses|answers)\\b|${CONDUCT}\\b)`;
+const SHAPED = `(?:your (?:behaviou?rs?|personality|persona|character|repl(?:y|ies)|responses?|answers?)\\b|${CONDUCT}\\b)`;
 const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: to)? you ${CONDUCT}\\b`;
 /** Asking for a text's content. "Tell me (a bit more) about…" asks for an explanation instead. */
 const DEMAND =
-  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: \\w+){0,3} about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
+  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: (?:a bit|a little|some))?(?: more)? about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
 
 /**
  * A clause that demands the prompt described instead of named, which the classifier scores near
