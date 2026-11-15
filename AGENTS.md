@@ -102,16 +102,16 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Run `/code-review high <range>` (see [Code Review Level](#code-review-level)) on exactly the
-   commits the push publishes, as a three-dot range so the diff starts at the merge base:
-   `@{upstream}...HEAD`; for a branch without an upstream, `origin/main...HEAD`; for a push to
-   another remote or ref, the range that target lacks. Uncommitted changes are not pushed; commit
-   or exclude them first.
+1. Run `/code-review high <range>` (see [Code Review Level](#code-review-level)) on the commits
+   the push publishes (`@{upstream}..HEAD`), giving the review a three-dot range so its diff
+   starts at the merge base: `@{upstream}...HEAD`; for a branch without an upstream, or one
+   rebased since its last push, `origin/main...HEAD`; for a push to another remote or ref,
+   `<remote>/<ref>...HEAD`. Uncommitted changes are not pushed; commit or exclude them first.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
-3. After fixes, re-run the quality gates above and the `verify` skill, then review again: the new
-   fix commits (`/code-review high <first fix>^...HEAD`), or the whole push range when a fix was
-   amended or squashed into a reviewed commit.
+3. After fixes, re-run the quality gates above and the `verify` skill, then review again: only
+   the new fix commits (`/code-review high <first fix>^...HEAD`) when they were added on top, and
+   the whole push range when any reviewed commit was amended, squashed, or rebased.
 4. In the handoff, say that the review ran, at which level, and what it found.
 
 ## Code Review Level
