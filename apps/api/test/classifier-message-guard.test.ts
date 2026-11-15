@@ -11,10 +11,16 @@ import { SYSTEM_RULES } from '../src/modules/chat/chat-prompt.js';
 /** Scores from a fixed table and records what it was asked. */
 class FakeClassifier implements InjectionClassifier {
   readonly seen: string[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
+  disposed = false;
   constructor(private readonly answer: (text: string) => Promise<number>) {}
-  score(text: string): Promise<number> {
+  score(text: string, signal?: AbortSignal): Promise<number> {
     this.seen.push(text);
+    this.signals.push(signal);
     return this.answer(text);
+  }
+  async dispose(): Promise<void> {
+    this.disposed = true;
   }
 }
 
@@ -82,6 +88,22 @@ describe('ClassifierMessageGuard', () => {
       () => new Promise((resolve) => setTimeout(() => resolve(1), options.timeoutMs * 3)),
     );
     assert.equal((await guard.screenMessage('Which projects use Go?')).allowed, true);
+  });
+
+  it('abandons a timed-out score so queued work is skipped, and keeps answered ones', async () => {
+    const slow = guardWith(() => new Promise<number>(() => undefined));
+    await slow.guard.screenMessage('Which projects use Go?');
+    assert.equal(slow.classifier.signals[0]?.aborted, true);
+
+    const quick = guardWith(async () => 0.1);
+    await quick.guard.screenMessage('Which projects use Go?');
+    assert.equal(quick.classifier.signals[0]?.aborted, false);
+  });
+
+  it('frees the model on shutdown', async () => {
+    const { guard, classifier } = guardWith(async () => 0);
+    await guard.onModuleDestroy();
+    assert.equal(classifier.disposed, true);
   });
 
   it('checks replies with the rules', () => {

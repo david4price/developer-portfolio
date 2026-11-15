@@ -83,10 +83,13 @@ for (const file of FILES) {
     throw new Error(`${file.source}: HTTP ${response.status}`);
   }
   const partial = `${path}.partial`;
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
-  if (!(await present(partial, file))) {
+  try {
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+    if (!(await present(partial, file)))
+      throw new Error(`${file.source}: size or SHA-256 mismatch`);
+  } catch (error) {
     await rm(partial, { force: true });
-    throw new Error(`${file.source}: size or SHA-256 mismatch`);
+    throw error;
   }
   await rename(partial, path);
   console.log(`fetched ${file.target} (${file.bytes} bytes)`);

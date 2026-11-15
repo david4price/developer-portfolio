@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, type OnModuleDestroy } from '@nestjs/common';
 import { InjectionClassifierBusyError, type InjectionClassifier } from './injection-classifier.js';
 import type { MessageGuard, ReplyRejection, ScreenedMessage } from './message-guard.js';
 
@@ -24,7 +24,7 @@ type Degraded = 'classifier_busy' | 'classifier_timeout' | 'classifier_error';
  * quotas), and refusing every message whenever the classifier lags would let a burst of traffic
  * take the chat down.
  */
-export class ClassifierMessageGuard implements MessageGuard {
+export class ClassifierMessageGuard implements MessageGuard, OnModuleDestroy {
   private readonly logger = new Logger('MessageGuard');
 
   constructor(
@@ -47,18 +47,28 @@ export class ClassifierMessageGuard implements MessageGuard {
       : screened;
   }
 
+  async onModuleDestroy(): Promise<void> {
+    await this.classifier.dispose?.();
+  }
+
   /** The reply check is a verbatim-leak detector; the rules already do it exactly. */
   screenReply(reply: string): ReplyRejection | undefined {
     return this.rules.screenReply(reply);
   }
 
   private async scoreWithin(text: string): Promise<number | Degraded> {
+    // Aborting on timeout drops the message from the classifier's queue if it hasn't started, so
+    // a burst doesn't leave the queue full of work nobody is waiting for.
+    const abandon = new AbortController();
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<Degraded>((resolve) => {
-      timer = setTimeout(() => resolve('classifier_timeout'), this.options.timeoutMs);
+      timer = setTimeout(() => {
+        abandon.abort();
+        resolve('classifier_timeout');
+      }, this.options.timeoutMs);
     });
     try {
-      const score = await Promise.race([this.classifier.score(text), timeout]);
+      const score = await Promise.race([this.classifier.score(text, abandon.signal), timeout]);
       return typeof score === 'number' && !Number.isFinite(score) ? 'classifier_error' : score;
     } catch (error) {
       return error instanceof InjectionClassifierBusyError ? 'classifier_busy' : 'classifier_error';

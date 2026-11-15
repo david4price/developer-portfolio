@@ -3,8 +3,13 @@
  * Only `ClassifierMessageGuard` uses it; the chat flow sees the `MessageGuard` port.
  */
 export interface InjectionClassifier {
-  /** Probability in [0, 1] that `text` is an injection attempt. Rejects when it can't answer. */
-  score(text: string): Promise<number>;
+  /**
+   * Probability in [0, 1] that `text` is an injection attempt. Rejects when it can't answer.
+   * Once `signal` aborts, queued work for it is skipped instead of run for nobody.
+   */
+  score(text: string, signal?: AbortSignal): Promise<number>;
+  /** Waits for work in progress, then frees the model. */
+  dispose?(): Promise<void>;
 }
 
 /** Too many messages are already waiting for the classifier. */

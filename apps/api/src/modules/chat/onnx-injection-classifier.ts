@@ -63,6 +63,10 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
     ]);
 
     const injectionIndex = injectionIndexOf(config);
+    // Windowing needs every token: a tokenizer that truncates would hide the rest of a message.
+    if ((tokenizerJson as { truncation?: unknown }).truncation != null) {
+      throw new Error('classifier tokenizer must not truncate');
+    }
     const tokenizer = new Tokenizer(tokenizerJson as object, tokenizerConfig as object);
     // Windowing re-wraps each chunk the way the tokenizer wraps a whole message.
     const wrapper = tokenizer.encode('').ids;
@@ -92,28 +96,36 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
     );
   }
 
-  score(text: string): Promise<number> {
+  score(text: string, signal?: AbortSignal): Promise<number> {
     if (this.queued > this.maxQueued) return Promise.reject(new InjectionClassifierBusyError());
     this.queued++;
-    const run = this.tail.then(() => this.scoreNow(text));
+    const run = this.tail.then(() => {
+      signal?.throwIfAborted();
+      return this.scoreNow(text);
+    });
     this.tail = run.catch(() => undefined);
     return run.finally(() => this.queued--);
   }
 
   async dispose(): Promise<void> {
+    await this.tail;
     await this.session.release();
   }
 
-  /** The highest score over the message's windows: an attack can't hide past a truncation. */
+  /**
+   * The highest score over the message's windows. Windows overlap by a quarter, so a phrase that
+   * spans a boundary is whole in one of them, and nothing is cut off.
+   */
   private async scoreNow(text: string): Promise<number> {
     const content = this.tokenizer.encode(text).ids.slice(1, -1);
     const size = this.windowTokens - 2;
+    const stride = size - Math.floor(size / 4);
     let highest = 0;
-    for (let start = 0; start === 0 || start < content.length; start += size) {
+    for (let start = 0; ; start += stride) {
       const window = [this.bos, ...content.slice(start, start + size), this.eos];
       highest = Math.max(highest, await this.scoreWindow(window));
+      if (start + size >= content.length) return highest;
     }
-    return highest;
   }
 
   private async scoreWindow(ids: readonly number[]): Promise<number> {

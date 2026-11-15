@@ -61,8 +61,9 @@ api:
       cidr: ''
       port: 0
   # Visitor message screening (P5-08). `rules` is pattern matching only. `classifier` runs the
-  # rules, then a CPU prompt-injection classifier baked into the API image, and the pod uses
-  # `classifierResources` instead of `resources`: the model and tokenizer take about 650 MiB.
+  # rules, then a CPU prompt-injection classifier baked into the API image, and (with AI enabled;
+  # otherwise no model is loaded) the pod uses `classifierResources` instead of `resources`: the
+  # model and tokenizer take about 650 MiB.
   messageGuard:
     mode: rules
     # Scores at or above this reject the message.
