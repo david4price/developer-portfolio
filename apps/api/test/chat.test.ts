@@ -19,7 +19,7 @@ import {
 import { sessionIdFromCookieHeader } from '../src/modules/chat/chat-cookie.js';
 import { ChatController } from '../src/modules/chat/chat.controller.js';
 import { ChatService, FALLBACK_REPLY } from '../src/modules/chat/chat.service.js';
-import { promptHistory, SYSTEM_RULES } from '../src/modules/chat/chat-prompt.js';
+import { ENGLISH_REMINDER, promptHistory, SYSTEM_RULES } from '../src/modules/chat/chat-prompt.js';
 import { ClientDisconnectedError } from '../src/common/client-disconnected.error.js';
 import { DependencyUnavailableError } from '../src/common/dependency-unavailable.error.js';
 import { HeuristicMessageGuard } from '../src/modules/chat/heuristic-message-guard.js';
@@ -166,7 +166,8 @@ class FakeAi implements AiProvider {
     this.requests.push(request);
     if (this.gate) await this.gate;
     if (this.failWith) throw this.failWith;
-    const last = request.messages.at(-1)?.content ?? '';
+    // Echo the visitor's question as asked, without the prompt-only language reminder.
+    const last = (request.messages.at(-1)?.content ?? '').replace(`\n\n${ENGLISH_REMINDER}`, '');
     return { content: this.replyWith ?? `  echo: ${last}  `, outputTokens: 3 };
   }
 }
@@ -345,7 +346,8 @@ describe('chat sessions and messages', () => {
     assert.deepEqual(second.messages.slice(1), [
       { role: 'user', content: 'Which projects use Kubernetes?' },
       { role: 'assistant', content: 'echo: Which projects use Kubernetes?' },
-      { role: 'user', content: 'And the API?' },
+      // Only the new question carries the reminder; history keeps questions as asked.
+      { role: 'user', content: `And the API?\n\n${ENGLISH_REMINDER}` },
     ]);
   });
 
@@ -487,7 +489,10 @@ describe('chat sessions and messages', () => {
   it('sends the model only the cleaned message, without invisible characters', async () => {
     const cookie = await startSession();
     await send(cookie, 'What\u200b is\u202e Recipe\u{E0041} Finder?');
-    assert.equal(ai.requests[0]?.messages.at(-1)?.content, 'What is Recipe Finder?');
+    assert.equal(
+      ai.requests[0]?.messages.at(-1)?.content,
+      `What is Recipe Finder?\n\n${ENGLISH_REMINDER}`,
+    );
   });
 
   it('withholds a reply that repeats the system rules', async () => {
