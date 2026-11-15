@@ -50,6 +50,8 @@ api:
   ai:
     enabled: false
     provider: ''
+    # model and baseUrl can instead come from envConfigMap/envSecret as AI_MODEL and AI_BASE_URL,
+    # to keep the reference deployment's model and address out of public values.
     model: ''
     baseUrl: ''
     # With networkPolicy.enabled, the only place the API may connect for inference (P5-06):

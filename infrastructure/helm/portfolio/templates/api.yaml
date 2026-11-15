@@ -10,6 +10,9 @@
 {{- if not (or .Values.api.turnstile.hostnames .Values.api.envConfigMap .Values.api.envSecret) }}
 {{- fail "api.turnstile.hostnames or an environment source for TURNSTILE_HOSTNAMES is required when AI is enabled" }}
 {{- end }}
+{{- if not (or .Values.api.ai.model .Values.api.envConfigMap .Values.api.envSecret) }}
+{{- fail "api.ai.model or an environment source for AI_MODEL is required when AI is enabled" }}
+{{- end }}
 {{- if and .Values.networkPolicy.enabled (not .Values.api.turnstile.egressCidrs) }}
 {{- fail "api.turnstile.egressCidrs is required when AI and NetworkPolicies are enabled" }}
 {{- end }}
@@ -93,8 +96,10 @@ spec:
             {{- end }}
             - name: AI_PROVIDER
               value: {{ required "api.ai.provider is required when AI is enabled" .ai.provider | quote }}
+            {{- with .ai.model }}
             - name: AI_MODEL
-              value: {{ required "api.ai.model is required when AI is enabled" .ai.model | quote }}
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .ai.baseUrl }}
             - name: AI_BASE_URL
               value: {{ . | quote }}

@@ -124,9 +124,14 @@ renewal off) under the `platform` AppProject. The `portfolio` Application syncs
 | `portfolio-api-env`   | `CORS_ORIGINS` | API environment (`api.envSecret`); real domain |
 | `portfolio-turnstile` | `secret-key`   | API session verification when AI is enabled    |
 
-The API environment Secret also supplies `TURNSTILE_HOSTNAMES` and, optionally,
-`CHAT_ASSISTANT_NAME` (a name the owner prefers not to keep in Git); keeping the hostname allowlist
-sealed preserves the public repository boundary. Turnstile's reference setup is recorded in the
+The API environment Secret also supplies `TURNSTILE_HOSTNAMES`, the inference settings
+`AI_MODEL` and `AI_BASE_URL` (the chart sets neither when `api.ai.model`/`api.ai.baseUrl` are
+empty, so the Secret's values apply), and, optionally, `CHAT_ASSISTANT_NAME` (a name the owner
+prefers not to keep in Git). Keeping these sealed preserves the public repository boundary.
+To add or change one key without re-entering the others, pipe a Secret holding only that key
+into `kubeseal … --merge-into infrastructure/environments/production/secrets/<name>.sealedsecret.yaml`
+(with `kubectl --kubeconfig <file>` if the default K3s kubeconfig isn't readable); check it with
+`kubeseal --validate` before committing. Turnstile's reference setup is recorded in the
 [verification guide](turnstile.md).
 
 **Seal a new or changed value** offline with the committed certificate; the plaintext goes through

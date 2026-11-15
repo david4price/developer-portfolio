@@ -56,7 +56,7 @@ echo "== guardrails"
 expect_failure 'needs a digest or a tag'
 expect_failure 'digest must look like sha256' \
   -f "$chart/ci/digests-values.yaml" --set api.image.digest=sha256:abc
-expect_failure 'api.ai.model is required' \
+expect_failure 'api.ai.model or an environment source for AI_MODEL' \
   -f "$chart/ci/ai-enabled-values.yaml" --set api.ai.model=
 expect_failure 'api.ai.egress.cidr and api.ai.egress.port are required' \
   -f "$chart/ci/ai-network-policy-values.yaml" --set api.ai.egress.port=0
@@ -76,6 +76,16 @@ expect_failure 'postgres.backup.hostPath is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.backup.hostPath=
 expect_failure 'postgres.auth.existingSecret is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.auth.existingSecret=
+
+# The model and address may come only from the environment Secret: the chart then sets neither,
+# so the Secret's values aren't overridden (container env wins over envFrom).
+echo "== AI settings from envSecret"
+if ! from_secret="$(render -f "$chart/ci/ai-enabled-values.yaml" --set api.ai.model= \
+  --set api.ai.baseUrl= --set api.envSecret=portfolio-api-env 2>&1)"; then
+  fail "AI settings from envSecret don't render: $from_secret"
+elif grep -qE 'name: AI_(MODEL|BASE_URL)$' <<<"$from_secret"; then
+  fail "chart sets AI_MODEL or AI_BASE_URL that should come from envSecret"
+fi
 
 if ((failures > 0)); then
   echo "$failures check(s) failed" >&2
