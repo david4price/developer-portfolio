@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-12 complete: an nftables guard on the host drops the inference port (TCP 12434) from every
+  interface except loopback, Docker bridges, and pods, covering Docker's forwarding as well as
+  the host's own input. A LAN device can no longer reach the unauthenticated runtime.
 - Session refusals are now explained in the API logs: one warning per refused session with its
   request ID and reasons (Siteverify error codes, hostname or action mismatch, missing token, or
   replayed), never the token. The live drill had needed a manual Siteverify call for this.
@@ -154,9 +157,8 @@ Phase 2 lacks only the owner's content (P2-12).
 
 1. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
-2. **P5-12:** 🔒 host firewall rule for the inference port.
 
-**Branch in progress:** English-only replies and P5-04 completion are on `feat/chat-english-only`.
+**Branch in progress:** none.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -301,7 +303,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (7/12)
+## Phase 5: AI Chatbot (8/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -373,11 +375,14 @@ Read-only inventory of the reference host. Findings:
       search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
       time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the
       existing `KNOWLEDGE_BASE` port, and the same question set shows a measured improvement.
-- [ ] **P5-12** 🔒 Host firewall rule for the inference port. _Needs:_ P5-06. _Done when:_ the
+- [x] **P5-12** 🔒 Host firewall rule for the inference port. _Needs:_ P5-06. _Done when:_ the
       runtime's port accepts connections only from the host itself, Docker containers, and the pod
       network, and other devices on the network are refused (tested from one). The rule must cover
       Docker's published-port forwarding, not only the input hook, and must not disturb Docker's or
-      Tailscale's own rules.
+      Tailscale's own rules. Done 2026-11-15: the owner applied an nftables guard (own table, input
+      and forward hooks; [guide](deployment/kubernetes.md#inference-port-guard-p5-12)). A LAN PC no
+      longer reaches the runtime; the host, the API pod, and the private assistant still do; the
+      worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 
 ## Phase 6: Infrastructure Explorer (0/4)
 

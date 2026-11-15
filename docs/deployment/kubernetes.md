@@ -109,6 +109,75 @@ WantedBy=multi-user.target
 - Verified 2026-11-13: from a LAN device, `6443` and `10250` hang (dropped) while port 80 on the
   same host connects.
 
+### Inference port guard (P5-12)
+
+**Confirmed** on the reference host (2026-11-15). The reference inference runtime (Docker Model
+Runner) has no authentication and publishes TCP `12434` on the host's loopback and Docker bridge
+addresses. A LAN device that routes Docker's bridge range through the host could reach it, because
+the host has no firewall of its own. This guard drops that port from every interface except
+loopback, Docker bridges (`docker0`, `br-*`), and pods (`cni0`), so the host, its containers (a
+private assistant among them), and the API pod keep working. The portfolio's NetworkPolicy still
+limits which pod may connect.
+
+Docker forwards a published port to the container (DNAT), so that traffic never reaches the
+`input` hook: the guard also filters `forward`, matching the port the connection was originally
+sent to. Each chain has a single rule that drops only on a full match (TCP, port 12434, an
+interface outside the allow-list), so other traffic, including UDP and ICMP, passes untouched.
+
+`/etc/inference-port-guard.nft`:
+
+```text
+table inet inference_port_guard {}
+delete table inet inference_port_guard
+
+# The local model runner's API (TCP 12434) has no authentication. Drop it from the LAN, the
+# tailnet, and any other interface; allow the host, Docker containers, and Kubernetes pods.
+# Each chain has one rule that drops only on a full match, so all other traffic passes untouched.
+table inet inference_port_guard {
+  # Connections to the published port's proxy on the host itself.
+  chain input {
+    type filter hook input priority filter - 1; policy accept;
+    meta l4proto tcp tcp dport 12434 iifname != { "lo", "docker0", "cni0" } iifname != "br-*" drop
+  }
+
+  # Connections Docker rewrites (DNAT) to the container: match the port they were sent to.
+  chain forward {
+    type filter hook forward priority filter - 1; policy accept;
+    meta l4proto tcp ct original proto-dst 12434 iifname != { "docker0", "cni0" } iifname != "br-*" drop
+  }
+}
+```
+
+`/etc/systemd/system/inference-port-guard.service` (loads before Docker publishes the port):
+
+```ini
+[Unit]
+Description=Restrict the local model runner's port to the host, containers, and pods
+Before=docker.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/inference-port-guard.nft
+ExecStop=/usr/sbin/nft delete table inet inference_port_guard
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- **Apply:** `sudo nft -c -f /etc/inference-port-guard.nft` (dry run), then
+  `sudo systemctl daemon-reload && sudo systemctl enable --now inference-port-guard`.
+- **Validate:** `sudo nft list table inet inference_port_guard`. From another LAN device with a
+  route to Docker's bridge range through the host, `curl -m 5 http://<docker-bridge-address>:12434/`
+  gets no answer. On the host, the runtime's `/engines/v1/models` still answers on loopback and the
+  bridge address; the API pod reaches it and the worker pod is refused; containers that use the
+  runtime still work; Tailscale and the K3s port guard stay active.
+- **Rollback:** `sudo systemctl disable --now inference-port-guard` (its stop command deletes the
+  table).
+- Verified 2026-11-15: a LAN device no longer reaches the runtime; the host, the API pod, and the
+  public site work; the worker pod is refused; Docker, K3s, Tailscale, and the K3s guard unaffected.
+
 ## 3. Secrets
 
 The reference deployment keeps every Secret in Git as a **SealedSecret** (ADR 0001, P3-08). The
