@@ -169,6 +169,8 @@ describe('loadApiConfig', () => {
     assert.equal(name("Mary-Jo O'Dog"), "Mary-Jo O'Dog");
     assert.equal(name('Ñandú'), 'Ñandú');
     assert.equal(name(''), 'Pixel');
+    assert.equal(name('   '), 'Pixel', 'blank means unset, as in the web build');
+    assert.equal(name('N\u0303andu\u0301'), 'Ñandú', 'decomposed accents are composed');
   });
 
   it('accepts only a plain name for the assistant, since it goes into the system prompt', () => {

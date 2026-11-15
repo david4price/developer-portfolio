@@ -12,6 +12,7 @@ describe('assistantNameFrom', () => {
   it('accepts a plain name, trimmed', () => {
     assert.equal(assistantNameFrom(' Rex '), 'Rex');
     assert.equal(assistantNameFrom("Mary-Jo O'Dog"), "Mary-Jo O'Dog");
+    assert.equal(assistantNameFrom('N\u0303andu\u0301'), 'Ñandú');
   });
 
   it('fails the build for anything the API would reject, without echoing it', () => {

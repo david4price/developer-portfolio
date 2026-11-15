@@ -74,11 +74,18 @@ const hostname = z
   .regex(
     /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   );
-/** Interpolated into the system prompt, so only a plain name: no digits, markup, or punctuation. */
-const assistantName = z
-  .string()
-  .trim()
-  .regex(ASSISTANT_NAME_PATTERN, 'must be 1-30 letters, spaces, hyphens, or apostrophes');
+/**
+ * Interpolated into the system prompt, so only a plain name: no digits, markup, or punctuation.
+ * Blank means unset (as in the web build), and composed (NFC) form means a decomposed accent
+ * isn't rejected as a non-letter.
+ */
+const assistantName = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().normalize('NFC') || undefined : value),
+  z
+    .string()
+    .regex(ASSISTANT_NAME_PATTERN, 'must be 1-30 letters, spaces, hyphens, or apostrophes')
+    .optional(),
+);
 const hostnames = z
   .string()
   .transform((value) => value.split(','))
@@ -99,7 +106,7 @@ const apiEnvironmentSchema = z
     AI_BASE_URL: optionalSetting(z.url()),
     TURNSTILE_SECRET_KEY: optionalSetting(z.string().trim().min(1)),
     TURNSTILE_HOSTNAMES: optionalSetting(hostnames),
-    CHAT_ASSISTANT_NAME: optionalSetting(assistantName),
+    CHAT_ASSISTANT_NAME: assistantName,
     CHAT_AI_MAX_CONCURRENCY: count(1, 4).default(1),
     CHAT_AI_QUEUE_MAX: count(0, 20).default(4),
     CHAT_AI_QUEUE_WAIT_MS: count(0, 30_000).default(10_000),

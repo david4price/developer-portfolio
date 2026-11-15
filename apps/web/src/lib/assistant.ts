@@ -5,7 +5,8 @@ import { ASSISTANT_NAME_PATTERN, DEFAULT_ASSISTANT_NAME } from '@portfolio/share
  * isn't a plain name fails the build instead of showing a name the API would reject.
  */
 export function assistantNameFrom(value: string | undefined): string {
-  const name = value?.trim() ?? '';
+  // Composed form, as in the API: a decomposed accent isn't rejected as a non-letter.
+  const name = value?.trim().normalize('NFC') ?? '';
   if (name === '') return DEFAULT_ASSISTANT_NAME;
   if (!ASSISTANT_NAME_PATTERN.test(name)) {
     throw new Error(

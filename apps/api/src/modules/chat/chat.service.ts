@@ -254,17 +254,21 @@ export class ChatService {
   }
 
   /**
-   * Withheld or empty replies become `FALLBACK_REPLY`; markers become validated links, and emoji
-   * are removed (the voice rules forbid them, but small models add them anyway).
+   * Markers become validated links, then emoji are removed (the voice rules forbid them, but
+   * small models add them anyway), from link titles too. Both steps change text, which can join
+   * markup that wasn't there (`<🐶portfolio_data>`, `<[[x:y]]/portfolio_data>`) or split markup
+   * that was, so the guard screens the raw reply and the final form that is sent and stored.
+   * Withheld or empty replies become `FALLBACK_REPLY`.
    */
   private screenReply(requestId: string, raw: string): ChatMessageResponse {
-    const rejection = this.guard.screenReply(raw);
+    const resolved = resolveNavigationLinks(raw, this.knowledge);
+    const reply = withoutEmoji(resolved.reply);
+    const rejection =
+      this.guard.screenReply(raw) ?? (reply === raw ? undefined : this.guard.screenReply(reply));
     if (rejection !== undefined) {
       this.logger.warn({ message: 'Chat reply withheld', reason: rejection, requestId });
       return { reply: FALLBACK_REPLY, links: [] };
     }
-    const resolved = resolveNavigationLinks(raw, this.knowledge);
-    const reply = withoutEmoji(resolved.reply);
     return { reply: reply === '' ? FALLBACK_REPLY : reply, links: resolved.links };
   }
 
