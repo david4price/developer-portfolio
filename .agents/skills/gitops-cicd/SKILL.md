@@ -54,5 +54,5 @@ new schema.
 ## Safety
 
 Creating tags, releases, GitHub settings, secrets, environments, or running workflows manually is
-outward-facing: confirm with the user first. Before any requested push, run `/code-review high
-<range>` with the range that "Before Every Push" in `AGENTS.md` describes, and resolve its findings.
+outward-facing: confirm with the user first. Before any requested push, run the code review that
+"Before Every Push" in `AGENTS.md` describes, and resolve its findings.
