@@ -13,12 +13,11 @@ api:
     egressCidrs:
       - 104.18.94.41/32
       - 104.18.95.41/32
-  # Inference (P5-06). Off until the live question-and-answer test; the model, its URL, and the
-  # assistant's name come from the sealed API environment Secret (AI_MODEL, AI_BASE_URL,
-  # CHAT_ASSISTANT_NAME). Egress is Docker's default bridge network, where the runtime publishes
-  # its port on the host side, limited to that port.
+  # Inference (P5-06). The model, its URL, and the assistant's name come from the sealed API
+  # environment Secret (AI_MODEL, AI_BASE_URL, CHAT_ASSISTANT_NAME). Egress is Docker's default
+  # bridge network, where the runtime publishes its port on the host side, limited to that port.
   ai:
-    enabled: false
+    enabled: true
     provider: openai-compatible
     egress:
       cidr: 172.17.0.0/16
