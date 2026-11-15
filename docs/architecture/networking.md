@@ -62,8 +62,10 @@ default-deny NetworkPolicy and explicit allow rules:
   (P5-06): the runtime publishes its port on the host's side of Docker's default bridge, so
   production allows Docker's default bridge network on that one TCP port; a pod reaching it
   was **Confirmed** on 2026-11-15, and with AI off the `api` and `worker` pods are refused.
-  The live rule takes effect when AI is enabled. Host-level restrictions on the runtime's port
-  are P5-12.
+  The live rule takes effect when AI is enabled. On the host, an nftables guard (P5-12,
+  **Confirmed**) drops the runtime's port from every interface except loopback, Docker bridges,
+  and pods, so the LAN and the tailnet can't reach it
+  ([guide](../deployment/kubernetes.md#inference-port-guard-p5-12)).
 - `api` → reviewed destination CIDRs for Turnstile Siteverify on TCP 443 (**Confirmed** in the
   chart through `api.turnstile.egressCidrs`, required when AI and NetworkPolicies are enabled;
   live configuration **Proposed**, P5-04). The adapter pins the HTTPS URL; standard NetworkPolicy
