@@ -18,7 +18,7 @@ const modelDir = process.env.CHAT_GUARD_MODEL_DIR;
 
 /**
  * Ceilings measured on 2026-11-16 (Wolf Defender Small v2.1, onnxruntime-node 1.31.1): rules alone
- * 3 false positives and 55 misses on 239 cases; rules + classifier 3 and 3. A pinned model and
+ * 3 false positives and 55 misses on 244 cases; rules + classifier 3 and 3. A pinned model and
  * runtime are deterministic, so a rise means the model, runtime, rules, or normalization changed.
  */
 const MAX_FALSE_POSITIVES = 3;
