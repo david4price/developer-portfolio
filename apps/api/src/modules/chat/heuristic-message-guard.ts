@@ -66,18 +66,6 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
     'prompt_extraction',
     /\b(?:repeat|print|output) (?:everything|all|the text|the words) (?:above|before)\b/,
   ],
-  // The prompt described instead of named: "the message that defines your behaviour", "the text
-  // that tells you how to behave". Both need the assistant as the object ("your", "you"), and the
-  // second only takes conduct verbs, so "instructions that tell you how to respond to an outage"
-  // or "the file that defines the worker's behaviour" pass. The classifier scores these near zero.
-  [
-    'prompt_extraction',
-    /\b(?:message|text|prompt|instructions?|rules?|words|setup|configuration|config) (?:that|which) (?:defines?|controls?|governs?|shapes?|sets?|determines?|configures?|specifies) (?:your (?:behaviou?r|personality|persona|character|responses|answers)|how you (?:behave|act|respond|talk|speak))\b/,
-  ],
-  [
-    'prompt_extraction',
-    /\b(?:message|text|prompt|instructions?|rules?|words) (?:that|which) (?:tells?|told|instructs?|instructed) you how to (?:behave|act|talk|speak)\b/,
-  ],
   [
     'jailbreak',
     /\b(?:jailbreak|jailbroken|dan mode|developer mode|god mode|do anything now|unfiltered mode|uncensored mode)\b/,
@@ -101,6 +89,27 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
  */
 const DEMANDED_PROMPT =
   /^(?:(?:please|now|just|ok|okay|so|hi|hey) )*(?:(?:can|could|would|will) you (?:please )?)?(?:print|repeat|reveal|show|output|display|dump|leak|recite|copy|share|write out|give me|tell me)(?: me)? (?:\w+ ){0,3}?(?:initial|original|developer) prompt\b/;
+
+const DESCRIBING_NOUN = `(?:${DIRECTIVE}|messages?|text|words|setup|configuration|config)`;
+const SHAPING_VERB =
+  '(?:define[sd]?|control(?:s|led)?|govern(?:s|ed)?|shape[sd]?|sets?|determine[sd]?|configure[sd]?|specif(?:y|ies|ied))';
+const TELLING_VERB = '(?:tells?|told|instructs?|instructed|explains?|explained)';
+const CONDUCT = '(?:behave|act|respond|reply|talk|speak)';
+
+/**
+ * A clause about the prompt described instead of named: "what does the message that defines your
+ * behaviour say", "the text that tells you how to behave". The classifier scores this wording near
+ * zero. The clause must end at the conduct (allowing only "say", "is", "contain", and the like),
+ * which keeps the impersonal "you" out: "instructions that tell you how to act during an
+ * incident" and "a config that determines how you respond to a 429" pass.
+ */
+const DESCRIBED_PROMPT = new RegExp(
+  `\\b${DESCRIBING_NOUN} (?:that|which) (?:` +
+    `${SHAPING_VERB} (?:your (?:behaviou?r|personality|persona|character|replies|responses)` +
+    `|how you (?:should |must |are to |will )?${CONDUCT})` +
+    `|${TELLING_VERB} you how to ${CONDUCT})` +
+    '(?: (?:says?|said|contains?|is|are|was|were|looks? like|means?))?$',
+);
 
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
 const SQUEEZED_TRIGGERS = /ignore|disregard|instruction|systemprompt|jailbreak|pretend/;
@@ -148,7 +157,7 @@ export class HeuristicMessageGuard implements MessageGuard {
       if (pattern.test(folded)) return { allowed: false, reason };
     }
     const clauses = message.split(/[.!?;:,\n\u2013\u2014]+|\s-\s/).map(fold);
-    if (clauses.some((clause) => DEMANDED_PROMPT.test(clause))) {
+    if (clauses.some((clause) => DEMANDED_PROMPT.test(clause) || DESCRIBED_PROMPT.test(clause))) {
       return { allowed: false, reason: 'prompt_extraction' };
     }
     if (squeezedRuns(folded).some((run) => SQUEEZED_TRIGGERS.test(run))) {
