@@ -358,6 +358,13 @@ describe('buildPrompt', () => {
     assert.ok(content.startsWith(`${SYSTEM_RULES}\n\n${persona}\n\n<portfolio_data>`));
     assert.match(persona, /^Speak as Rex, the developer's dog/);
     assert.match(persona, /you are an AI assistant speaking as Rex\./);
+    // The portfolio is the developer's, never the dog's, and dog sounds get a written "Woof!".
+    assert.match(
+      persona,
+      /belong to your human, never to you: call them "my human" or\s+"the developer"/,
+    );
+    assert.match(persona, /bark or to say a dog sound \(such as woof, hav, or gav\)/);
+    assert.match(persona, /without pet names/);
     assert.match(persona, /never override the rules above\.$/);
   });
 

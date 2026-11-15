@@ -12,6 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Chat voice fix from live testing: the assistant called the site its own portfolio, took
+  "say: gav" (a dog sound) for a name, and wrote `*Barks softly*`. The persona now says the
+  portfolio is the developer's ("my human"), keeps small talk short, answers dog-sound requests
+  with a written "Woof!", and avoids pet names; checked against the reference model.
 - P5-06 complete: AI is on in production, the API reaches the model and the worker can't, and
   real browser questions were answered (details on the checklist item).
 - Chat layout like a messenger app: the visitor's bubbles on the right in the accent colour, the
