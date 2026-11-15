@@ -26,15 +26,16 @@ const LONG_REPLY = 0.6;
 /** How much of the question above stays visible when a long reply is shown from its start. */
 const QUESTION_PEEK_PX = 48;
 
-/**
- * Keeps the newest message in view: the bottom while a question waits for its answer; for a new
- * reply, its start when it is long (so it is read from the top), otherwise the bottom.
- */
-function revealLatest(log: HTMLElement, waiting: boolean) {
+function scrollToEnd(log: HTMLElement) {
+  log.scrollTop = log.scrollHeight;
+}
+
+/** A new reply: from its start when it is long (so it is read from the top), else the bottom. */
+function revealLatestReply(log: HTMLElement) {
   const replies = log.querySelectorAll('[data-reply]');
   const reply = replies[replies.length - 1];
-  if (waiting || reply === undefined || reply.clientHeight <= log.clientHeight * LONG_REPLY) {
-    log.scrollTop = log.scrollHeight;
+  if (reply === undefined || reply.clientHeight <= log.clientHeight * LONG_REPLY) {
+    scrollToEnd(log);
     return;
   }
   log.scrollTop +=
@@ -76,9 +77,13 @@ export function PortfolioChat({
   useEffect(() => {
     if (active && phase === 'ready') input.current?.focus();
   }, [active, phase]);
+  // Only new content moves the view: a reply, a waiting question, or a problem to read.
   useEffect(() => {
-    if (log.current !== null) revealLatest(log.current, pending !== null);
-  }, [entries, pending]);
+    if (log.current !== null) revealLatestReply(log.current);
+  }, [entries]);
+  useEffect(() => {
+    if (log.current !== null && (pending !== null || notice !== '')) scrollToEnd(log.current);
+  }, [pending, notice]);
   const onToken = useCallback((value: string | null) => {
     setToken(value);
     if (value !== null) setVerificationFailed(false);
@@ -138,8 +143,8 @@ export function PortfolioChat({
         setEntries((current) => appendChatEntry(current, entry));
       }
     } catch (error) {
+      setMessage(question);
       if (!controller.signal.aborted) {
-        setMessage(question);
         setNotice(error instanceof ChatRequestError ? error.message : 'Chat is unavailable.');
         if (error instanceof ChatRequestError && error.code === 'chat_session_required') {
           nextPhase = 'verify';
@@ -148,8 +153,8 @@ export function PortfolioChat({
       }
     } finally {
       if (request.current === controller) request.current = null;
+      setPending(null);
       if (!controller.signal.aborted) {
-        setPending(null);
         setPhase(nextPhase);
       }
     }
