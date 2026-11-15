@@ -102,13 +102,12 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. After `git fetch`, run `/code-review high <range>` (see [Code Review Level](#code-review-level))
-   on the commits the push would publish: `@{push}...HEAD`, or `origin/main...HEAD` when
-   `@{push}` doesn't resolve (never pushed, an `origin/main` upstream, or a deleted remote
-   branch). For anything else (a merged base branch, stacked branches, rebases, tags,
-   force-pushes, another remote or ref), work out the range from the commits the push adds, and
-   ask the user when unsure. The review also reads uncommitted changes: commit them first, or ask
-   the user how to handle them.
+1. Ask git what the push would publish: `git push --dry-run --porcelain <remote> <refspec>` (the
+   same arguments as the real push). For each ref it updates as `<old>..<new>`, run
+   `/code-review high <old>...<new>` (see [Code Review Level](#code-review-level)); for a new
+   branch, `/code-review high origin/main...<new>`. Nothing to update means nothing to review. For
+   forced updates, tags, or anything unclear, ask the user what to review. The review also reads
+   uncommitted changes: if there are any, ask the user how to handle them before reviewing.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
 3. After fixes, re-run the quality gates above and the `verify` skill, then review again: only the
@@ -123,8 +122,9 @@ change, a branch, or a pull request, after fixes, and whenever a skill calls for
 the size or kind of change (docs and configuration included). Always type the level and a target
 that names exactly what is reviewed (a three-dot commit range, branch, or pull request number), as
 in `/code-review high origin/main...HEAD`: with no level the command reuses the last one typed, and
-with no target it picks its own scope. Use another level only when the user names it for that
-review; a level named once does not carry over to the next review.
+with no target it picks its own scope (allowed only when the user asks for a review of uncommitted
+changes). Use another level only when the user names it for that review; a level named once does not
+carry over to the next review.
 
 ## Working Agreements
 
