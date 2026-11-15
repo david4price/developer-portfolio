@@ -68,4 +68,5 @@ Summarize as a short table: step, result (passed / failed / not run), and detail
 counts from `pnpm check`.
 
 Verification does not replace review. Before any requested `git push`, also run `/code-review high`
-on the range that "Before Every Push" in `AGENTS.md` names.
+on the range that "Before Every Push" in `AGENTS.md` computes, never without a target ("Code Review
+Level").
