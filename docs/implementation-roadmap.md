@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Favicon: the dog's face from the sitting pose on the chat avatar's light disc (`favicon.ico` at
+  16/32/48 px, a 192 px icon, and an opaque 180 px Apple icon), as Next.js file-based metadata;
+  palette PNGs keep each file under 10 KB. The console's `favicon.ico` 404 is gone.
 - P5-12 complete: an nftables guard on the host drops the inference port (TCP 12434) from every
   interface except loopback, Docker bridges, and pods, covering Docker's forwarding as well as
   the host's own input. A LAN device can no longer reach the unauthenticated runtime.
