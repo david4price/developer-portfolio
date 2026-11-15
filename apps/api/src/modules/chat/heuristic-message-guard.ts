@@ -114,7 +114,7 @@ const shingles = (folded: string, size: number): string[] => {
 export class HeuristicMessageGuard implements MessageGuard {
   private readonly ruleShingles = new Set(shingles(fold(SYSTEM_RULES), LEAK_SHINGLE_WORDS));
 
-  screenMessage(raw: string): ScreenedMessage {
+  async screenMessage(raw: string): Promise<ScreenedMessage> {
     // Inspect the original brackets before NFKC folds U+2329/U+232A into CJK title brackets,
     // which the shared detector deliberately allows. Keep the normalized-text check below too.
     if (controlMarkupIn(raw).size > 0) return { allowed: false, reason: 'role_injection' };

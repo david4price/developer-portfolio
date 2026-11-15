@@ -7,7 +7,9 @@ export type MessageRejection =
   | 'prompt_extraction'
   | 'role_injection'
   | 'jailbreak'
-  | 'obfuscation';
+  | 'obfuscation'
+  /** The rules passed it, but the injection classifier scored it at or above its threshold. */
+  | 'classified_injection';
 
 export type ScreenedMessage =
   | { readonly allowed: true; readonly message: string }
@@ -18,12 +20,12 @@ export type ReplyRejection = 'prompt_leak';
 
 /**
  * Screens everything that crosses the model boundary: visitor messages on the way in, model
- * replies on the way out. The default adapter is rule-based (`heuristic-message-guard.ts`); a
- * model-based classifier can replace it behind this token without touching the chat flow.
+ * replies on the way out. The default adapter is rule-based (`heuristic-message-guard.ts`);
+ * `classifier-message-guard.ts` adds a CPU injection classifier after the rules (P5-08).
  */
 export interface MessageGuard {
   /** Normalizes a visitor message for the model, or rejects it as an injection attempt. */
-  screenMessage(message: string): ScreenedMessage;
+  screenMessage(message: string): Promise<ScreenedMessage>;
   /** Why `reply` must not reach the visitor, or `undefined` when it may. */
   screenReply(reply: string): ReplyRejection | undefined;
 }

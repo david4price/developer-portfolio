@@ -89,6 +89,7 @@ const generousLimits: ChatConfig = {
   ipMessagesPerHour: 1_000,
   ipSessionsPerHour: 1_000,
   trustCfConnectingIp: false,
+  guard: { kind: 'rules' },
 };
 
 function chatProviders(

@@ -5,5 +5,7 @@ packages:
 allowBuilds:
   esbuild: false
   msgpackr-extract: false
+  # The CPU binaries ship in the package; its postinstall only fetches optional GPU providers.
+  onnxruntime-node: false
 
 engineStrict: true

@@ -124,7 +124,7 @@ interface QuotaHit {
 export class ChatService {
   private readonly logger = new Logger('ChatService');
   private readonly limits: ChatConfig;
-  /** The session lock must outlast queueing for a slot plus the AI call itself. */
+  /** The session lock must outlast screening, queueing for a slot, and the AI call itself. */
   private readonly lockTtlMs: number;
 
   constructor(
@@ -139,7 +139,8 @@ export class ChatService {
     @Inject(API_CONFIG) config: ApiConfig,
   ) {
     this.limits = config.chat;
-    this.lockTtlMs = config.chat.queueWaitMs + AI_LEASE_MS;
+    const screeningMs = config.chat.guard.kind === 'classifier' ? config.chat.guard.timeoutMs : 0;
+    this.lockTtlMs = screeningMs + config.chat.queueWaitMs + AI_LEASE_MS;
   }
 
   /**
@@ -235,7 +236,7 @@ export class ChatService {
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
-      const screened = this.guard.screenMessage(message);
+      const screened = await this.guard.screenMessage(message);
       if (!screened.allowed) {
         this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();

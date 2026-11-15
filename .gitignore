@@ -6,6 +6,8 @@ out/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+# Downloaded injection classifier (apps/api/scripts/fetch-injection-classifier.mjs)
+apps/api/models/
 
 .env
 .env.*

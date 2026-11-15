@@ -149,6 +149,7 @@ describe('loadApiConfig', () => {
       ipMessagesPerHour: 60,
       ipSessionsPerHour: 10,
       trustCfConnectingIp: false,
+      guard: { kind: 'rules' },
     });
   });
 
@@ -187,6 +188,59 @@ describe('loadApiConfig', () => {
         () => loadApiConfig({ ...required, CHAT_ASSISTANT_NAME: value }),
         /CHAT_ASSISTANT_NAME/,
         value,
+      );
+    }
+  });
+
+  it('screens with rules unless the classifier is chosen and AI is on', () => {
+    const ai = {
+      ...required,
+      AI_ENABLED: 'true',
+      AI_PROVIDER: 'openai-compatible',
+      AI_MODEL: 'example-model',
+      AI_BASE_URL: 'http://inference.internal:8000/v1',
+      TURNSTILE_SECRET_KEY: 'test-only-challenge-secret',
+      TURNSTILE_HOSTNAMES: 'portfolio.example.com',
+    };
+    assert.deepEqual(loadApiConfig(ai).chat.guard, { kind: 'rules' });
+    assert.deepEqual(
+      loadApiConfig({ ...required, CHAT_GUARD: 'classifier' }).chat.guard,
+      { kind: 'rules' },
+      'with AI off nothing is screened, so no model is loaded',
+    );
+    assert.deepEqual(loadApiConfig({ ...ai, CHAT_GUARD: 'classifier' }).chat.guard, {
+      kind: 'classifier',
+      modelDir: 'models/injection-classifier',
+      threshold: 0.5,
+      timeoutMs: 2_000,
+    });
+    const tuned = loadApiConfig({
+      ...ai,
+      CHAT_GUARD: 'classifier',
+      CHAT_GUARD_MODEL_DIR: '/models/guard',
+      CHAT_GUARD_THRESHOLD: '0.8',
+      CHAT_GUARD_TIMEOUT_MS: '500',
+    }).chat.guard;
+    assert.deepEqual(tuned, {
+      kind: 'classifier',
+      modelDir: '/models/guard',
+      threshold: 0.8,
+      timeoutMs: 500,
+    });
+  });
+
+  it('bounds the classifier settings', () => {
+    for (const [key, value] of [
+      ['CHAT_GUARD', 'llm'],
+      ['CHAT_GUARD_THRESHOLD', '0'],
+      ['CHAT_GUARD_THRESHOLD', '1.5'],
+      ['CHAT_GUARD_TIMEOUT_MS', '10'],
+      ['CHAT_GUARD_MODEL_DIR', ' '],
+    ] as const) {
+      assert.throws(
+        () => loadApiConfig({ ...required, CHAT_GUARD: 'classifier', [key]: value }),
+        new RegExp(key),
+        `${key}=${value}`,
       );
     }
   });

@@ -227,6 +227,7 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
       ipMessagesPerHour: 1_000,
       ipSessionsPerHour: 1_000,
       trustCfConnectingIp: false,
+      guard: { kind: 'rules' },
     };
     const slowAi: AiProvider = {
       enabled: true,
