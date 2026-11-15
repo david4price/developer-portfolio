@@ -37,7 +37,7 @@ const INJECTION_LABEL = 'INJECTION';
 export class OnnxInjectionClassifier implements InjectionClassifier {
   private queued = 0;
   private tail: Promise<unknown> = Promise.resolve();
-  private disposed = false;
+  private disposal: Promise<void> | undefined;
 
   private constructor(
     private readonly session: ort.InferenceSession,
@@ -56,6 +56,9 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
   ): Promise<OnnxInjectionClassifier> {
     if (!Number.isInteger(windowTokens) || windowTokens < 16) {
       throw new RangeError('windowTokens must be an integer of at least 16');
+    }
+    if (!Number.isInteger(maxQueued) || maxQueued < 0) {
+      throw new RangeError('maxQueued must be a non-negative integer');
     }
     const json = async (file: string): Promise<unknown> =>
       JSON.parse(await readFile(join(directory, file), 'utf8'));
@@ -101,7 +104,7 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
   }
 
   score(text: string, signal?: AbortSignal): Promise<number> {
-    if (this.disposed) return Promise.reject(new Error('injection classifier is disposed'));
+    if (this.disposal) return Promise.reject(new Error('injection classifier is disposed'));
     if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.queued > this.maxQueued) return Promise.reject(new InjectionClassifierBusyError());
 
@@ -121,13 +124,10 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
     });
   }
 
-  async dispose(): Promise<void> {
-    this.disposed = true;
-    for (let settled = this.tail; ; settled = this.tail) {
-      await settled;
-      if (settled === this.tail) break;
-    }
-    await this.session.release();
+  /** Idempotent. `score` refuses new work from the first call, so the queue only drains. */
+  dispose(): Promise<void> {
+    this.disposal ??= this.tail.then(() => this.session.release());
+    return this.disposal;
   }
 
   /**
@@ -136,6 +136,7 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
    * one of them. Stops between windows once the caller gives up.
    */
   private async scoreNow(text: string, signal?: AbortSignal): Promise<number> {
+    signal?.throwIfAborted();
     const content = this.tokenizer.encode(text).ids.slice(1, -1);
     const size = this.windowTokens - 2;
     const stride = size - Math.floor(size / 4);

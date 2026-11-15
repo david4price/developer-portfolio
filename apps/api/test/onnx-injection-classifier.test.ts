@@ -30,6 +30,12 @@ describe('OnnxInjectionClassifier.load', () => {
     return OnnxInjectionClassifier.load(directory);
   };
 
+  it('rejects a queue limit that is not a non-negative integer', async () => {
+    for (const maxQueued of [Number.NaN, -1, 1.5]) {
+      await assert.rejects(OnnxInjectionClassifier.load(directory, { maxQueued }), RangeError);
+    }
+  });
+
   it('rejects a window too small to hold any text', async () => {
     await assert.rejects(OnnxInjectionClassifier.load(directory, { windowTokens: 2 }), RangeError);
     await assert.rejects(

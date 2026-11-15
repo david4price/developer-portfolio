@@ -124,11 +124,15 @@ describe('injection classifier evaluation', () => {
 
   it('refuses new work once disposed, after finishing what was queued', async () => {
     const small = await OnnxInjectionClassifier.load(modelDir ?? '');
-    const queued = small.score('Which projects use Go?');
-    const disposing = small.dispose();
-    await assert.rejects(small.score('Which projects use Rust?'), /disposed/);
-    assert.equal(typeof (await queued), 'number');
-    await disposing;
+    try {
+      const queued = small.score('Which projects use Go?');
+      const disposing = small.dispose();
+      assert.equal(small.dispose(), disposing, 'a second dispose shares the first');
+      await assert.rejects(small.score('Which projects use Rust?'), /disposed/);
+      assert.equal(typeof (await queued), 'number');
+    } finally {
+      await small.dispose();
+    }
   });
 
   it('refuses work beyond its queue instead of piling it up', async () => {
