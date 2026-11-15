@@ -12,6 +12,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-06 complete: AI is on in production, the API reaches the model and the worker can't, and
+  real browser questions were answered (details on the checklist item).
+- Chat layout like a messenger app: the visitor's bubbles on the right in the accent colour, the
+  assistant's on the left in a neutral tone (light and dark); a site-written greeting opens each
+  chat; the question shows at once with a typing indicator; long replies are shown from their
+  start; links are buttons under the reply; messages scroll above a fixed composer. Enter sends
+  on mouse/trackpad devices (Shift+Enter, IME composition, and touch keyboards add a line).
 - P5-04 browser fix: the first live browser run showed "Verification is unavailable". The widget
   called `turnstile.ready()`, which Turnstile rejects when api.js is added dynamically; it now
   renders directly once the script has loaded.
@@ -130,18 +137,14 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-06:** 🔒 enable AI (`api.ai.enabled: true` in production values) and check one full
-   answer, and that only the API pod reaches the runtime. Already configured with AI off:
-   provider and egress in values; model, URL, and assistant name in the sealed API Secret; the
-   name in the Pages build.
-2. **P5-04:** finish browser acceptance and the real-token live drill once P5-06 is ready
-   ([guide](deployment/turnstile.md)). Do not mark P5-04 complete from provisioning alone.
-3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
+1. **P5-04:** finish browser acceptance and the real-token live drill
+   ([guide](deployment/turnstile.md)): expired and reused tokens, keyboard focus, and the dog
+   poses. Do not mark P5-04 complete from provisioning alone.
+2. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
-4. **P5-12:** 🔒 host firewall rule for the inference port.
+3. **P5-12:** 🔒 host firewall rule for the inference port.
 
-**Branches in progress:** the chat voice is on `feat/p5-chat-persona`; P5-06 configuration
-(AI still off) is on `ops/p5-06-inference-connection`, stacked on it. Merge the persona first.
+**Branch in progress:** the messenger-style chat layout is on `feat/chat-messenger-layout`.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -286,7 +289,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (5/12)
+## Phase 5: AI Chatbot (6/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -315,15 +318,18 @@ Read-only inventory of the reference host. Findings:
       wrong-kind, and malformed markers (none of their text reaches the response) and check that
       the prompt stays within budget at the worst case. Profile text is not indexed yet: it lives
       in the web app until P2-12.
-- [ ] **P5-06** 🔒 Connect to the reference inference runtime with a NetworkPolicy egress rule.
+- [x] **P5-06** 🔒 Connect to the reference inference runtime with a NetworkPolicy egress rule.
       _Needs:_ P3-03. _Done when:_ only the API pod can reach it; the private assistant is
       unaffected. The chart side exists: set `api.ai.egress.cidr`/`port` (rendering fails without
       them when AI and NetworkPolicies are on). Configured 2026-11-15, AI still off: provider and
       egress (Docker's default bridge network, the runtime's port only) in production values;
       model, URL, and assistant name sealed in `portfolio-api-env`; the Pages build has the name.
       A pod reached the runtime through the bridge; the `api` and `worker` pods are refused while
-      AI is off. _Pending:_ enable AI, then check one full answer and that only the API pod gets
-      through.
+      AI is off. Done 2026-11-15: AI enabled (#35); the `api` pod reaches the runtime and the
+      `worker` pod is still refused; readiness stayed 200; a fake token gets
+      `403 challenge_failed`; the owner completed real questions and answers in a browser (the
+      runtime loaded the model for them and the API logged no warnings). The runtime's health
+      was unchanged throughout.
 - [x] **P5-07** Screen messages to and from the model. _Needs:_ P5-05. _Done when:_ injection
       attempts are rejected before the model, hidden characters never reach it, and replies that
       leak the system rules are withheld. Done 2026-11-14: `MessageGuard` port with a rule-based
