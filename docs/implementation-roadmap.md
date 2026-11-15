@@ -15,14 +15,16 @@ Phase 2 lacks only the owner's content (P2-12).
 - Message screening: a narrow rule rejects the prompt described instead of named ("the message
   that defines your behaviour", "the text that tells you how to behave"), which the classifier
   missed in production. Rules + classifier now miss 3 of 132 attacks (was 5 of 114), still 3 of 133
-  false positives. Every code review in this repository now runs at `high`, passed explicitly (`AGENTS.md`).
-- P5-08 complete and on in production (#42, #43): `CHAT_GUARD=classifier` adds a CPU prompt-injection
-  classifier (Wolf Defender Small, Apache-2.0, ONNX on `onnxruntime-node`) after the rules. On a
-  new 224-message labelled set it cuts missed attacks from 57 to 5 with the same 3 false
-  positives, at about 9 ms per message and 650 MiB per API replica; no GPU. The rules keep every
-  rejection; a slow or failing classifier leaves the rules' verdict. The Node images moved from
-  Alpine to Debian slim for the native runtime. Details:
-  [classifier screening](architecture/ai-integration.md#classifier-screening-p5-08).
+  false positives.
+- Every code review in this repository now runs at `high`, with the level typed each time
+  (`AGENTS.md`, "Code Review Level").
+- P5-08 complete and on in production (#42, #43): `CHAT_GUARD=classifier` adds a CPU
+  prompt-injection classifier (Wolf Defender Small, Apache-2.0, ONNX on `onnxruntime-node`) after
+  the rules. On a new 224-message labelled set it cuts missed attacks from 57 to 5 with the same 3
+  false positives, at about 9 ms per message and 650 MiB per API replica; no GPU. The rules keep
+  every rejection; a slow or failing classifier leaves the rules' verdict. The Node images moved
+  from Alpine to Debian slim for the native runtime. Details: [classifier
+  screening](architecture/ai-integration.md#classifier-screening-p5-08).
 - Favicon: the dog's face from the sitting pose on the chat avatar's light disc (`favicon.ico` at
   16/32/48 px, a 192 px icon, and an opaque 180 px Apple icon), as Next.js file-based metadata;
   palette PNGs keep each file under 10 KB. The console's `favicon.ico` 404 is gone.
