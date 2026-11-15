@@ -20,6 +20,11 @@ export function chatGreeting(assistantName: string): string {
   return `Hi, I'm ${assistantName}! I'll be your guide to this portfolio. Ask me about the projects, the technologies behind them, or where to start.`;
 }
 
+/** The assistant's face beside its messages; decorative, since the name is read out. */
+function Avatar() {
+  return <span className="chat-avatar" aria-hidden="true" />;
+}
+
 function Message({
   from,
   speaker,
@@ -35,11 +40,14 @@ function Message({
 }) {
   return (
     <div className={`chat-message chat-message--${from}`} data-reply={reply ? '' : undefined}>
-      <p className="chat-bubble">
-        <span className="visually-hidden">{speaker}: </span>
-        {children}
-      </p>
-      {links}
+      {from === 'assistant' && <Avatar />}
+      <div className="chat-message__content">
+        <p className="chat-bubble">
+          <span className="visually-hidden">{speaker}: </span>
+          {children}
+        </p>
+        {links}
+      </div>
     </div>
   );
 }
@@ -47,13 +55,16 @@ function Message({
 /**
  * The conversation as chat bubbles: the visitor's on the right, the assistant's on the left.
  * Speaker names are read to screen readers but not shown. `pending` is a question still waiting
- * for its answer; a typing indicator stands in for the reply until it arrives.
+ * for its answer; a typing indicator stands in for the reply until it arrives. `suggestions` are
+ * starter questions offered under the greeting; choosing one sends it.
  */
 export function ChatConversation({
   assistantName,
   greeting = false,
   entries,
   pending = null,
+  suggestions = [],
+  onSuggestion,
   renderLink,
 }: {
   /** Labels the dog companion's replies. */
@@ -62,6 +73,8 @@ export function ChatConversation({
   readonly greeting?: boolean;
   readonly entries: readonly ChatEntry[];
   readonly pending?: string | null;
+  readonly suggestions?: readonly string[];
+  readonly onSuggestion?: (question: string) => void;
   readonly renderLink: (link: ChatLink) => ReactNode;
 }) {
   return (
@@ -76,6 +89,17 @@ export function ChatConversation({
         <Message from="assistant" speaker={assistantName}>
           {chatGreeting(assistantName)}
         </Message>
+      )}
+      {suggestions.length > 0 && onSuggestion !== undefined && (
+        <ul className="chat-suggestions" aria-label="Suggested questions">
+          {suggestions.map((question) => (
+            <li key={question}>
+              <button type="button" onClick={() => onSuggestion(question)}>
+                {question}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
       {entries.map(({ id, question, answer }) => (
         <div className="chat-exchange" key={id}>
@@ -106,11 +130,14 @@ export function ChatConversation({
             {pending}
           </Message>
           <div className="chat-message chat-message--assistant" aria-hidden="true">
-            <p className="chat-bubble chat-typing">
-              <span />
-              <span />
-              <span />
-            </p>
+            <Avatar />
+            <div className="chat-message__content">
+              <p className="chat-bubble chat-typing">
+                <span />
+                <span />
+                <span />
+              </p>
+            </div>
           </div>
         </div>
       )}

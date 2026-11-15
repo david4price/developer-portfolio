@@ -19,6 +19,12 @@ import { appendChatEntry, ChatConversation, type ChatEntry } from '@/components/
 
 const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || null;
 type Phase = 'verify' | 'starting' | 'ready' | 'sending';
+/** Offered under the greeting until the first question; each is answerable from the registry. */
+const STARTER_QUESTIONS = [
+  'What is this site built with?',
+  'How is this site deployed?',
+  'What is the Infrastructure Explorer?',
+] as const;
 /** The character counter appears only near the limit. */
 const COUNTER_FROM = Math.floor(CHAT_MESSAGE_MAX_LENGTH * 0.8);
 /** A reply taller than this share of the visible log is shown from its start, not its end. */
@@ -124,9 +130,13 @@ export function PortfolioChat({
     }
   }
 
-  async function send(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const question = message.trim();
+    void submit(message.trim());
+  }
+
+  /** Sends a typed question or a chosen starter question. */
+  async function submit(question: string) {
     if (messagesUrl === null || phase !== 'ready' || !question || request.current !== null) return;
     const controller = new AbortController();
     request.current = controller;
@@ -201,6 +211,8 @@ export function PortfolioChat({
           greeting={started}
           entries={entries}
           pending={pending}
+          suggestions={phase === 'ready' && entries.length === 0 ? STARTER_QUESTIONS : []}
+          onSuggestion={(question) => void submit(question)}
           renderLink={(link) => (
             <Link href={link.path} onNavigate={onNavigate}>
               {link.title}
@@ -237,7 +249,7 @@ export function PortfolioChat({
         )}
       </div>
       {started && (
-        <form className="chat-composer" onSubmit={(event) => void send(event)}>
+        <form className="chat-composer" onSubmit={onSubmit}>
           <label htmlFor="chat-message" className="visually-hidden">
             Message {assistantName}
           </label>

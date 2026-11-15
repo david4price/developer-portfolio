@@ -19,6 +19,8 @@ Phase 2 lacks only the owner's content (P2-12).
   chat; the question shows at once with a typing indicator; long replies are shown from their
   start; links are buttons under the reply; messages scroll above a fixed composer. Enter sends
   on mouse/trackpad devices (Shift+Enter, IME composition, and touch keyboards add a line).
+  The dog's avatar sits beside its messages, and three starter questions answerable from the
+  registry are offered under the greeting until the first question.
 - P5-04 browser fix: the first live browser run showed "Verification is unavailable". The widget
   called `turnstile.ready()`, which Turnstile rejects when api.js is added dynamically; it now
   renders directly once the script has loaded.

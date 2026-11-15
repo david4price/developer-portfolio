@@ -97,7 +97,7 @@ it('shows a waiting question at once, with a typing indicator hidden from screen
   assert.match(html, /chat-message--user.*Is it &lt;b&gt;live&lt;\/b&gt;\?/s);
   assert.match(
     html,
-    /chat-message--assistant" aria-hidden="true"><p class="chat-bubble chat-typing">/,
+    /chat-message--assistant" aria-hidden="true"><span class="chat-avatar" aria-hidden="true"><\/span><div class="chat-message__content"><p class="chat-bubble chat-typing">/,
   );
   assert.ok(!html.includes('data-reply'), 'no reply yet');
   assert.ok(!render().includes('chat-typing'), 'no indicator when nothing is waiting');
@@ -114,4 +114,27 @@ it('sends on Enter only with a fine pointer, and never on Shift+Enter or while c
   assert.equal(sendsOnEnter(press('Enter', false, true), true), false);
   assert.equal(sendsOnEnter(press('Enter'), false), false, 'touch keyboards add a new line');
   assert.equal(sendsOnEnter(press('a'), true), false);
+});
+
+it('puts the avatar beside every assistant message, and never beside the visitor', () => {
+  const html = render({
+    greeting: true,
+    entries: [{ id: 0, question: 'Q', answer: { reply: 'A', links: [] } }],
+    pending: 'Next?',
+  });
+  // Greeting, reply, and typing indicator.
+  assert.equal(html.match(/class="chat-avatar" aria-hidden="true"/g)?.length, 3);
+  for (const user of html.match(/chat-message--user"[^]*?<\/div><\/div>/g) ?? []) {
+    assert.ok(!user.includes('chat-avatar'), user);
+  }
+});
+
+it('offers starter questions as buttons, only with a handler', () => {
+  const questions = ['What is this site built with?', 'How is it <deployed>?'];
+  const html = render({ greeting: true, suggestions: questions, onSuggestion: () => {} });
+  assert.match(html, /<ul class="chat-suggestions" aria-label="Suggested questions">/);
+  assert.match(html, /<button type="button">What is this site built with\?<\/button>/);
+  assert.ok(html.includes('How is it &lt;deployed&gt;?'), 'escaped like any text');
+  assert.ok(!render({ greeting: true, suggestions: questions }).includes('chat-suggestions'));
+  assert.ok(!render({ greeting: true, onSuggestion: () => {} }).includes('chat-suggestions'));
 });
