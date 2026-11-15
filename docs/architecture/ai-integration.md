@@ -232,7 +232,7 @@ say?"), role-play, and other languages pass. The classifier below covers most of
 
 ## Classifier Screening (P5-08)
 
-**Implemented; off by default** (`CHAT_GUARD=rules`). `ClassifierMessageGuard` runs the rules
+**On in production since 2026-11-15** (the default stays `CHAT_GUARD=rules`). `ClassifierMessageGuard` runs the rules
 first and keeps every rejection they make; only messages they pass go to the classifier, as the
 same normalized text the model would get. A score at or above `CHAT_GUARD_THRESHOLD` (0.5)
 rejects the message with reason `classified_injection` (same `422 message_rejected`). Replies are
