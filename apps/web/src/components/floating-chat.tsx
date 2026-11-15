@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PortfolioAssistant } from '@/mini-apps/portfolio-assistant/loader';
+import { assistantName } from '@/lib/assistant';
 import { ChatOverlay } from './chat-overlay';
 
 /** The layout retains one conversation across page navigation and closing/reopening the popup. */
@@ -12,6 +13,7 @@ export function FloatingChat() {
 
   return (
     <ChatOverlay
+      assistantName={assistantName}
       open={open}
       waiting={waiting}
       loaded={loaded}

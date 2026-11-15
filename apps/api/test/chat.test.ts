@@ -80,6 +80,7 @@ class InMemoryConcurrency implements AiConcurrencyLimiter {
 }
 
 const generousLimits: ChatConfig = {
+  assistantName: 'Pixel',
   maxConcurrency: 1_000,
   queueMax: 0,
   queueWaitMs: 0,
@@ -391,6 +392,28 @@ describe('chat sessions and messages', () => {
       store.sessions.get(sessionId)?.history.at(-1)?.content,
       'Look at Recipe Finder, and Infrastructure Explorer.',
     );
+  });
+
+  it('removes emoji from replies, keeping links, and stores the cleaned reply', async () => {
+    const cookie = await startSession();
+    ai.replyWith = '🐶 See [[project:recipe-finder]] 🐾. Proud of it! 🐕‍🦺';
+
+    const response = await send(cookie, 'What should I look at?');
+    const body = response.json<ChatMessageResponse>();
+    assert.equal(body.reply, 'See Recipe Finder. Proud of it!');
+    assert.deepEqual(
+      body.links.map(({ slug }) => slug),
+      ['recipe-finder'],
+    );
+    const sessionId = sessionIdFromCookieHeader(cookie) ?? '';
+    assert.equal(store.sessions.get(sessionId)?.history.at(-1)?.content, body.reply);
+  });
+
+  it('answers with the fallback when a reply was nothing but emoji', async () => {
+    const cookie = await startSession();
+    ai.replyWith = ' 🐶🐾 ';
+    const response = await send(cookie, 'hi');
+    assert.deepEqual(response.json<ChatMessageResponse>(), { reply: FALLBACK_REPLY, links: [] });
   });
 
   it('answers with a fallback instead of an empty reply when only invalid markers remain', async () => {

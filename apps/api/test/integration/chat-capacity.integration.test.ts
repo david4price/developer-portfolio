@@ -219,6 +219,7 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     let app: NestFastifyApplication;
     const AI_MS = 250;
     const limits: ChatConfig = {
+      assistantName: 'Pixel',
       maxConcurrency: 1,
       queueMax: 2,
       queueWaitMs: 1_000,

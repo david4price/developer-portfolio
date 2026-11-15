@@ -124,7 +124,8 @@ renewal off) under the `platform` AppProject. The `portfolio` Application syncs
 | `portfolio-api-env`   | `CORS_ORIGINS` | API environment (`api.envSecret`); real domain |
 | `portfolio-turnstile` | `secret-key`   | API session verification when AI is enabled    |
 
-The API environment Secret also supplies `TURNSTILE_HOSTNAMES`; keeping the hostname allowlist
+The API environment Secret also supplies `TURNSTILE_HOSTNAMES` and, optionally,
+`CHAT_ASSISTANT_NAME` (a name the owner prefers not to keep in Git); keeping the hostname allowlist
 sealed preserves the public repository boundary. Turnstile's reference setup is recorded in the
 [verification guide](turnstile.md).
 

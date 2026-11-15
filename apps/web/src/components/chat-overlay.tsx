@@ -35,6 +35,8 @@ export function outsideDialog(
 }
 
 interface Props {
+  /** The dog companion's name, shown in the popup title. */
+  readonly assistantName: string;
   readonly open: boolean;
   readonly waiting?: boolean;
   readonly loaded?: boolean;
@@ -61,6 +63,7 @@ export function ChatOverlay({
   onOpen,
   onClose,
   children,
+  assistantName,
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
@@ -102,7 +105,7 @@ export function ChatOverlay({
       >
         <div className="chat-popup__bubble">
           <header className="chat-popup__header">
-            <h2 id={`${id}-title`}>Portfolio assistant</h2>
+            <h2 id={`${id}-title`}>Chat with {assistantName}</h2>
             <button
               type="button"
               className="chat-popup__close"

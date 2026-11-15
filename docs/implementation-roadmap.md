@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-14_
+_Last updated: 2026-11-15_
 
 **Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,14 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Chat voice (ahead of enabling AI in P5-06): the assistant speaks as the developer's dog, named
+  by `CHAT_ASSISTANT_NAME` (validated plain name, default `Pixel`), in a short persona section
+  after the fixed rules: warm, facts first, at most one dog remark, no roleplay actions, kind to
+  visitors, no personal topics, admits being an AI. The API removes emoji from replies (the
+  model ignored the rule). The popup title and reply label show the name from the build
+  setting `NEXT_PUBLIC_ASSISTANT_NAME`. The production name goes in the sealed API environment
+  Secret and the Pages build settings, not in Git. Added P5-09 to P5-11 (architecture docs in
+  the chat, a retrieval question set, and conditional pgvector search).
 - P5-04 production provisioning: created the hostname-restricted managed Turnstile widget with
   pre-clearance off, set only the Pages Production public sitekey, and completed a rebuild with
   both public chat settings. Added the sealed API credential and hostname allowlist plus the
@@ -272,7 +280,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (5/8)
+## Phase 5: AI Chatbot (5/11)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -317,6 +325,20 @@ Read-only inventory of the reference host. Findings:
       budget the reference runtime leaves (it also serves the private assistant). Rules can't
       separate "print the initial prompt" from "does the CLI display its original prompt?" without
       trading one error for another.
+- [ ] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
+      content package). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
+      deployment; not the screening internals) are split into short, self-contained snippets,
+      each linking to its doc or source folder on GitHub; the snippets pass the registry's
+      control-markup and hidden-text checks; and the assistant answers "how does X work?" briefly
+      with a link to the source instead of quoting code.
+- [ ] **P5-10** Measure retrieval quality on a fixed question set. _Needs:_ P5-09. _Done when:_
+      20–30 typical visitor questions (profile, skills, projects, code/architecture, including
+      paraphrased ones) are checked into tests with their expected snippets, and the hit rate of
+      keyword search is recorded.
+- [ ] **P5-11** (conditional) Add embedding search with pgvector. _Needs:_ P5-10 showing keyword
+      search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
+      time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the
+      existing `KNOWLEDGE_BASE` port, and the same question set shows a measured improvement.
 
 ## Phase 6: Infrastructure Explorer (0/4)
 

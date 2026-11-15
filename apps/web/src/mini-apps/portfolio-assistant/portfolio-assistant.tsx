@@ -4,6 +4,7 @@ import { CHAT_MESSAGE_MAX_LENGTH } from '@portfolio/shared-types';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiUrl } from '@/lib/api';
+import { assistantName } from '@/lib/assistant';
 import { ChatRequestError, createChatSession, sendChatMessage } from '@/lib/chat';
 import { TurnstileChallenge } from '@/components/turnstile-challenge';
 import { appendChatEntry, ChatConversation, type ChatEntry } from '@/components/chat-conversation';
@@ -133,6 +134,7 @@ export function PortfolioChat({
         Messages are kept for up to 24 hours. Please avoid sharing personal information.
       </p>
       <ChatConversation
+        assistantName={assistantName}
         entries={entries}
         renderLink={(link) => (
           <Link href={link.path} onNavigate={onNavigate}>

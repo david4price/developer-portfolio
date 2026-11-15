@@ -1,6 +1,14 @@
 /** Version prefix for every public API route. */
 export const API_PREFIX = 'api/v1';
 
+/** The chat assistant's name when none is configured (API `CHAT_ASSISTANT_NAME`, web build). */
+export const DEFAULT_ASSISTANT_NAME = 'Pixel';
+/**
+ * A configured assistant name: 1-30 letters, spaces, hyphens, or apostrophes, starting and ending
+ * with a letter. The API writes it into the system prompt, so nothing else is allowed.
+ */
+export const ASSISTANT_NAME_PATTERN = /^\p{L}(?:[\p{L}' -]{0,28}\p{L})?$/u;
+
 export type ProjectKind = 'portfolio-app' | 'external-repository';
 
 export interface ProjectSummary {
