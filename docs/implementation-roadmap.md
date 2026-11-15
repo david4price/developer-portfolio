@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-04 browser fix: the first live browser run showed "Verification is unavailable". The widget
+  called `turnstile.ready()`, which Turnstile rejects when api.js is added dynamically; it now
+  renders directly once the script has loaded.
 - Chat voice (ahead of enabling AI in P5-06): the assistant speaks as the developer's dog, named
   by `CHAT_ASSISTANT_NAME` (validated plain name, default `Pixel`), in a short persona section
   after the fixed rules: warm, facts first, at most one dog remark, no roleplay actions, kind to
