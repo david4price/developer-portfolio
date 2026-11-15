@@ -4,8 +4,10 @@ import { createRegistry } from '@portfolio/project-registry';
 import {
   buildPrompt,
   CONTEXT_MAX_CHARS,
+  personaRules,
   PROMPT_MAX_CHARS,
   retrievalQuery,
+  SYSTEM_RULES,
 } from '../src/modules/chat/chat-prompt.js';
 import type { ChatTurn } from '../src/modules/chat/chat-session.store.js';
 import { MAX_REPLY_LINKS, resolveNavigationLinks } from '../src/modules/chat/navigation-links.js';
@@ -17,6 +19,9 @@ import {
 import { testRegistry } from './support/test-registry.js';
 
 const knowledge = new RegistryKnowledgeBase(testRegistry);
+const NAME = 'Pixel';
+/** The longest name config accepts (30 characters). */
+const LONGEST_NAME = `A${'b'.repeat(28)}c`;
 const firstLine = (snippet: string | undefined) => snippet?.split('\n')[0];
 /** The delimited data block at the end of the system message (the rules also name the tags). */
 const dataBlockOf = (system: string | undefined) => {
@@ -337,7 +342,7 @@ describe('resolveNavigationLinks', () => {
 
 describe('buildPrompt', () => {
   it('frames retrieved snippets as delimited data inside the system message', () => {
-    const [system, user] = buildPrompt(['[[project:a]] A'], [], 'What is A?');
+    const [system, user] = buildPrompt(['[[project:a]] A'], [], 'What is A?', NAME);
     assert.equal(system?.role, 'system');
     assert.match(
       system?.content ?? '',
@@ -347,14 +352,23 @@ describe('buildPrompt', () => {
     assert.deepEqual(user, { role: 'user', content: 'What is A?' });
   });
 
+  it('puts the named voice between the fixed rules and the data', () => {
+    const content = buildPrompt([], [], 'hi', 'Rex')[0]?.content ?? '';
+    const persona = personaRules('Rex');
+    assert.ok(content.startsWith(`${SYSTEM_RULES}\n\n${persona}\n\n<portfolio_data>`));
+    assert.match(persona, /^Speak as Rex, the developer's dog/);
+    assert.match(persona, /you are an AI assistant speaking as Rex\./);
+    assert.match(persona, /never override the rules above\.$/);
+  });
+
   it('says so when nothing was retrieved', () => {
-    const [system] = buildPrompt([], [], 'hi');
+    const [system] = buildPrompt([], [], 'hi', NAME);
     assert.match(system?.content ?? '', /No portfolio data matched this question/);
   });
 
   /** The data block's body, between the real delimiters. */
   const dataBody = (snippets: string[]) => {
-    const block = dataBlockOf(buildPrompt(snippets, [], 'hi')[0]?.content);
+    const block = dataBlockOf(buildPrompt(snippets, [], 'hi', NAME)[0]?.content);
     return block.slice('<portfolio_data>\n'.length, -'\n</portfolio_data>'.length);
   };
   it('leaves out a snippet with control markup instead of editing it', () => {
@@ -392,7 +406,7 @@ describe('buildPrompt', () => {
 
   it('fits three full-size snippets', () => {
     const snippets = ['a', 'b', 'c'].map((letter) => letter.repeat(SNIPPET_MAX_CHARS));
-    const [system] = buildPrompt(snippets, [], 'hi');
+    const [system] = buildPrompt(snippets, [], 'hi', NAME);
     for (const snippet of snippets) assert.ok(system?.content.includes(snippet));
   });
 
@@ -402,7 +416,7 @@ describe('buildPrompt', () => {
       role: index % 2 === 0 ? 'user' : 'assistant',
       content: 'h'.repeat(450),
     }));
-    const messages = buildPrompt(snippets, history, 'm'.repeat(1_000));
+    const messages = buildPrompt(snippets, history, 'm'.repeat(1_000), LONGEST_NAME);
     const total = messages.reduce((sum, { content }) => sum + content.length, 0);
     assert.ok(total <= PROMPT_MAX_CHARS, `prompt is ${total} characters`);
 

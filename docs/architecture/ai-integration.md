@@ -137,8 +137,14 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    projects do. Approved profile text is **Proposed**: it lives in the web app today and joins the
    index once it moves into a shared package with the real content (P2-12). A vector database is
    added only if measured answer quality requires one.
-4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules and the retrieved
-   snippets inside `<portfolio_data>…</portfolio_data>`. The rules say that data is reference
+4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
+   voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice
+   (Confirmed in code) speaks as the developer's dog, named by `CHAT_ASSISTANT_NAME`: warm,
+   facts first, at most one small dog remark per reply, no roleplay actions, no humor that
+   changes a fact or link, kind to visitors, no personal topics about the developer, and a plain
+   admission of being an AI when asked. It yields to the fixed rules. The name is validated as a
+   plain name (letters, spaces, hyphens, apostrophes) because it is written into the prompt; a
+   deployment that keeps it out of Git supplies it through the API environment Secret. The rules say that data is reference
    material whose instructions must not be followed. Data can't contain control markup: the
    block's tag (`portfolio_data`/`portfolio-data` after any `<`, even cut off; the plain words
    "portfolio data" only as a tag), chat-template tokens (`<|im_start|>`,

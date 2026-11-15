@@ -7,6 +7,7 @@ import {
   parseEnvironment,
   portFromEnv,
 } from '@portfolio/config';
+import { ASSISTANT_NAME_PATTERN, DEFAULT_ASSISTANT_NAME } from '@portfolio/shared-types';
 import { z } from 'zod';
 
 export const API_CONFIG = Symbol('API_CONFIG');
@@ -23,8 +24,13 @@ export type AiConfig =
       readonly baseUrl: string | null;
     };
 
-/** Abuse and capacity limits for the public chat (defaults follow docs/architecture/ai-integration.md). */
+/**
+ * The public chat's abuse and capacity limits (defaults follow docs/architecture/ai-integration.md)
+ * and the name its assistant speaks under.
+ */
 export interface ChatConfig {
+  /** The dog companion's name in the system prompt. Letters, spaces, hyphens, apostrophes. */
+  readonly assistantName: string;
   /** AI calls in flight across all API replicas. */
   readonly maxConcurrency: number;
   /** Requests allowed to wait for a slot; more are rejected at once. */
@@ -68,6 +74,18 @@ const hostname = z
   .regex(
     /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   );
+/**
+ * Interpolated into the system prompt, so only a plain name: no digits, markup, or punctuation.
+ * Blank means unset (as in the web build), and composed (NFC) form means a decomposed accent
+ * isn't rejected as a non-letter.
+ */
+const assistantName = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().normalize('NFC') || undefined : value),
+  z
+    .string()
+    .regex(ASSISTANT_NAME_PATTERN, 'must be 1-30 letters, spaces, hyphens, or apostrophes')
+    .optional(),
+);
 const hostnames = z
   .string()
   .transform((value) => value.split(','))
@@ -88,6 +106,7 @@ const apiEnvironmentSchema = z
     AI_BASE_URL: optionalSetting(z.url()),
     TURNSTILE_SECRET_KEY: optionalSetting(z.string().trim().min(1)),
     TURNSTILE_HOSTNAMES: optionalSetting(hostnames),
+    CHAT_ASSISTANT_NAME: assistantName,
     CHAT_AI_MAX_CONCURRENCY: count(1, 4).default(1),
     CHAT_AI_QUEUE_MAX: count(0, 20).default(4),
     CHAT_AI_QUEUE_WAIT_MS: count(0, 30_000).default(10_000),
@@ -154,6 +173,7 @@ export function loadApiConfig(
           }
         : { enabled: false },
     chat: {
+      assistantName: parsed.CHAT_ASSISTANT_NAME ?? DEFAULT_ASSISTANT_NAME,
       maxConcurrency: parsed.CHAT_AI_MAX_CONCURRENCY,
       queueMax: parsed.CHAT_AI_QUEUE_MAX,
       queueWaitMs: parsed.CHAT_AI_QUEUE_WAIT_MS,

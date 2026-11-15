@@ -16,9 +16,12 @@ export function appendChatEntry(
 }
 
 export function ChatConversation({
+  assistantName,
   entries,
   renderLink,
 }: {
+  /** Labels the dog companion's replies. */
+  readonly assistantName: string;
   readonly entries: readonly ChatEntry[];
   readonly renderLink: (link: ChatLink) => ReactNode;
 }) {
@@ -28,7 +31,7 @@ export function ChatConversation({
         <article className="chat-entry" key={id}>
           <h2 className="chat-speaker">You</h2>
           <p className="chat-text">{question}</p>
-          <h2 className="chat-speaker">Portfolio assistant</h2>
+          <h2 className="chat-speaker">{assistantName}</h2>
           <p className="chat-text">{answer.reply}</p>
           {answer.links.length > 0 && (
             <ul aria-label="Suggested pages">

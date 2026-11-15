@@ -7,7 +7,7 @@ import { ChatOverlay, openChatDialog, outsideDialog } from '../src/components/ch
 describe('floating chat overlay', () => {
   it('starts closed, exposes an accessible artwork button, and contains no verification frame', () => {
     const html = renderToStaticMarkup(
-      createElement(ChatOverlay, { open: false, onOpen() {}, onClose() {} }),
+      createElement(ChatOverlay, { assistantName: 'Rex', open: false, onOpen() {}, onClose() {} }),
     );
     assert.match(html, /aria-label="Open portfolio chat"/);
     assert.match(html, /aria-haspopup="dialog"/);
@@ -24,7 +24,13 @@ describe('floating chat overlay', () => {
 
   it('keeps the active poses mounted after first activation for subsequent replies and reopening', () => {
     const html = renderToStaticMarkup(
-      createElement(ChatOverlay, { open: false, loaded: true, onOpen() {}, onClose() {} }),
+      createElement(ChatOverlay, {
+        assistantName: 'Rex',
+        open: false,
+        loaded: true,
+        onOpen() {},
+        onClose() {},
+      }),
     );
     assert.match(html, /chat-dog__pose--sitting/);
     assert.match(html, /chat-dog__pose--standing/);
@@ -33,7 +39,13 @@ describe('floating chat overlay', () => {
   it('sits in the speech bubble dialog, stands while waiting, then sits again', () => {
     for (const waiting of [false, true, false]) {
       const html = renderToStaticMarkup(
-        createElement(ChatOverlay, { open: true, waiting, onOpen() {}, onClose() {} }),
+        createElement(ChatOverlay, {
+          assistantName: 'Rex',
+          open: true,
+          waiting,
+          onOpen() {},
+          onClose() {},
+        }),
       );
       const dialog = html.slice(html.indexOf('<dialog'));
       assert.match(html, /aria-expanded="true"/);
@@ -41,12 +53,19 @@ describe('floating chat overlay', () => {
       assert.match(dialog, new RegExp(`data-pose="${waiting ? 'standing' : 'sitting'}"`));
       assert.ok(!dialog.includes('data-pose="lying"'));
       assert.match(dialog, /class="chat-popup__dog"[^>]*aria-label="Close portfolio chat"/);
+      assert.match(dialog, /<h2 id="[^"]+-title">Chat with Rex<\/h2>/);
     }
   });
 
   it('returns to the resting launcher when closed during an outstanding request', () => {
     const html = renderToStaticMarkup(
-      createElement(ChatOverlay, { open: false, waiting: true, onOpen() {}, onClose() {} }),
+      createElement(ChatOverlay, {
+        assistantName: 'Rex',
+        open: false,
+        waiting: true,
+        onOpen() {},
+        onClose() {},
+      }),
     );
     const launcher = html.slice(0, html.indexOf('<dialog'));
     assert.match(launcher, /aria-expanded="false"/);

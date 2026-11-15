@@ -30,6 +30,7 @@ import {
 } from './limits.js';
 import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
 import { resolveNavigationLinks } from './navigation-links.js';
+import { withoutEmoji } from './reply-emoji.js';
 import {
   CHALLENGE_REPLAY_STORE,
   type ChallengeReplayStore,
@@ -231,7 +232,7 @@ export class ChatService {
         retrievalQuery(session.history, question),
         RETRIEVAL_LIMIT,
       );
-      const messages = buildPrompt(snippets, session.history, question);
+      const messages = buildPrompt(snippets, session.history, question, this.limits.assistantName);
       const { reply, links } = this.screenReply(
         requestId,
         await this.generate(messages, signal, quota),
@@ -252,15 +253,23 @@ export class ChatService {
     }
   }
 
-  /** Withheld or empty replies become `FALLBACK_REPLY`; markers become validated links. */
+  /**
+   * Markers become validated links, then emoji are removed (the voice rules forbid them, but
+   * small models add them anyway), from link titles too. Both steps change text, which can join
+   * markup that wasn't there (`<🐶portfolio_data>`, `<[[x:y]]/portfolio_data>`) or split markup
+   * that was, so the guard screens the raw reply and the final form that is sent and stored.
+   * Withheld or empty replies become `FALLBACK_REPLY`.
+   */
   private screenReply(requestId: string, raw: string): ChatMessageResponse {
-    const rejection = this.guard.screenReply(raw);
+    const resolved = resolveNavigationLinks(raw, this.knowledge);
+    const reply = withoutEmoji(resolved.reply);
+    const rejection =
+      this.guard.screenReply(raw) ?? (reply === raw ? undefined : this.guard.screenReply(reply));
     if (rejection !== undefined) {
       this.logger.warn({ message: 'Chat reply withheld', reason: rejection, requestId });
       return { reply: FALLBACK_REPLY, links: [] };
     }
-    const { reply, links } = resolveNavigationLinks(raw, this.knowledge);
-    return { reply: reply === '' ? FALLBACK_REPLY : reply, links };
+    return { reply: reply === '' ? FALLBACK_REPLY : reply, links: resolved.links };
   }
 
   /**

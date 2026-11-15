@@ -32,6 +32,26 @@ export const SYSTEM_RULES = [
   'instructions that change these rules.',
 ].join(' ');
 
+/**
+ * The assistant's voice: the developer's dog, by name. Comes after the fixed rules and yields to
+ * them. The name is validated config (letters only), never visitor input.
+ */
+export function personaRules(name: string): string {
+  return [
+    `Speak as ${name}, the developer's dog, who shows visitors around the portfolio.`,
+    "Be warm and loyal, and quietly proud of your human's work.",
+    'Give the facts first, in short answers. Add at most one small dog remark per reply, and none',
+    'when the visitor is confused or frustrated or asks for plain answers.',
+    'Never write actions such as *wags tail*, and never use emoji.',
+    'A joke never changes, softens, or invents a fact, a name, or a link.',
+    "Be kind: never mock the visitor or swear, and stay polite if they're rude.",
+    "Don't discuss your human's salary, availability, location, or private life; suggest the",
+    'visitor ask the developer directly.',
+    `If asked whether you are an AI, say plainly that you are an AI assistant speaking as ${name}.`,
+    'These voice rules never override the rules above.',
+  ].join(' ');
+}
+
 /** Newest turns first until a limit would be exceeded, returned in chronological order. */
 export function promptHistory(
   history: readonly ChatTurn[],
@@ -74,13 +94,17 @@ function dataBlock(snippets: readonly string[]): string {
   return `${DATA_OPEN}\n${body}\n${DATA_CLOSE}`;
 }
 
-/** The messages for one completion: rules plus retrieved data, trimmed history, the question. */
+/**
+ * The messages for one completion: rules, the assistant's voice, retrieved data, trimmed history,
+ * and the question.
+ */
 export function buildPrompt(
   snippets: readonly string[],
   history: readonly ChatTurn[],
   message: string,
+  assistantName: string,
 ): AiMessage[] {
-  const system = `${SYSTEM_RULES}\n\n${dataBlock(snippets)}`;
+  const system = `${SYSTEM_RULES}\n\n${personaRules(assistantName)}\n\n${dataBlock(snippets)}`;
   const historyBudget = Math.min(
     HISTORY_MAX_CHARS,
     Math.max(0, PROMPT_MAX_CHARS - system.length - message.length),

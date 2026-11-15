@@ -53,6 +53,11 @@ returns `400 bad_request`.
 
 Chat needs `AI_ENABLED=true` and an AI provider. Replies are plain text; `links` lists pages the
 assistant suggested, each checked against the project registry (`kind`, `slug`, `title`, `path`).
+The assistant speaks as the site's dog companion; `CHAT_ASSISTANT_NAME` sets its name (default
+`Pixel`; letters, spaces, hyphens, and apostrophes, at most 30). The API removes emoji from
+replies. The popup shows the name from the build setting `NEXT_PUBLIC_ASSISTANT_NAME`: for
+`pnpm dev`, set it to the same value; `compose.full.yaml` passes `CHAT_ASSISTANT_NAME` to the web
+build itself and ignores `NEXT_PUBLIC_ASSISTANT_NAME`. An invalid web value fails the build.
 The design and limits are in [AI integration](../architecture/ai-integration.md#chat-design-phase-5).
 
 ### Chat session verification

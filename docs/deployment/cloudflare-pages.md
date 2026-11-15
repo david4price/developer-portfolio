@@ -29,14 +29,15 @@ requests from forks.
 
 Build variables (plain text, not secrets):
 
-| Variable                          | Production                                 | Preview |
-| --------------------------------- | ------------------------------------------ | ------- |
-| `NODE_VERSION`                    | `24`                                       | `24`    |
-| `SKIP_DEPENDENCY_INSTALL`         | `1`                                        | `1`     |
-| `NEXT_TELEMETRY_DISABLED`         | `1`                                        | `1`     |
-| `COREPACK_ENABLE_DOWNLOAD_PROMPT` | `0`                                        | `0`     |
-| `NEXT_PUBLIC_API_BASE_URL`        | `https://api.<domain>`                     | _unset_ |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`  | dedicated public sitekey, once provisioned | _unset_ |
+| Variable                          | Production                                    | Preview |
+| --------------------------------- | --------------------------------------------- | ------- |
+| `NODE_VERSION`                    | `24`                                          | `24`    |
+| `SKIP_DEPENDENCY_INSTALL`         | `1`                                           | `1`     |
+| `NEXT_TELEMETRY_DISABLED`         | `1`                                           | `1`     |
+| `COREPACK_ENABLE_DOWNLOAD_PROMPT` | `0`                                           | `0`     |
+| `NEXT_PUBLIC_API_BASE_URL`        | `https://api.<domain>`                        | _unset_ |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`  | dedicated public sitekey, once provisioned    | _unset_ |
+| `NEXT_PUBLIC_ASSISTANT_NAME`      | same value as the API's `CHAT_ASSISTANT_NAME` | _unset_ |
 
 - `SKIP_DEPENDENCY_INSTALL` turns off the builder's own install, so pnpm (the version pinned in
   `packageManager`, via Corepack) installs with `--frozen-lockfile` and the workspace's

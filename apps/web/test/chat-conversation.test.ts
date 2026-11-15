@@ -11,6 +11,7 @@ import {
 it('escapes visitor and model markup and never autolinks URLs in their text', () => {
   const html = renderToStaticMarkup(
     createElement(ChatConversation, {
+      assistantName: 'Rex',
       renderLink: (link) => createElement('a', { href: link.path }, link.title),
       entries: [
         {
@@ -39,6 +40,7 @@ it('escapes visitor and model markup and never autolinks URLs in their text', ()
   assert.ok(html.includes('href="/projects/example/"'));
   assert.ok(html.includes('A &lt;project&gt;'));
   assert.match(html, /role="log"/);
+  assert.match(html, /<h2 class="chat-speaker">You<\/h2>.*<h2 class="chat-speaker">Rex<\/h2>/s);
 });
 
 it('keeps stable exchange identities when the history limit removes old replies', () => {
