@@ -102,23 +102,25 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Run `/code-review high` (see [Code Review Level](#code-review-level)) on everything the push
-   would publish: with no target it covers `@{upstream}...HEAD`, and a branch without an upstream
-   is reviewed against `main`. Uncommitted changes are not pushed; commit or exclude them first.
+1. Run `/code-review high <range>` (see [Code Review Level](#code-review-level)) on exactly the
+   commits the push publishes: `@{upstream}..HEAD`; for a branch without an upstream,
+   `origin/main..HEAD`; for a push to another remote or ref, the range that target lacks.
+   Uncommitted changes are not pushed; commit or exclude them first.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
 3. After fixes, re-run the quality gates above and the `verify` skill, then run
-   `/code-review high` on the new commits.
+   `/code-review high <first fix>^..HEAD` on the new commits.
 4. In the handoff, say that the review ran, at which level, and what it found.
 
 ## Code Review Level
 
 Every `/code-review` in this repository runs at `high`: before a push, when asked to review a
-change, a branch, or a pull request, after fixes, and whenever a skill calls for a review,
-whatever the size or kind of change (docs and configuration included). Always type the level
-(`/code-review high`, plus a target when one is needed): with no level, the command reuses the
-last one typed. Use another level only when the user names it for that review; a level named
-once does not carry over to the next review.
+change, a branch, or a pull request, after fixes, and whenever a skill calls for a review, whatever
+the size or kind of change (docs and configuration included). Always type the level and a target
+that names exactly what is reviewed (a commit range, branch, or pull request number), as in
+`/code-review high origin/main..HEAD`: with no level the command reuses the last one typed, and with
+no target it picks its own scope, which can include uncommitted changes. Use another level only when
+the user names it for that review; a level named once does not carry over to the next review.
 
 ## Working Agreements
 
