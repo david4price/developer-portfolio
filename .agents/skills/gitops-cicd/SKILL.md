@@ -55,5 +55,5 @@ new schema.
 
 Creating tags, releases, GitHub settings, secrets, environments, or running workflows manually is
 outward-facing: confirm with the user first. Before any requested push, run `/code-review high` on
-the range that "Before Every Push" in `AGENTS.md` computes, never without a target ("Code Review
+the range that "Before Every Push" in `AGENTS.md` describes, never without a target ("Code Review
 Level"), and resolve its findings.

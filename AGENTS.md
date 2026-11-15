@@ -102,19 +102,17 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Review what the push publishes. After `git fetch --prune <remote>`, list it with
-   `git rev-list --reverse <source> --not --remotes=<remote>` (`<source>` is usually `HEAD`) and
-   run `/code-review high <oldest listed commit>^...<source>` (see
-   [Code Review Level](#code-review-level)). Nothing listed means nothing new to review; a root
-   commit listed first means reviewing `<source>` as a whole. If the listed commits merge in the
-   base branch, review `<remote>/main...<source>` instead, so already-published changes stay out.
+1. Run `/code-review high <range>` (see [Code Review Level](#code-review-level)) on the commits
+   the push would publish: `@{upstream}...HEAD`, or `origin/main...HEAD` for a branch without an
+   upstream. For anything else (merges, stacked branches, rebases, tags, force-pushes, another
+   remote or ref), work out the range from the commits the push adds, and ask the user when unsure.
    Uncommitted changes are not pushed; commit or exclude them first.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
 3. After fixes, re-run the quality gates above and the `verify` skill, then review again: only the
-   new fix commits (`/code-review high <first fix>^...<source>`) when they were added on top of
-   reviewed ones, otherwise step 1 again.
-4. In the handoff, say that the review ran, at which level, and what it found.
+   new fix commits (`/code-review high <first fix>^...HEAD`) when they were added on top of
+   reviewed ones, otherwise the whole range again.
+4. In the handoff, say that the review ran, at which level, on which range, and what it found.
 
 ## Code Review Level
 
