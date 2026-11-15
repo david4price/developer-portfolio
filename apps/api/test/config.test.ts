@@ -149,6 +149,7 @@ describe('loadApiConfig', () => {
       ipMessagesPerHour: 60,
       ipSessionsPerHour: 10,
       trustCfConnectingIp: false,
+      guard: { kind: 'rules' },
     });
   });
 
@@ -187,6 +188,45 @@ describe('loadApiConfig', () => {
         () => loadApiConfig({ ...required, CHAT_ASSISTANT_NAME: value }),
         /CHAT_ASSISTANT_NAME/,
         value,
+      );
+    }
+  });
+
+  it('screens with rules unless the classifier is chosen', () => {
+    assert.deepEqual(loadApiConfig(required).chat.guard, { kind: 'rules' });
+    assert.deepEqual(loadApiConfig({ ...required, CHAT_GUARD: 'classifier' }).chat.guard, {
+      kind: 'classifier',
+      modelDir: 'models/injection-classifier',
+      threshold: 0.5,
+      timeoutMs: 2_000,
+    });
+    const tuned = loadApiConfig({
+      ...required,
+      CHAT_GUARD: 'classifier',
+      CHAT_GUARD_MODEL_DIR: '/models/guard',
+      CHAT_GUARD_THRESHOLD: '0.8',
+      CHAT_GUARD_TIMEOUT_MS: '500',
+    }).chat.guard;
+    assert.deepEqual(tuned, {
+      kind: 'classifier',
+      modelDir: '/models/guard',
+      threshold: 0.8,
+      timeoutMs: 500,
+    });
+  });
+
+  it('bounds the classifier settings', () => {
+    for (const [key, value] of [
+      ['CHAT_GUARD', 'llm'],
+      ['CHAT_GUARD_THRESHOLD', '0'],
+      ['CHAT_GUARD_THRESHOLD', '1.5'],
+      ['CHAT_GUARD_TIMEOUT_MS', '10'],
+      ['CHAT_GUARD_MODEL_DIR', ' '],
+    ] as const) {
+      assert.throws(
+        () => loadApiConfig({ ...required, CHAT_GUARD: 'classifier', [key]: value }),
+        new RegExp(key),
+        `${key}=${value}`,
       );
     }
   });

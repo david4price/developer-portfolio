@@ -10,6 +10,8 @@ api:
     provider: openai-compatible
     model: example-model
     baseUrl: http://inference.example.internal:8080/v1
+  messageGuard:
+    mode: classifier
 worker:
   image:
     tag: ci

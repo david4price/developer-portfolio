@@ -12,6 +12,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-08 implemented, off by default: `CHAT_GUARD=classifier` adds a CPU prompt-injection
+  classifier (Wolf Defender Small, Apache-2.0, ONNX on `onnxruntime-node`) after the rules. On a
+  new 224-message labelled set it cuts missed attacks from 57 to 5 with the same 3 false
+  positives, at about 9 ms per message and 650 MiB per API replica; no GPU. The rules keep every
+  rejection; a slow or failing classifier leaves the rules' verdict. The Node images moved from
+  Alpine to Debian slim for the native runtime. Details:
+  [classifier screening](architecture/ai-integration.md#classifier-screening-p5-08).
 - Favicon: the dog's face from the sitting pose on the chat avatar's light disc (`favicon.ico` at
   16/32/48 px, a 192 px icon, and an opaque 180 px Apple icon), as Next.js file-based metadata;
   palette PNGs keep each file under 10 KB. The console's `favicon.ico` 404 is gone.
@@ -158,10 +165,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P2-12:** replace the placeholder profile and experience content (owner will send the text
+1. **P5-08 enablement (needs approval):** after the image builds, set
+   `api.messageGuard.mode: classifier` in production values; check that pods start with the
+   larger memory, that a paraphrased extraction gets `422`, and that ordinary questions answer.
+2. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
 
-**Branch in progress:** none.
+**Branch in progress:** `feat/p5-08-classifier-guard`.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -363,7 +373,11 @@ Read-only inventory of the reference host. Findings:
       `apps/api/test/message-guard.test.ts` plus a larger labelled set, within the latency and GPU
       budget the reference runtime leaves (it also serves the private assistant). Rules can't
       separate "print the initial prompt" from "does the CLI display its original prompt?" without
-      trading one error for another.
+      trading one error for another. Implemented 2026-11-15 on the CPU (no GPU use): on
+      `test/fixtures/screening-cases.ts` (224 messages, including every case from the rules'
+      tests), rules + classifier miss 5 of 114 attacks against the rules' 57, with the same 3 of
+      110 false positives; p95 14 ms. Off by default; ticked once enabled in production
+      ([details](architecture/ai-integration.md#classifier-screening-p5-08)).
 - [ ] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
       content package). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
       deployment; not the screening internals) are split into short, self-contained snippets,

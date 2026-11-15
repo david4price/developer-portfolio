@@ -3,6 +3,9 @@
 {{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
 {{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
 {{- end }}
+{{- if not (has .Values.api.messageGuard.mode (list "rules" "classifier")) }}
+{{- fail "api.messageGuard.mode must be rules or classifier" }}
+{{- end }}
 {{- if .Values.api.ai.enabled }}
 {{- if not .Values.api.turnstile.existingSecret }}
 {{- fail "api.turnstile.existingSecret is required when AI is enabled" }}
@@ -82,6 +85,14 @@ spec:
             {{- end }}
             - name: CHAT_TRUST_CF_CONNECTING_IP
               value: {{ .trustCloudflareClientIp | quote }}
+            - name: CHAT_GUARD
+              value: {{ .messageGuard.mode | quote }}
+            {{- if eq .messageGuard.mode "classifier" }}
+            - name: CHAT_GUARD_THRESHOLD
+              value: {{ .messageGuard.threshold | quote }}
+            - name: CHAT_GUARD_TIMEOUT_MS
+              value: {{ .messageGuard.timeoutMs | quote }}
+            {{- end }}
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}
             {{- if .ai.enabled }}
@@ -140,7 +151,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 2
           resources:
-            {{- toYaml .resources | nindent 12 }}
+            {{- toYaml (eq .messageGuard.mode "classifier" | ternary .messageGuard.classifierResources .resources) | nindent 12 }}
           securityContext:
             {{- include "portfolio.containerSecurityContext" $ | nindent 12 }}
           volumeMounts:

@@ -4,6 +4,7 @@
 **/.next
 **/out
 **/*.tsbuildinfo
+apps/api/models
 .git
 .github
 .env

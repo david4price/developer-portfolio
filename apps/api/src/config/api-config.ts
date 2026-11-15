@@ -15,6 +15,21 @@ export const API_CONFIG = Symbol('API_CONFIG');
 export const aiProviderNames = ['openai-compatible', 'ollama', 'openai', 'anthropic'] as const;
 export type AiProviderName = (typeof aiProviderNames)[number];
 
+export const messageGuardNames = ['rules', 'classifier'] as const;
+
+/**
+ * How visitor messages are screened (P5-08). `classifier` runs the rules, then a CPU injection
+ * classifier loaded from `modelDir`; it needs about 1 GiB more memory than `rules`.
+ */
+export type MessageGuardConfig =
+  | { readonly kind: 'rules' }
+  | {
+      readonly kind: 'classifier';
+      readonly modelDir: string;
+      readonly threshold: number;
+      readonly timeoutMs: number;
+    };
+
 export type AiConfig =
   | { readonly enabled: false }
   | {
@@ -46,6 +61,7 @@ export interface ChatConfig {
    * could pick their own quota bucket.
    */
   readonly trustCfConnectingIp: boolean;
+  readonly guard: MessageGuardConfig;
 }
 
 export interface ApiConfig {
@@ -114,6 +130,10 @@ const apiEnvironmentSchema = z
     CHAT_IP_MESSAGES_PER_HOUR: count(1, 1_000).default(60),
     CHAT_IP_SESSIONS_PER_HOUR: count(1, 1_000).default(10),
     CHAT_TRUST_CF_CONNECTING_IP: booleanFromEnv.default(false),
+    CHAT_GUARD: z.enum(messageGuardNames).default('rules'),
+    CHAT_GUARD_MODEL_DIR: z.string().trim().min(1).default('models/injection-classifier'),
+    CHAT_GUARD_THRESHOLD: z.coerce.number().gt(0).max(1).default(0.5),
+    CHAT_GUARD_TIMEOUT_MS: count(50, 10_000).default(2_000),
   })
   .superRefine((environment, context) => {
     if (!environment.AI_ENABLED) return;
@@ -181,6 +201,15 @@ export function loadApiConfig(
       ipMessagesPerHour: parsed.CHAT_IP_MESSAGES_PER_HOUR,
       ipSessionsPerHour: parsed.CHAT_IP_SESSIONS_PER_HOUR,
       trustCfConnectingIp: parsed.CHAT_TRUST_CF_CONNECTING_IP,
+      guard:
+        parsed.CHAT_GUARD === 'classifier'
+          ? {
+              kind: 'classifier',
+              modelDir: parsed.CHAT_GUARD_MODEL_DIR,
+              threshold: parsed.CHAT_GUARD_THRESHOLD,
+              timeoutMs: parsed.CHAT_GUARD_TIMEOUT_MS,
+            }
+          : { kind: 'rules' },
     },
     turnstile:
       parsed.AI_ENABLED &&

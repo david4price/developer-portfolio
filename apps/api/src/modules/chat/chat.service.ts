@@ -235,7 +235,7 @@ export class ChatService {
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
-      const screened = this.guard.screenMessage(message);
+      const screened = await this.guard.screenMessage(message);
       if (!screened.allowed) {
         this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();

@@ -6,10 +6,12 @@ import { REDIS } from '../../redis/redis.module.js';
 import { CHAT_SESSION_STORE } from './chat-session.store.js';
 import { ChatController } from './chat.controller.js';
 import { AI_LEASE_MS, ChatService } from './chat.service.js';
+import { ClassifierMessageGuard } from './classifier-message-guard.js';
 import { HeuristicMessageGuard } from './heuristic-message-guard.js';
 import { KNOWLEDGE_BASE } from './knowledge-base.js';
 import { AI_CONCURRENCY, RATE_LIMITER } from './limits.js';
-import { MESSAGE_GUARD } from './message-guard.js';
+import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
+import { OnnxInjectionClassifier } from './onnx-injection-classifier.js';
 import { RedisChatSessionStore } from './redis-chat-session.store.js';
 import { RegistryKnowledgeBase } from './registry-knowledge-base.js';
 import { RedisAiConcurrencyLimiter, RedisRateLimiter } from './redis-limits.js';
@@ -44,7 +46,15 @@ import {
     },
     {
       provide: MESSAGE_GUARD,
-      useFactory: () => new HeuristicMessageGuard(),
+      inject: [API_CONFIG],
+      useFactory: async ({ chat: { guard } }: ApiConfig): Promise<MessageGuard> => {
+        const rules = new HeuristicMessageGuard();
+        if (guard.kind === 'rules') return rules;
+        // Loaded at startup (about a second), so a missing or corrupt model stops the pod
+        // instead of silently screening with rules only.
+        const classifier = await OnnxInjectionClassifier.load(guard.modelDir);
+        return new ClassifierMessageGuard(rules, classifier, guard);
+      },
     },
     {
       provide: CHAT_SESSION_STORE,

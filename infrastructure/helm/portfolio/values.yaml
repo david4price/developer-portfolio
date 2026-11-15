@@ -60,6 +60,21 @@ api:
     egress:
       cidr: ''
       port: 0
+  # Visitor message screening (P5-08). `rules` is pattern matching only. `classifier` runs the
+  # rules, then a CPU prompt-injection classifier baked into the API image, and the pod uses
+  # `classifierResources` instead of `resources`: the model and tokenizer take about 650 MiB.
+  messageGuard:
+    mode: rules
+    # Scores at or above this reject the message.
+    threshold: 0.5
+    # Longest a message waits for a score; after that the rules' verdict stands alone.
+    timeoutMs: 2000
+    classifierResources:
+      requests:
+        cpu: 100m
+        memory: 896Mi
+      limits:
+        memory: 1280Mi
   resources:
     requests:
       cpu: 50m
