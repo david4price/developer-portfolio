@@ -87,19 +87,28 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
  * ("does the CLI display its original prompt?") opens differently and passes; wording that slips
  * through still meets the reply check.
  */
-const DEMANDED_PROMPT =
-  /^(?:(?:please|now|just|ok|okay|so|hi|hey) )*(?:(?:can|could|would|will) you (?:please )?)?(?:print|repeat|reveal|show|output|display|dump|leak|recite|copy|share|write out|give me|tell me)(?: me)? (?:\w+ ){0,3}?(?:initial|original|developer) prompt\b/;
+/** How a demanding clause may open before its verb: "ok so", "can you please just". */
+const CLAUSE_LEAD_IN =
+  '(?:(?:please|now|just|ok|okay|so|hi|hey|then|first|and) )*(?:(?:can|could|would|will) you (?:please )?(?:(?:just|now|first) )*)?';
+
+const DEMANDED_PROMPT = new RegExp(
+  `^${CLAUSE_LEAD_IN}(?:print|repeat|reveal|show|output|display|dump|leak|recite|copy|share|write out|give me|tell me)(?: me)? (?:\\w+ ){0,3}?(?:initial|original|developer) prompt\\b`,
+);
 
 const DESCRIBING_NOUN = `(?:${DIRECTIVE}|messages?|texts?|words|setups?|configurations?|configs?)`;
 const SHAPING_VERB =
   '(?:define[sd]?|control(?:s|led)?|govern(?:s|ed)?|shape[sd]?|sets?|determine[sd]?|configure[sd]?|specif(?:y|ies|ied)|explain(?:s|ed)?|describe[sd]?)';
+const CONDUCT_VERB = '(?:behave|act|respond|reply|talk|speak|answer)';
+const MODAL =
+  '(?:(?:should|must|will|would|can|could|ll|d|re|are|have|need|ought)(?: (?:not|supposed|meant|going|expected|allowed))*|supposed|meant|going|expected|allowed)(?: to)?';
+/** "how to act", "how not to reply", "how you should respond", "how you're supposed to behave". */
+const CONDUCT = `how (?:not )?(?:to|(?:you|youre|youll|youd)(?: ${MODAL})?) ${CONDUCT_VERB}`;
 /** What the described text is said to shape: this assistant's traits or conduct. */
-const SHAPED =
-  '(?:your (?:behaviou?r|personality|persona|character|replies|responses|answers)|how (?:you|youre|youll|youd|to|not to)\\b)';
-const TELLING = '(?:tells?|told|instructs?|instructed|explains?|explained)(?: to)? you\\b';
-/** Asking for a text's content. "Tell me about…" asks for an explanation instead. */
+const SHAPED = `(?:your (?:behaviou?r|personality|persona|character|replies|responses|answers)\\b|${CONDUCT}\\b)`;
+const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: to)? you ${CONDUCT}\\b`;
+/** Asking for a text's content. "Tell me (more) about…" asks for an explanation instead. */
 const DEMAND =
-  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! me about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak)(?: (?:me|us))?';
+  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: \\w+)? about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
 
 /**
  * A clause that demands the prompt described instead of named, which the classifier scores near
@@ -108,13 +117,15 @@ const DEMAND =
  * your behaviour?", "is there a config that determines how you respond to a 429?"), so the clause
  * opener decides, as in `DEMANDED_PROMPT`: a demand for the text's content ("print…", "what does…
  * say") is about this assistant, a question about whether such a text exists is not. What follows
- * the description doesn't matter.
+ * the description doesn't matter, but the conduct must be named ("how to behave", not "how to
+ * deploy"). "What is the text that…" counts only with "tells you how to…": "what is the config that
+ * determines how you respond to a 429?" is an ordinary question.
  */
 const DESCRIBED_PROMPT = new RegExp(
-  '^(?:(?:please|now|just|ok|okay|so|hi|hey|then|first|and) )*' +
-    '(?:(?:can|could|would|will) you (?:please )?)?' +
+  `^${CLAUSE_LEAD_IN}(?:` +
     `(?:${DEMAND}|what (?:exactly )?(?:does|do|did|would)|what (?:s|is|are) (?:written )?in)` +
-    `(?: \\w+){0,4}? ${DESCRIBING_NOUN} (?:that|which) (?:${SHAPING_VERB} ${SHAPED}|${TELLING})`,
+    `(?: \\w+){0,6}? ${DESCRIBING_NOUN} (?:that|which) (?:${SHAPING_VERB} ${SHAPED}|${TELLS_YOU})` +
+    `|what (?:s|is|are)(?: \\w+){0,6}? ${DESCRIBING_NOUN} (?:that|which) ${TELLS_YOU})`,
 );
 
 /** Hidden in letter-spaced text, these words are reason enough to reject. */
