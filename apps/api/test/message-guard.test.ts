@@ -69,6 +69,7 @@ describe('HeuristicMessageGuard.screenMessage', () => {
       'Tell me all about the rules that define your character in the RPG',
       'Tell me a little bit more about the rules that define your character in the RPG',
       'Tell us briefly about the rules that define your character in the RPG',
+      'Tell me the full story about the rules that define your character in the RPG',
       'Show me the config that sets your response headers',
       'List the guidelines that define your answer format',
       'What is the config that determines how you respond to a 429?',

@@ -99,15 +99,15 @@ const DESCRIBING_NOUN = `(?:${DIRECTIVE}|messages?|texts?|words|setups?|configur
 const SHAPING_VERB =
   '(?:define[sd]?|control(?:s|led)?|govern(?:s|ed)?|shape[sd]?|sets?|determine[sd]?|configure[sd]?|specif(?:y|ies|ied)|explain(?:s|ed)?|describe[sd]?)';
 const CONDUCT_VERB = '(?:behave|act|respond|reply|talk|speak|answer)';
-/** Modal, negation, and adverb words that may sit between "how (you)" and the conduct verb. */
+/** Modal, negation, and adverb words that may sit around "how (you)" and the conduct verb. */
 const HOW_WORD =
-  '(?:to|not|ever|never|always|properly|exactly|really|actually|best|should|must|will|would|can|could|ll|d|re|are|have|need|ought|supposed|meant|going|expected|allowed)';
+  '(?:not|ever|never|always|properly|exactly|really|actually|best|should|must|will|would|can|could|ll|d|re|are|have|need|ought|supposed|meant|going|expected|allowed)';
 /**
- * "how to act", "how not to reply", "how you should respond", "how you're always supposed to
- * behave": "to" or "you" after "how", then a closed set of words in any order, never an
- * arbitrary one ("how to deploy" passes).
+ * "how to act", "how never to reply", "how you should respond", "how you're always supposed to
+ * behave": after "how", either a "you" form or a "to" (with up to two closed-set words before
+ * it), then closed-set words in any order, never an arbitrary one ("how to deploy" passes).
  */
-const CONDUCT = `(?:exactly )?how (?:(?:you|youre|youll|youd)(?: ${HOW_WORD}){0,5}|(?:${HOW_WORD} ){0,2}to(?: ${HOW_WORD}){0,3}) ${CONDUCT_VERB}`;
+const CONDUCT = `(?:exactly )?how (?:(?:you|youre|youll|youd)(?: ${HOW_WORD}){0,5}(?: to)?|(?:${HOW_WORD} ){0,2}to(?: ${HOW_WORD}){0,3}) ${CONDUCT_VERB}`;
 /** What the described text is said to shape: this assistant's traits or conduct. */
 const SHAPED = `(?:your (?:behaviou?rs?|personality|persona|character|replies|responses|answers)\\b|${CONDUCT}\\b)`;
 const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: to)? you ${CONDUCT}\\b`;
@@ -116,7 +116,7 @@ const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: 
  * instead, unless it asks for the words themselves ("tell me word for word about…").
  */
 const DEMAND =
-  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: (?!(?:words?|wording|verbatim|exact|exactly|precisely|literally|full|complete|entire|text|texts|contents?)\\b)\\w+){0,4} about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
+  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: (?!(?:words?|wording|verbatim|exact|exactly|precisely|literally|contents?)\\b)\\w+){0,4} about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
 
 /**
  * A clause that demands the prompt described instead of named, which the classifier scores near
