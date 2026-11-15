@@ -31,7 +31,7 @@ import {
       useFactory: (config: ApiConfig): SessionChallenge =>
         config.turnstile.enabled
           ? new CloudflareSessionChallenge(config.turnstile)
-          : { verify: async () => false },
+          : { verify: async () => ({ verified: false, reasons: ['challenge-disabled'] }) },
     },
     {
       provide: CHALLENGE_REPLAY_STORE,

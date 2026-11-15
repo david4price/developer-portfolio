@@ -121,6 +121,18 @@ drill), and the Redis claim covers the rest. Send drill tokens one at a time oth
 five minutes of solving the challenge; closing the popup does not invalidate a solved token. Confirm
 that non-chat routes work while Siteverify is unreachable. Do not log tokens or secret keys.
 
+Each refused session logs one API warning, `Chat session challenge rejected`, with its
+`requestId` (the one in the client's error) and `reasons`. The reasons are Siteverify's error
+codes, such as `timeout-or-duplicate` (expired, already used, or sent concurrently) and
+`invalid-input-response`; `hostname-mismatch` or `action-mismatch` (Cloudflare accepted the
+token, but for another site or form); `missing-token`; or `replayed` (already claimed by a
+session). Siteverify outages log `Chat session challenge unavailable`. Tokens, hostnames, and
+secrets are never logged:
+
+```bash
+kubectl logs -n portfolio -l app.kubernetes.io/component=api --since=1h | grep 'challenge'
+```
+
 Expected impact is limited to chat session creation and the API's outbound verification traffic.
 Roll back by disabling AI, reverting configuration/image changes, and removing the new egress
 rule. Delete the dedicated widget after confirming it has no remaining consumer. Existing

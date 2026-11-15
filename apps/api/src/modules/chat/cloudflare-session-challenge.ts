@@ -1,6 +1,10 @@
 import { CHAT_SESSION_CHALLENGE_ACTION } from '@portfolio/shared-types';
 import { z } from 'zod';
-import { ChallengeUnavailableError, type SessionChallenge } from './session-challenge.js';
+import {
+  ChallengeUnavailableError,
+  type ChallengeVerdict,
+  type SessionChallenge,
+} from './session-challenge.js';
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const MAX_RESPONSE_BYTES = 8_192;
@@ -22,6 +26,28 @@ export interface CloudflareChallengeOptions {
   readonly timeoutMs?: number;
 }
 
+/** Siteverify error codes look like `timeout-or-duplicate`; anything else is not logged. */
+const ERROR_CODE = /^[a-z0-9-]{1,40}$/;
+const MAX_LOGGED_CODES = 5;
+
+/** Success needs Cloudflare's yes plus this site's hostname and the chat action. */
+function verdictOf(
+  result: z.infer<typeof verificationSchema>,
+  hostnames: readonly string[],
+): ChallengeVerdict {
+  if (!result.success) {
+    const codes = (result['error-codes'] ?? []).filter((code) => ERROR_CODE.test(code));
+    const reasons = codes.slice(0, MAX_LOGGED_CODES);
+    return { verified: false, reasons: reasons.length > 0 ? reasons : ['unsuccessful'] };
+  }
+  const reasons: string[] = [];
+  if (result.hostname === undefined || !hostnames.includes(result.hostname.toLowerCase())) {
+    reasons.push('hostname-mismatch');
+  }
+  if (result.action !== CHAT_SESSION_CHALLENGE_ACTION) reasons.push('action-mismatch');
+  return reasons.length === 0 ? { verified: true } : { verified: false, reasons };
+}
+
 /** Fixed HTTPS endpoint, no redirects, bounded response, and a deadline covering the body too. */
 export class CloudflareSessionChallenge implements SessionChallenge {
   constructor(
@@ -29,7 +55,7 @@ export class CloudflareSessionChallenge implements SessionChallenge {
     private readonly fetchResponse: typeof fetch = fetch,
   ) {}
 
-  async verify(token: string): Promise<boolean> {
+  async verify(token: string): Promise<ChallengeVerdict> {
     try {
       const response = await this.fetchResponse(SITEVERIFY_URL, {
         method: 'POST',
@@ -48,12 +74,7 @@ export class CloudflareSessionChallenge implements SessionChallenge {
       if (result['error-codes']?.some((code) => configurationErrors.has(code))) {
         throw new ChallengeUnavailableError();
       }
-      return (
-        result.success &&
-        result.hostname !== undefined &&
-        this.options.hostnames.includes(result.hostname.toLowerCase()) &&
-        result.action === CHAT_SESSION_CHALLENGE_ACTION
-      );
+      return verdictOf(result, this.options.hostnames);
     } catch {
       // Never expose tokens, secrets, upstream bodies, or network errors to callers or logs.
       throw new ChallengeUnavailableError();

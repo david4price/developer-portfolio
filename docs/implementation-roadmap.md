@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Session refusals are now explained in the API logs: one warning per refused session with its
+  request ID and reasons (Siteverify error codes, hostname or action mismatch, missing token, or
+  replayed), never the token. The live drill had needed a manual Siteverify call for this.
 - P5-04 complete: owner browser checks passed, and the live token drill showed fake, reused,
   and concurrent tokens never yield more than one session (details on the checklist item).
 - English-only replies: the reference model answered Hebrew and Russian in kind, and its Hebrew

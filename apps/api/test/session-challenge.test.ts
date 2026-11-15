@@ -59,22 +59,51 @@ describe('CloudflareSessionChallenge (contract, fake server)', () => {
       });
       request.on('end', () => response.end(JSON.stringify(success)));
     };
-    assert.equal(await adapter().verify('visitor-token'), true);
+    assert.deepEqual(await adapter().verify('visitor-token'), { verified: true });
     assert.deepEqual(JSON.parse(body), { secret: 'local-test-secret', response: 'visitor-token' });
   });
 
-  it('rejects unsuccessful, expired, replayed, wrong-host, and wrong-action tokens', async () => {
-    for (const result of [
-      { success: false, 'error-codes': ['invalid-input-response'] },
-      { success: false, 'error-codes': ['timeout-or-duplicate'] },
-      { ...success, hostname: 'attacker.example.com' },
-      { ...success, hostname: 'sub.portfolio.example.com' },
-      { ...success, action: 'other_form' },
-      { success: true },
-    ]) {
+  it('rejects unsuccessful, expired, replayed, wrong-host, and wrong-action tokens, with reasons', async () => {
+    const cases: [object, string[]][] = [
+      [{ success: false, 'error-codes': ['invalid-input-response'] }, ['invalid-input-response']],
+      [{ success: false, 'error-codes': ['timeout-or-duplicate'] }, ['timeout-or-duplicate']],
+      [{ success: false }, ['unsuccessful']],
+      [{ ...success, hostname: 'attacker.example.com' }, ['hostname-mismatch']],
+      [{ ...success, hostname: 'sub.portfolio.example.com' }, ['hostname-mismatch']],
+      [{ ...success, action: 'other_form' }, ['action-mismatch']],
+      [{ success: true }, ['hostname-mismatch', 'action-mismatch']],
+    ];
+    for (const [result, reasons] of cases) {
       handle = (_request, response) => response.end(JSON.stringify(result));
-      assert.equal(await adapter().verify('visitor-token'), false, JSON.stringify(result));
+      assert.deepEqual(
+        await adapter().verify('visitor-token'),
+        { verified: false, reasons },
+        JSON.stringify(result),
+      );
     }
+  });
+
+  it('logs only well-formed Siteverify codes, and at most five', async () => {
+    handle = (_request, response) =>
+      response.end(
+        JSON.stringify({
+          success: false,
+          'error-codes': [
+            'bad-request',
+            'Token: abc\nInjected',
+            'x'.repeat(41),
+            'a',
+            'b',
+            'c',
+            'd',
+            'e',
+          ],
+        }),
+      );
+    assert.deepEqual(await adapter().verify('visitor-token'), {
+      verified: false,
+      reasons: ['bad-request', 'a', 'b', 'c', 'd'],
+    });
   });
 
   it('treats configuration errors and upstream failures as unavailable', async () => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { after, beforeEach, describe, it } from 'node:test';
+import { after, beforeEach, describe, it, mock } from 'node:test';
+import { Logger } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { ApiErrorResponse, ChatMessageResponse } from '@portfolio/shared-types';
 import {
@@ -253,6 +254,36 @@ describe('chat sessions and messages', () => {
     }
     assert.equal(store.sessions.size, 0);
     assert.deepEqual(challenge.tokens, ['invalid'], 'missing tokens never call the provider');
+  });
+
+  it('logs why a session challenge was refused, with the request ID and never the token', async () => {
+    const warn = mock.method(Logger.prototype, 'warn', () => {});
+    try {
+      const post = (payload?: object) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/chat/sessions',
+          ...(payload === undefined ? {} : { payload }),
+        });
+      await post();
+      await post({ turnstileToken: 'invalid' });
+      assert.equal((await post({ turnstileToken: 'secret-token-once' })).statusCode, 201);
+      assert.equal((await post({ turnstileToken: 'secret-token-once' })).statusCode, 403);
+
+      const logged = warn.mock.calls.map((call) => call.arguments[0] as Record<string, unknown>);
+      const rejections = logged.filter(
+        (entry) => entry.message === 'Chat session challenge rejected',
+      );
+      assert.deepEqual(
+        rejections.map((entry) => entry.reasons),
+        [['missing-token'], ['invalid-input-response'], ['replayed']],
+      );
+      for (const entry of rejections) assert.equal(typeof entry.requestId, 'string');
+      const everything = JSON.stringify(logged);
+      assert.ok(!everything.includes('secret-token-once') && !everything.includes('"invalid"'));
+    } finally {
+      warn.mock.restore();
+    }
   });
 
   it('bounds and validates session request bodies before verification', async () => {

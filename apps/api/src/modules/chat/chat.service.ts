@@ -36,6 +36,7 @@ import {
   type ChallengeReplayStore,
   ChallengeUnavailableError,
   SESSION_CHALLENGE,
+  type ChallengeVerdict,
   type SessionChallenge,
 } from './session-challenge.js';
 
@@ -154,25 +155,16 @@ export class ChatService {
   async createSession(
     clientBucket: string,
     token: string | undefined,
+    requestId: string,
   ): Promise<{ sessionId: string; session: ChatSession }> {
     // Don't hand out sessions for a chat that can't answer.
     if (!this.ai.enabled) throw aiDisabled();
     await this.enforce(`ip:${clientBucket}:sessions`, this.limits.ipSessionsPerHour, HOUR_SECONDS);
     // Failed attempts cost quota too, and rate-limited requests never call Siteverify.
-    let verified = false;
-    if (token !== undefined) {
-      try {
-        verified = await this.challenge.verify(token);
-      } catch (error) {
-        if (!(error instanceof ChallengeUnavailableError)) throw error;
-        throw new ApiException(
-          HttpStatus.SERVICE_UNAVAILABLE,
-          'challenge_unavailable',
-          'Verification is temporarily unavailable. Try again with a new challenge.',
-        );
-      }
-    }
-    if (!verified || token === undefined || !(await this.challengeReplay.claim(token))) {
+    const reasons = await this.challengeRejection(token, requestId);
+    if (reasons !== undefined) {
+      // Why, for operators: Siteverify codes or a mismatch, never the token itself.
+      this.logger.warn({ message: 'Chat session challenge rejected', reasons, requestId });
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         'challenge_failed',
@@ -182,6 +174,28 @@ export class ChatService {
     const sessionId = newSessionId();
     const session = await this.store.create(sessionId, CHAT_SESSION_TTL_SECONDS);
     return { sessionId, session };
+  }
+
+  /** Reasons the token can't start a session, or undefined when it can (and is now claimed). */
+  private async challengeRejection(
+    token: string | undefined,
+    requestId: string,
+  ): Promise<readonly string[] | undefined> {
+    if (token === undefined) return ['missing-token'];
+    let verdict: ChallengeVerdict;
+    try {
+      verdict = await this.challenge.verify(token);
+    } catch (error) {
+      if (!(error instanceof ChallengeUnavailableError)) throw error;
+      this.logger.warn({ message: 'Chat session challenge unavailable', requestId });
+      throw new ApiException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'challenge_unavailable',
+        'Verification is temporarily unavailable. Try again with a new challenge.',
+      );
+    }
+    if (!verdict.verified) return verdict.reasons;
+    return (await this.challengeReplay.claim(token)) ? undefined : ['replayed'];
   }
 
   async sendMessage(
