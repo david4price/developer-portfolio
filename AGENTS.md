@@ -102,13 +102,14 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Run `/code-review` on everything the push would publish: the commits in `@{upstream}..HEAD`,
-   or the branch against `main` when it has no upstream yet. Uncommitted changes are not pushed;
+1. Run `/code-review high` on everything the push would publish: the commits in
+   `@{upstream}..HEAD`, or the branch against `main` when it has no upstream yet. Always at `high`,
+   whatever the size of the change; a lower level needs the user's say-so. Uncommitted changes are not pushed;
    commit or exclude them first.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
 3. After fixes, re-run the quality gates above and the `verify` skill, then review the new commits
-   again.
+   again, also at `high`.
 4. In the handoff, say that the review ran, at which level, and what it found.
 
 ## Working Agreements
