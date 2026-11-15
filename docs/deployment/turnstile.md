@@ -115,7 +115,10 @@ token to retry. Verification and Redis outages never grant sessions.
 Before applying changes, run `pnpm check`, `pnpm build`, `pnpm helm:check`, and the privacy scan.
 For the live drill, valid hostname/action must create a secure session cookie; absent, expired,
 invalid, wrong-host, wrong-action, and reused tokens must fail without a cookie. Repeat one
-token concurrently through multiple replicas and confirm exactly one session is issued. Confirm
+token concurrently and confirm that at most one session is issued: Siteverify itself may reject
+every concurrent verification of a token as `timeout-or-duplicate` (observed in the 2026-11-15
+drill), and the Redis claim covers the rest. Send drill tokens one at a time otherwise, within
+five minutes of solving the challenge; closing the popup does not invalidate a solved token. Confirm
 that non-chat routes work while Siteverify is unreachable. Do not log tokens or secret keys.
 
 Expected impact is limited to chat session creation and the API's outbound verification traffic.
