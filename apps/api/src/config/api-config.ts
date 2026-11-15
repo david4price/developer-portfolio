@@ -19,7 +19,8 @@ export const messageGuardNames = ['rules', 'classifier'] as const;
 
 /**
  * How visitor messages are screened (P5-08). `classifier` runs the rules, then a CPU injection
- * classifier loaded from `modelDir`; it needs about 1 GiB more memory than `rules`.
+ * classifier loaded from `modelDir`; it needs about 650 MiB more memory than `rules`. With AI off
+ * no message reaches screening, so the guard is always `rules` and no model is loaded.
  */
 export type MessageGuardConfig =
   | { readonly kind: 'rules' }
@@ -202,7 +203,7 @@ export function loadApiConfig(
       ipSessionsPerHour: parsed.CHAT_IP_SESSIONS_PER_HOUR,
       trustCfConnectingIp: parsed.CHAT_TRUST_CF_CONNECTING_IP,
       guard:
-        parsed.CHAT_GUARD === 'classifier'
+        parsed.CHAT_GUARD === 'classifier' && parsed.AI_ENABLED
           ? {
               kind: 'classifier',
               modelDir: parsed.CHAT_GUARD_MODEL_DIR,

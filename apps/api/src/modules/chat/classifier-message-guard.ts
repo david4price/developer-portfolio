@@ -1,4 +1,4 @@
-import { Logger, type OnModuleDestroy } from '@nestjs/common';
+import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { InjectionClassifierBusyError, type InjectionClassifier } from './injection-classifier.js';
 import type { MessageGuard, ReplyRejection, ScreenedMessage } from './message-guard.js';
 
@@ -24,7 +24,7 @@ type Degraded = 'classifier_busy' | 'classifier_timeout' | 'classifier_error';
  * quotas), and refusing every message whenever the classifier lags would let a burst of traffic
  * take the chat down.
  */
-export class ClassifierMessageGuard implements MessageGuard, OnModuleDestroy {
+export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdown {
   private readonly logger = new Logger('MessageGuard');
 
   constructor(
@@ -47,7 +47,8 @@ export class ClassifierMessageGuard implements MessageGuard, OnModuleDestroy {
       : screened;
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** After the HTTP server has closed, so no request can reach a released model. */
+  async onApplicationShutdown(): Promise<void> {
     await this.classifier.dispose?.();
   }
 
@@ -57,8 +58,8 @@ export class ClassifierMessageGuard implements MessageGuard, OnModuleDestroy {
   }
 
   private async scoreWithin(text: string): Promise<number | Degraded> {
-    // Aborting on timeout drops the message from the classifier's queue if it hasn't started, so
-    // a burst doesn't leave the queue full of work nobody is waiting for.
+    // Aborting on timeout frees the message's place in the classifier's queue and stops its
+    // remaining windows, so a burst doesn't leave the queue full of work nobody is waiting for.
     const abandon = new AbortController();
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<Degraded>((resolve) => {

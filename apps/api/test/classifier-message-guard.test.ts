@@ -102,7 +102,7 @@ describe('ClassifierMessageGuard', () => {
 
   it('frees the model on shutdown', async () => {
     const { guard, classifier } = guardWith(async () => 0);
-    await guard.onModuleDestroy();
+    await guard.onApplicationShutdown();
     assert.equal(classifier.disposed, true);
   });
 

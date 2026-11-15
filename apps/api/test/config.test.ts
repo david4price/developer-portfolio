@@ -192,16 +192,30 @@ describe('loadApiConfig', () => {
     }
   });
 
-  it('screens with rules unless the classifier is chosen', () => {
-    assert.deepEqual(loadApiConfig(required).chat.guard, { kind: 'rules' });
-    assert.deepEqual(loadApiConfig({ ...required, CHAT_GUARD: 'classifier' }).chat.guard, {
+  it('screens with rules unless the classifier is chosen and AI is on', () => {
+    const ai = {
+      ...required,
+      AI_ENABLED: 'true',
+      AI_PROVIDER: 'openai-compatible',
+      AI_MODEL: 'example-model',
+      AI_BASE_URL: 'http://inference.internal:8000/v1',
+      TURNSTILE_SECRET_KEY: 'test-only-challenge-secret',
+      TURNSTILE_HOSTNAMES: 'portfolio.example.com',
+    };
+    assert.deepEqual(loadApiConfig(ai).chat.guard, { kind: 'rules' });
+    assert.deepEqual(
+      loadApiConfig({ ...required, CHAT_GUARD: 'classifier' }).chat.guard,
+      { kind: 'rules' },
+      'with AI off nothing is screened, so no model is loaded',
+    );
+    assert.deepEqual(loadApiConfig({ ...ai, CHAT_GUARD: 'classifier' }).chat.guard, {
       kind: 'classifier',
       modelDir: 'models/injection-classifier',
       threshold: 0.5,
       timeoutMs: 2_000,
     });
     const tuned = loadApiConfig({
-      ...required,
+      ...ai,
       CHAT_GUARD: 'classifier',
       CHAT_GUARD_MODEL_DIR: '/models/guard',
       CHAT_GUARD_THRESHOLD: '0.8',

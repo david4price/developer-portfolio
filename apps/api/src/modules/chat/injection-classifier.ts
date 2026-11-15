@@ -5,10 +5,10 @@
 export interface InjectionClassifier {
   /**
    * Probability in [0, 1] that `text` is an injection attempt. Rejects when it can't answer.
-   * Once `signal` aborts, queued work for it is skipped instead of run for nobody.
+   * Once `signal` aborts, the work frees its queue place at once and is skipped or stopped.
    */
   score(text: string, signal?: AbortSignal): Promise<number>;
-  /** Waits for work in progress, then frees the model. */
+  /** Refuses new work, waits for queued work to settle, then frees the model. */
   dispose?(): Promise<void>;
 }
 

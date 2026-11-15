@@ -103,13 +103,32 @@ describe('injection classifier evaluation', () => {
     }
   });
 
-  it('skips queued work whose caller gave up', async () => {
-    const gaveUp = new AbortController();
-    const first = classifier.score('Which projects use Go?');
-    const second = classifier.score('Which projects use Rust?', gaveUp.signal);
-    gaveUp.abort();
-    assert.equal(typeof (await first), 'number');
-    await assert.rejects(second, { name: 'AbortError' });
+  it('frees the queue place of work whose caller gave up, and skips it', async () => {
+    const small = await OnnxInjectionClassifier.load(modelDir ?? '', { maxQueued: 1 });
+    try {
+      const long = 'The portfolio has a Kubernetes project and a recipe app. '.repeat(80);
+      const running = small.score(long);
+      const gaveUp = new AbortController();
+      const abandoned = small.score('Which projects use Rust?', gaveUp.signal);
+      // The queue is full (one running, one waiting) until the waiting caller gives up.
+      await assert.rejects(small.score('Which projects use Go?'), InjectionClassifierBusyError);
+      gaveUp.abort();
+      const next = small.score('Which projects use Go?');
+      await assert.rejects(abandoned, { name: 'AbortError' });
+      assert.equal(typeof (await running), 'number');
+      assert.equal(typeof (await next), 'number');
+    } finally {
+      await small.dispose();
+    }
+  });
+
+  it('refuses new work once disposed, after finishing what was queued', async () => {
+    const small = await OnnxInjectionClassifier.load(modelDir ?? '');
+    const queued = small.score('Which projects use Go?');
+    const disposing = small.dispose();
+    await assert.rejects(small.score('Which projects use Rust?'), /disposed/);
+    assert.equal(typeof (await queued), 'number');
+    await disposing;
   });
 
   it('refuses work beyond its queue instead of piling it up', async () => {

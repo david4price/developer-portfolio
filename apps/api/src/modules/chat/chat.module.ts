@@ -47,10 +47,9 @@ import {
     {
       provide: MESSAGE_GUARD,
       inject: [API_CONFIG],
-      useFactory: async ({ ai, chat: { guard } }: ApiConfig): Promise<MessageGuard> => {
+      useFactory: async ({ chat: { guard } }: ApiConfig): Promise<MessageGuard> => {
         const rules = new HeuristicMessageGuard();
-        // With AI off, no message reaches screening: don't spend the memory on a model.
-        if (guard.kind === 'rules' || !ai.enabled) return rules;
+        if (guard.kind === 'rules') return rules;
         // Loaded at startup (about a second), so a missing or corrupt model stops the pod
         // instead of silently screening with rules only.
         const classifier = await OnnxInjectionClassifier.load(guard.modelDir);

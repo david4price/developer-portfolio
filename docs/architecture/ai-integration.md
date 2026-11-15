@@ -245,12 +245,13 @@ still checked by the rules.
   image fetches it in its own build stage. ONNX files are a graph and weights, not code.
 - **Runtime:** `onnxruntime-node` on the CPU, one thread, one message at a time, with up to 8
   waiting (more are refused at once). Inference runs on the libuv thread pool, so it never blocks
-  the event loop. Long messages are scored in 512-token windows that overlap by a quarter, and the
-  highest score counts, so an attack can't hide past a truncation point or across a boundary.
-  Queued work whose caller timed out is skipped. The native binaries need glibc, so the Node images
+  the event loop. Long messages are scored in 512-token windows, and the highest score counts:
+  nothing is truncated, and windows overlap by 127 tokens, so a phrase up to that long can't be
+  split across a boundary. A message whose caller timed out frees its queue place at once and
+  stops between windows. The native binaries need glibc, so the Node images
   are Debian slim instead of Alpine. No GPU, and no call to the inference runtime.
-- **Failure:** with AI enabled, a model that doesn't load stops the API at startup (with AI off,
-  no model is loaded). At runtime, a full queue, an
+- **Failure:** a model that doesn't load stops the API at startup. With AI off no message is
+  screened, so the guard stays `rules` and no model is loaded. At runtime, a full queue, an
   error, or no score within `CHAT_GUARD_TIMEOUT_MS` (2 s) leaves the rules' verdict standing and
   logs `Message screened by rules only` with the cause. Refusing every message whenever the
   classifier lags would let a burst of traffic take the chat down, and screening is one layer

@@ -37,6 +37,7 @@ const INJECTION_LABEL = 'INJECTION';
 export class OnnxInjectionClassifier implements InjectionClassifier {
   private queued = 0;
   private tail: Promise<unknown> = Promise.resolve();
+  private disposed = false;
 
   private constructor(
     private readonly session: ort.InferenceSession,
@@ -53,6 +54,9 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
     directory: string,
     { windowTokens = 512, maxQueued = 8 }: OnnxInjectionClassifierOptions = {},
   ): Promise<OnnxInjectionClassifier> {
+    if (!Number.isInteger(windowTokens) || windowTokens < 16) {
+      throw new RangeError('windowTokens must be an integer of at least 16');
+    }
     const json = async (file: string): Promise<unknown> =>
       JSON.parse(await readFile(join(directory, file), 'utf8'));
     const [config, tokenizerJson, tokenizerConfig, model] = await Promise.all([
@@ -97,31 +101,47 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
   }
 
   score(text: string, signal?: AbortSignal): Promise<number> {
+    if (this.disposed) return Promise.reject(new Error('injection classifier is disposed'));
+    if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.queued > this.maxQueued) return Promise.reject(new InjectionClassifierBusyError());
+
+    // A message holds its queue place until it settles or its caller gives up, whichever is first.
     this.queued++;
-    const run = this.tail.then(() => {
-      signal?.throwIfAborted();
-      return this.scoreNow(text);
-    });
+    let holding = true;
+    const leave = () => {
+      if (holding) this.queued--;
+      holding = false;
+    };
+    signal?.addEventListener('abort', leave, { once: true });
+    const run = this.tail.then(() => this.scoreNow(text, signal));
     this.tail = run.catch(() => undefined);
-    return run.finally(() => this.queued--);
+    return run.finally(() => {
+      signal?.removeEventListener('abort', leave);
+      leave();
+    });
   }
 
   async dispose(): Promise<void> {
-    await this.tail;
+    this.disposed = true;
+    for (let settled = this.tail; ; settled = this.tail) {
+      await settled;
+      if (settled === this.tail) break;
+    }
     await this.session.release();
   }
 
   /**
-   * The highest score over the message's windows. Windows overlap by a quarter, so a phrase that
-   * spans a boundary is whole in one of them, and nothing is cut off.
+   * The highest score over the message's windows. Nothing is cut off, and windows overlap by a
+   * quarter (127 tokens by default), so a phrase up to that long that spans a boundary is whole in
+   * one of them. Stops between windows once the caller gives up.
    */
-  private async scoreNow(text: string): Promise<number> {
+  private async scoreNow(text: string, signal?: AbortSignal): Promise<number> {
     const content = this.tokenizer.encode(text).ids.slice(1, -1);
     const size = this.windowTokens - 2;
     const stride = size - Math.floor(size / 4);
     let highest = 0;
     for (let start = 0; ; start += stride) {
+      signal?.throwIfAborted();
       const window = [this.bos, ...content.slice(start, start + size), this.eos];
       highest = Math.max(highest, await this.scoreWindow(window));
       if (start + size >= content.length) return highest;
