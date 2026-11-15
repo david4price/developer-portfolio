@@ -107,7 +107,7 @@ const HOW_WORD =
  * behave": "to" or "you" after "how", then a closed set of words in any order, never an
  * arbitrary one ("how to deploy" passes).
  */
-const CONDUCT = `(?:exactly )?how (?:(?:you|youre|youll|youd)(?: ${HOW_WORD}){0,5}|(?:not )?to(?: ${HOW_WORD}){0,2}) ${CONDUCT_VERB}`;
+const CONDUCT = `(?:exactly )?how (?:(?:you|youre|youll|youd)(?: ${HOW_WORD}){0,5}|(?:${HOW_WORD} ){0,2}to(?: ${HOW_WORD}){0,3}) ${CONDUCT_VERB}`;
 /** What the described text is said to shape: this assistant's traits or conduct. */
 const SHAPED = `(?:your (?:behaviou?rs?|personality|persona|character|replies|responses|answers)\\b|${CONDUCT}\\b)`;
 const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: to)? you ${CONDUCT}\\b`;
@@ -116,7 +116,7 @@ const TELLS_YOU = `(?:tells?|told|instructs?|instructed|explains?|explained)(?: 
  * instead, unless it asks for the words themselves ("tell me word for word about…").
  */
 const DEMAND =
-  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: (?!(?:word|verbatim|exactly|precisely|literally)\\b)\\w+){0,4} about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
+  '(?:print|show|repeat|quote|paste|reveal|output|display|give|tell(?! (?:me|us)(?: (?!(?:words?|wording|verbatim|exact|exactly|precisely|literally|full|complete|entire|text|texts|contents?)\\b)\\w+){0,4} about)|share|copy|recite|spell out|summari[sz]e|list|translate|send|write out|read out|dump|leak|i (?:want|need|d like|would like)(?: to (?:see|read|know))?)(?: (?:me|us))?';
 
 /**
  * A clause that demands the prompt described instead of named, which the classifier scores near
