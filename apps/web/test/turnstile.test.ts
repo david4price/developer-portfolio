@@ -3,16 +3,15 @@ import { describe, it } from 'node:test';
 import { CHAT_SESSION_CHALLENGE_ACTION, CHALLENGE_TOKEN_MAX_LENGTH } from '@portfolio/shared-types';
 import { mountChallenge, type TurnstileApi, type TurnstileOptions } from '../src/lib/turnstile.js';
 
-function fixture(delayed = false) {
+function fixture() {
   const tokens: (string | null)[] = [];
   const calls: string[] = [];
-  let ready = () => {};
   let options: TurnstileOptions | undefined;
   const container = {} as HTMLElement;
-  const api: TurnstileApi = {
-    ready(callback) {
-      ready = callback;
-      if (!delayed) callback();
+  // Like Turnstile when api.js was added dynamically: ready() throws instead of waiting.
+  const api: TurnstileApi & { ready(callback: () => void): void } = {
+    ready() {
+      throw new Error('turnstile.ready() would break if called before api.js is loaded');
     },
     render(element, value) {
       assert.equal(element, container);
@@ -41,7 +40,6 @@ function fixture(delayed = false) {
     tokens,
     calls,
     dispose,
-    ready: () => ready(),
     options: () => {
       assert.ok(options);
       return options;
@@ -90,10 +88,9 @@ describe('Turnstile challenge lifecycle', () => {
     assert.deepEqual(f.calls, ['render', 'remove']);
   });
 
-  it('does not mount when navigation happened before the script became ready', () => {
-    const f = fixture(true);
-    f.dispose();
-    f.ready();
-    assert.deepEqual(f.calls, []);
+  it('renders at once without turnstile.ready(), which rejects a dynamically added api.js', () => {
+    const f = fixture();
+    assert.deepEqual(f.calls, ['render']);
+    assert.equal(f.options().sitekey, 'public-test-sitekey');
   });
 });
