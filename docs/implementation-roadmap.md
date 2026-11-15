@@ -127,15 +127,18 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-06:** 🔒 connect the API to the reference inference runtime and enable AI with reviewed
-   model and verification egress. Turnstile and Pages are provisioned; AI is currently disabled.
+1. **P5-06:** 🔒 enable AI (`api.ai.enabled: true` in production values) and check one full
+   answer, and that only the API pod reaches the runtime. Already configured with AI off:
+   provider and egress in values; model, URL, and assistant name in the sealed API Secret; the
+   name in the Pages build.
 2. **P5-04:** finish browser acceptance and the real-token live drill once P5-06 is ready
    ([guide](deployment/turnstile.md)). Do not mark P5-04 complete from provisioning alone.
 3. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
+4. **P5-12:** 🔒 host firewall rule for the inference port.
 
-**Branch in progress:** P5-04 production provisioning is on `ops/p5-04-production-turnstile`;
-the server boundary (#30) and dog speech bubble (#31) are merged.
+**Branches in progress:** the chat voice is on `feat/p5-chat-persona`; P5-06 configuration
+(AI still off) is on `ops/p5-06-inference-connection`, stacked on it. Merge the persona first.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -280,7 +283,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (5/11)
+## Phase 5: AI Chatbot (5/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -312,7 +315,12 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P5-06** 🔒 Connect to the reference inference runtime with a NetworkPolicy egress rule.
       _Needs:_ P3-03. _Done when:_ only the API pod can reach it; the private assistant is
       unaffected. The chart side exists: set `api.ai.egress.cidr`/`port` (rendering fails without
-      them when AI and NetworkPolicies are on).
+      them when AI and NetworkPolicies are on). Configured 2026-11-15, AI still off: provider and
+      egress (Docker's default bridge network, the runtime's port only) in production values;
+      model, URL, and assistant name sealed in `portfolio-api-env`; the Pages build has the name.
+      A pod reached the runtime through the bridge; the `api` and `worker` pods are refused while
+      AI is off. _Pending:_ enable AI, then check one full answer and that only the API pod gets
+      through.
 - [x] **P5-07** Screen messages to and from the model. _Needs:_ P5-05. _Done when:_ injection
       attempts are rejected before the model, hidden characters never reach it, and replies that
       leak the system rules are withheld. Done 2026-11-14: `MessageGuard` port with a rule-based
@@ -339,6 +347,11 @@ Read-only inventory of the reference host. Findings:
       search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
       time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the
       existing `KNOWLEDGE_BASE` port, and the same question set shows a measured improvement.
+- [ ] **P5-12** 🔒 Host firewall rule for the inference port. _Needs:_ P5-06. _Done when:_ the
+      runtime's port accepts connections only from the host itself, Docker containers, and the pod
+      network, and other devices on the network are refused (tested from one). The rule must cover
+      Docker's published-port forwarding, not only the input hook, and must not disturb Docker's or
+      Tailscale's own rules.
 
 ## Phase 6: Infrastructure Explorer (0/4)
 

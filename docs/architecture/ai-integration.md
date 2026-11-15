@@ -43,7 +43,9 @@ API keys stay server-side.
 ## Reference Deployment (Confirmed)
 
 - Runtime: Docker Model Runner (llama.cpp backend) with an OpenAI-compatible API. It runs outside
-  Kubernetes on a 4 GB laptop GPU.
+  Kubernetes on a 4 GB laptop GPU, listening only on the host's loopback and Docker bridge
+  addresses; the API reaches it from the pod network through the bridge. The model ID and URL are
+  kept in the sealed API environment Secret.
 - Model: a 4 B-parameter instruct model, 4-bit quantized (≈2.3 GiB).
 - Capacity: 4 parallel slots with an 8k context each. The model unloads after about 5 minutes
   idle and reloads in about 2 seconds.
