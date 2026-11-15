@@ -2,15 +2,44 @@
 
 import { CHAT_MESSAGE_MAX_LENGTH } from '@portfolio/shared-types';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
 import { apiUrl } from '@/lib/api';
 import { assistantName } from '@/lib/assistant';
 import { ChatRequestError, createChatSession, sendChatMessage } from '@/lib/chat';
+import { FINE_POINTER_QUERY, sendsOnEnter } from '@/lib/chat-keys';
 import { TurnstileChallenge } from '@/components/turnstile-challenge';
 import { appendChatEntry, ChatConversation, type ChatEntry } from '@/components/chat-conversation';
 
 const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || null;
 type Phase = 'verify' | 'starting' | 'ready' | 'sending';
+/** The character counter appears only near the limit. */
+const COUNTER_FROM = Math.floor(CHAT_MESSAGE_MAX_LENGTH * 0.8);
+/** A reply taller than this share of the visible log is shown from its start, not its end. */
+const LONG_REPLY = 0.6;
+/** How much of the question above stays visible when a long reply is shown from its start. */
+const QUESTION_PEEK_PX = 48;
+
+/**
+ * Keeps the newest message in view: the bottom while a question waits for its answer; for a new
+ * reply, its start when it is long (so it is read from the top), otherwise the bottom.
+ */
+function revealLatest(log: HTMLElement, waiting: boolean) {
+  const replies = log.querySelectorAll('[data-reply]');
+  const reply = replies[replies.length - 1];
+  if (waiting || reply === undefined || reply.clientHeight <= log.clientHeight * LONG_REPLY) {
+    log.scrollTop = log.scrollHeight;
+    return;
+  }
+  log.scrollTop +=
+    reply.getBoundingClientRect().top - log.getBoundingClientRect().top - QUESTION_PEEK_PX;
+}
 
 export function PortfolioChat({
   active,
@@ -30,6 +59,8 @@ export function PortfolioChat({
   const [notice, setNotice] = useState('');
   const [message, setMessage] = useState('');
   const [entries, setEntries] = useState<readonly ChatEntry[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
+  const log = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const nextEntryId = useRef(0);
@@ -45,6 +76,9 @@ export function PortfolioChat({
   useEffect(() => {
     if (active && phase === 'ready') input.current?.focus();
   }, [active, phase]);
+  useEffect(() => {
+    if (log.current !== null) revealLatest(log.current, pending !== null);
+  }, [entries, pending]);
   const onToken = useCallback((value: string | null) => {
     setToken(value);
     if (value !== null) setVerificationFailed(false);
@@ -93,16 +127,19 @@ export function PortfolioChat({
     request.current = controller;
     setPhase('sending');
     setNotice('');
+    // Show the question at once, like a messenger; it returns to the input if sending fails.
+    setPending(question);
+    setMessage('');
     let nextPhase: Phase = 'ready';
     try {
       const answer = await sendChatMessage(messagesUrl, question, controller.signal);
       if (!controller.signal.aborted) {
         const entry = { id: nextEntryId.current++, question, answer };
         setEntries((current) => appendChatEntry(current, entry));
-        setMessage('');
       }
     } catch (error) {
       if (!controller.signal.aborted) {
+        setMessage(question);
         setNotice(error instanceof ChatRequestError ? error.message : 'Chat is unavailable.');
         if (error instanceof ChatRequestError && error.code === 'chat_session_required') {
           nextPhase = 'verify';
@@ -112,9 +149,22 @@ export function PortfolioChat({
     } finally {
       if (request.current === controller) request.current = null;
       if (!controller.signal.aborted) {
+        setPending(null);
         setPhase(nextPhase);
       }
     }
+  }
+
+  function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const finePointer = window.matchMedia(FINE_POINTER_QUERY).matches;
+    const press = {
+      key: event.key,
+      shiftKey: event.shiftKey,
+      isComposing: event.nativeEvent.isComposing,
+    };
+    if (!sendsOnEnter(press, finePointer)) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
   }
 
   if (sessionsUrl === null || messagesUrl === null || siteKey === null) {
@@ -125,76 +175,92 @@ export function PortfolioChat({
     );
   }
 
+  const started = phase === 'ready' || phase === 'sending';
+  const status =
+    phase === 'starting'
+      ? 'Starting chat…'
+      : phase === 'sending'
+        ? `${assistantName} is thinking…`
+        : phase === 'ready'
+          ? 'Chat is ready.'
+          : '';
   return (
     <section className="chat" aria-label="Portfolio chat">
-      <p>
-        Ask about the projects and technologies in this portfolio. Answers may contain mistakes.
-      </p>
-      <p className="chat-note">
-        Messages are kept for up to 24 hours. Please avoid sharing personal information.
-      </p>
-      <ChatConversation
-        assistantName={assistantName}
-        entries={entries}
-        renderLink={(link) => (
-          <Link href={link.path} onNavigate={onNavigate}>
-            {link.title}
-          </Link>
+      <div className="chat-scroll" ref={log}>
+        <p className="chat-intro">
+          Ask about the projects and technologies in this portfolio. Answers may contain mistakes.
+          Messages are kept for up to 24 hours; please avoid sharing personal information.
+        </p>
+        <ChatConversation
+          assistantName={assistantName}
+          greeting={started}
+          entries={entries}
+          pending={pending}
+          renderLink={(link) => (
+            <Link href={link.path} onNavigate={onNavigate}>
+              {link.title}
+            </Link>
+          )}
+        />
+        {/* Problems are shown; routine progress is for screen readers (the typing dots show it). */}
+        <p role="status" aria-live="polite" className={notice ? 'chat-notice' : 'visually-hidden'}>
+          {notice || status}
+        </p>
+        {phase === 'verify' && (
+          <div className="chat-verify">
+            <p>Complete the verification to start a new chat.</p>
+            {active && (
+              <TurnstileChallenge
+                key={challengeKey}
+                siteKey={siteKey}
+                onToken={onToken}
+                onUnavailable={onUnavailable}
+              />
+            )}
+            {verificationFailed && (
+              <p role="status">
+                Verification is unavailable.{' '}
+                <button type="button" onClick={resetVerification}>
+                  Retry verification
+                </button>
+              </p>
+            )}
+            <button type="button" onClick={() => void start()} disabled={token === null}>
+              Start chat
+            </button>
+          </div>
         )}
-      />
-      <p role="status" aria-live="polite">
-        {notice ||
-          (phase === 'starting'
-            ? 'Starting chat…'
-            : phase === 'sending'
-              ? 'Thinking…'
-              : phase === 'ready'
-                ? 'Chat is ready. Ask a question below.'
-                : '')}
-      </p>
-      {phase === 'verify' && (
-        <div>
-          <p>Complete the verification to start a new chat.</p>
-          {active && (
-            <TurnstileChallenge
-              key={challengeKey}
-              siteKey={siteKey}
-              onToken={onToken}
-              onUnavailable={onUnavailable}
+      </div>
+      {started && (
+        <form className="chat-composer" onSubmit={(event) => void send(event)}>
+          <label htmlFor="chat-message" className="visually-hidden">
+            Message {assistantName}
+          </label>
+          <div className="chat-composer__row">
+            <textarea
+              ref={input}
+              id="chat-message"
+              value={message}
+              maxLength={CHAT_MESSAGE_MAX_LENGTH}
+              required
+              rows={1}
+              placeholder={`Message ${assistantName}…`}
+              aria-describedby="chat-message-hint"
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={onComposerKeyDown}
+              readOnly={phase === 'sending'}
             />
-          )}
-          {verificationFailed && (
-            <p role="status">
-              Verification is unavailable.{' '}
-              <button type="button" onClick={resetVerification}>
-                Retry verification
-              </button>
-            </p>
-          )}
-          <button type="button" onClick={() => void start()} disabled={token === null}>
-            Start chat
-          </button>
-        </div>
-      )}
-      {(phase === 'ready' || phase === 'sending') && (
-        <form onSubmit={(event) => void send(event)}>
-          <label htmlFor="chat-message">Your question</label>
-          <textarea
-            ref={input}
-            id="chat-message"
-            value={message}
-            maxLength={CHAT_MESSAGE_MAX_LENGTH}
-            required
-            rows={3}
-            onChange={(event) => setMessage(event.target.value)}
-            readOnly={phase === 'sending'}
-          />
-          <p className="chat-note">
-            {message.length} / {CHAT_MESSAGE_MAX_LENGTH} characters
+            <button type="submit" disabled={phase === 'sending' || !message.trim()}>
+              Send
+            </button>
+          </div>
+          <p id="chat-message-hint" className="chat-note chat-composer__hint">
+            {message.length >= COUNTER_FROM ? (
+              `${message.length} / ${CHAT_MESSAGE_MAX_LENGTH} characters`
+            ) : (
+              <span className="chat-composer__keys">Enter to send, Shift+Enter for a new line</span>
+            )}
           </p>
-          <button type="submit" disabled={phase === 'sending' || !message.trim()}>
-            Send question
-          </button>
         </form>
       )}
     </section>
