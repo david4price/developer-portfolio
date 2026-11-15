@@ -27,6 +27,10 @@ api:
     enabled: true
   # Every request arrives through the tunnel (only cloudflared may reach the API).
   trustCloudflareClientIp: true
+  # Rules, then the CPU injection classifier baked into the API image (P5-08). The pod switches
+  # to messageGuard.classifierResources (896Mi request, 1280Mi limit) for the model.
+  messageGuard:
+    mode: classifier
 postgres:
   backup:
     enabled: true
