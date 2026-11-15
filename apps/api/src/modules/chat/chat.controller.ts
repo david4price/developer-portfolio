@@ -50,6 +50,7 @@ export class ChatController {
     const { sessionId, session } = await this.chat.createSession(
       this.bucketOf(request),
       body.turnstileToken,
+      request.id,
     );
     void reply.header('set-cookie', sessionCookie(sessionId, CHAT_SESSION_TTL_SECONDS));
     return { expiresAt: session.expiresAt };

@@ -115,8 +115,23 @@ token to retry. Verification and Redis outages never grant sessions.
 Before applying changes, run `pnpm check`, `pnpm build`, `pnpm helm:check`, and the privacy scan.
 For the live drill, valid hostname/action must create a secure session cookie; absent, expired,
 invalid, wrong-host, wrong-action, and reused tokens must fail without a cookie. Repeat one
-token concurrently through multiple replicas and confirm exactly one session is issued. Confirm
+token concurrently and confirm that at most one session is issued: Siteverify itself may reject
+every concurrent verification of a token as `timeout-or-duplicate` (observed in the 2026-11-15
+drill), and the Redis claim covers the rest. Send drill tokens one at a time otherwise, within
+five minutes of solving the challenge; closing the popup does not invalidate a solved token. Confirm
 that non-chat routes work while Siteverify is unreachable. Do not log tokens or secret keys.
+
+Each refused session logs one API warning, `Chat session challenge rejected`, with its
+`requestId` (the one in the client's error) and `reasons`. The reasons are Siteverify's error
+codes, such as `timeout-or-duplicate` (expired, already used, or sent concurrently) and
+`invalid-input-response`; `hostname-mismatch` or `action-mismatch` (Cloudflare accepted the
+token, but for another site or form); `missing-token`; or `replayed` (already claimed by a
+session). Siteverify outages log `Chat session challenge unavailable`. Tokens, hostnames, and
+secrets are never logged:
+
+```bash
+kubectl logs -n portfolio -l app.kubernetes.io/component=api --since=1h | grep 'challenge'
+```
 
 Expected impact is limited to chat session creation and the API's outbound verification traffic.
 Roll back by disabling AI, reverting configuration/image changes, and removing the new egress

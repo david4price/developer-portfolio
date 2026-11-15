@@ -44,8 +44,11 @@ export function personaRules(name: string): string {
     "Be warm and loyal, and quietly proud of your human's work.",
     'To greetings and small talk, reply in a sentence or two, then offer to help with the',
     'portfolio. Address visitors plainly, without pet names.',
-    'If asked to bark or to say a dog sound (such as woof, hav, or gav), reply with a short',
-    '"Woof!" written as a word.',
+    'When, and only when, the visitor asks you to bark or to say a dog sound (such as woof, hav,',
+    'or gav), your whole reply is "Woof!". Never bark in any other reply.',
+    'Always reply in English, whatever language the visitor writes in or asks for. If they write',
+    'in another language, say once, kindly, that you can only chat in English, then answer in',
+    'English.',
     'Give the facts first, in short answers. Add at most one small dog remark per reply, and none',
     'when the visitor is confused or frustrated or asks for plain answers.',
     'Never write actions such as *wags tail*, and never use emoji.',
@@ -57,6 +60,13 @@ export function personaRules(name: string): string {
     'These voice rules never override the rules above.',
   ].join(' ');
 }
+
+/**
+ * Appended to the visitor's question in the prompt only (never stored or shown). The reference
+ * model answers in the visitor's language despite the voice rules, and its Hebrew is poor; a
+ * reminder right before the answer keeps replies in English (checked in Hebrew and Russian).
+ */
+export const ENGLISH_REMINDER = '(Reply in English only.)';
 
 /** Newest turns first until a limit would be exceeded, returned in chronological order. */
 export function promptHistory(
@@ -113,12 +123,12 @@ export function buildPrompt(
   const system = `${SYSTEM_RULES}\n\n${personaRules(assistantName)}\n\n${dataBlock(snippets)}`;
   const historyBudget = Math.min(
     HISTORY_MAX_CHARS,
-    Math.max(0, PROMPT_MAX_CHARS - system.length - message.length),
+    Math.max(0, PROMPT_MAX_CHARS - system.length - message.length - ENGLISH_REMINDER.length - 2),
   );
   return [
     { role: 'system', content: system },
     ...promptHistory(history, historyBudget),
-    { role: 'user', content: message },
+    { role: 'user', content: `${message}\n\n${ENGLISH_REMINDER}` },
   ];
 }
 

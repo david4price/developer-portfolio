@@ -12,6 +12,15 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Session refusals are now explained in the API logs: one warning per refused session with its
+  request ID and reasons (Siteverify error codes, hostname or action mismatch, missing token, or
+  replayed), never the token. The live drill had needed a manual Siteverify call for this.
+- P5-04 complete: owner browser checks passed, and the live token drill showed fake, reused,
+  and concurrent tokens never yield more than one session (details on the checklist item).
+- English-only replies: the reference model answered Hebrew and Russian in kind, and its Hebrew
+  was poor. A reminder after the visitor's question (prompt only) keeps replies in English;
+  asked to switch, it says it can only chat in English. The bark rule is narrower ("Woof!" only
+  when asked), and the popup's intro asks for English.
 - Chat voice fix from live testing: the assistant called the site its own portfolio, took
   "say: gav" (a dog sound) for a name, and wrote `*Barks softly*`. The persona now says the
   portfolio is the developer's ("my human"), keeps small talk short, answers dog-sound requests
@@ -143,14 +152,11 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-04:** finish browser acceptance and the real-token live drill
-   ([guide](deployment/turnstile.md)): expired and reused tokens, keyboard focus, and the dog
-   poses. Do not mark P5-04 complete from provisioning alone.
-2. **P2-12:** replace the placeholder profile and experience content (owner will send the text
+1. **P2-12:** replace the placeholder profile and experience content (owner will send the text
    later). Moving the profile into a shared package lets the chat index it too.
-3. **P5-12:** 🔒 host firewall rule for the inference port.
+2. **P5-12:** 🔒 host firewall rule for the inference port.
 
-**Branch in progress:** the messenger-style chat layout is on `feat/chat-messenger-layout`.
+**Branch in progress:** English-only replies and P5-04 completion are on `feat/chat-english-only`.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -295,7 +301,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (6/12)
+## Phase 5: AI Chatbot (7/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -311,13 +317,18 @@ Read-only inventory of the reference host. Findings:
       with expiring leases and a bounded queue, per-session and per-IP quotas with `Retry-After`.
       Load test (real Redis): 12 concurrent visitors, capacity 1 + queue 2 → 3 answered, 9
       immediate `503 ai_overloaded`, none hung.
-- [ ] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
+- [x] **P5-04** 🔒 Turnstile verification. _Needs:_ P5-02. _Done when:_ invalid or missing tokens
       rejected server-side. Server boundary implemented with hostname/action binding, bounded
       Siteverify calls, rate limits before verification, and Redis single-use token claims.
       Browser integration is implemented with fresh-token handling, safe output, and offline
-      states in a site-wide floating popup (vector launcher artwork pending). Tests cover server failure paths, concurrent replay, widget and overlay lifecycle, client
-      requests, and output escaping. _Pending:_ create the Cloudflare widget, provision production
-      settings, verify browser interaction, and run the live drill. See the
+      states in a site-wide floating popup. Tests cover server failure paths (including expired
+      tokens), concurrent replay, widget and overlay lifecycle, client requests, and output
+      escaping. Done 2026-11-15: the owner completed the browser checks (popup, keyboard focus,
+      dog poses, links, offline, phone). Live drill on production: a fake token and a reused
+      token were refused without a cookie; a fresh token sent once created a session, with its
+      Redis claim stored; four concurrent sends of one token created no session (Siteverify
+      answered `timeout-or-duplicate` to all of them), so never more than one. The live
+      expired-token check was skipped by the owner (covered by unit tests). See the
       [setup guide](deployment/turnstile.md).
 - [x] **P5-05** Registry-grounded retrieval and validated navigation links. _Needs:_ P5-01. _Done
       when:_ unknown slugs never reach the client. Done 2026-11-14: unit tests drop unknown,

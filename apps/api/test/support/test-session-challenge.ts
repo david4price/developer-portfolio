@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   ChallengeReplayStore,
+  ChallengeVerdict,
   SessionChallenge,
 } from '../../src/modules/chat/session-challenge.js';
 
@@ -9,10 +10,12 @@ export const sessionPayload = () => ({ turnstileToken: randomUUID() });
 export class FakeSessionChallenge implements SessionChallenge {
   readonly tokens: string[] = [];
   failWith: Error | undefined;
-  async verify(token: string): Promise<boolean> {
+  async verify(token: string): Promise<ChallengeVerdict> {
     this.tokens.push(token);
     if (this.failWith !== undefined) throw this.failWith;
-    return token !== 'invalid';
+    return token === 'invalid'
+      ? { verified: false, reasons: ['invalid-input-response'] }
+      : { verified: true };
   }
 }
 
