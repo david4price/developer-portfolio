@@ -102,23 +102,22 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Run `/code-review high` on everything the push would publish: the commits in
-   `@{upstream}..HEAD`, or the branch against `main` when it has no upstream yet (see
-   [Code Review Level](#code-review-level)). Uncommitted changes are not pushed; commit or exclude
-   them first.
+1. Run `/code-review` (at the [review level](#code-review-level)) on everything the push would
+   publish: the commits in `@{upstream}..HEAD`, or the branch against `main` when it has no
+   upstream yet. Uncommitted changes are not pushed; commit or exclude them first.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
 3. After fixes, re-run the quality gates above and the `verify` skill, then review the new commits
-   again, also at `high`.
+   again.
 4. In the handoff, say that the review ran, at which level, and what it found.
 
-### Code Review Level
+## Code Review Level
 
 Every `/code-review` in this repository runs at `high`: before a push, when asked to review a
-change, a branch, or a pull request, after fixes, and whenever a skill calls for a review. That
-holds whatever the size or kind of change, including docs and configuration. Use another level
-only when the user names it for that review; never pick `low` or `medium` on your own judgment,
-and never `max` or `ultra` unless the user asks for them.
+change, a branch, or a pull request, after fixes, and whenever a skill calls for a review,
+whatever the size or kind of change (docs and configuration included). Always pass the level
+explicitly (`/code-review high <target>`): with no level, the command reuses the last one typed.
+Use any other level only when the user names it for that review.
 
 ## Working Agreements
 
