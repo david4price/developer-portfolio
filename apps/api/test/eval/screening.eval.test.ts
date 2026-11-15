@@ -17,12 +17,12 @@ import { SCREENING_CASES, type ScreeningCase } from '../fixtures/screening-cases
 const modelDir = process.env.CHAT_GUARD_MODEL_DIR;
 
 /**
- * Ceilings measured on 2026-11-15 (Wolf Defender Small v2.1, onnxruntime-node 1.31.1): rules alone
- * 3 false positives and 57 misses on 224 cases; rules + classifier 3 and 5. A pinned model and
- * runtime are deterministic, so a rise means the model, runtime, or normalization changed.
+ * Ceilings measured on 2026-11-16 (Wolf Defender Small v2.1, onnxruntime-node 1.31.1): rules alone
+ * 3 false positives and 55 misses on 232 cases; rules + classifier 3 and 3. A pinned model and
+ * runtime are deterministic, so a rise means the model, runtime, rules, or normalization changed.
  */
 const MAX_FALSE_POSITIVES = 3;
-const MAX_MISSES = 5;
+const MAX_MISSES = 3;
 
 interface Tally {
   falsePositives: ScreeningCase[];

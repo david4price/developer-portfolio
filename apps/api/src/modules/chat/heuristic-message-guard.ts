@@ -66,6 +66,18 @@ const FOLDED_RULES: readonly (readonly [MessageRejection, RegExp])[] = [
     'prompt_extraction',
     /\b(?:repeat|print|output) (?:everything|all|the text|the words) (?:above|before)\b/,
   ],
+  // The prompt described instead of named: "the message that defines your behaviour", "the text
+  // that tells you how to behave". Both need the assistant as the object ("your", "you"), and the
+  // second only takes conduct verbs, so "instructions that tell you how to respond to an outage"
+  // or "the file that defines the worker's behaviour" pass. The classifier scores these near zero.
+  [
+    'prompt_extraction',
+    /\b(?:message|text|prompt|instructions?|rules?|words|setup|configuration|config) (?:that|which) (?:defines?|controls?|governs?|shapes?|sets?|determines?|configures?|specifies) (?:your (?:behaviou?r|personality|persona|character|responses|answers)|how you (?:behave|act|respond|talk|speak))\b/,
+  ],
+  [
+    'prompt_extraction',
+    /\b(?:message|text|prompt|instructions?|rules?|words) (?:that|which) (?:tells?|told|instructs?|instructed) you how to (?:behave|act|talk|speak)\b/,
+  ],
   [
     'jailbreak',
     /\b(?:jailbreak|jailbroken|dan mode|developer mode|god mode|do anything now|unfiltered mode|uncensored mode)\b/,

@@ -12,6 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Message screening: a narrow rule rejects the prompt described instead of named ("the message
+  that defines your behaviour", "the text that tells you how to behave"), which the classifier
+  missed in production. Rules + classifier now miss 3 of 117 attacks (was 5), still 3 of 115
+  false positives. Code reviews before a push now always run at `high` (`AGENTS.md`).
 - P5-08 complete and on in production (#42, #43): `CHAT_GUARD=classifier` adds a CPU prompt-injection
   classifier (Wolf Defender Small, Apache-2.0, ONNX on `onnxruntime-node`) after the rules. On a
   new 224-message labelled set it cuts missed attacks from 57 to 5 with the same 3 false
