@@ -102,14 +102,32 @@ run, such as integration tests that need PostgreSQL and Redis.
 Pushing still needs an explicit request (see [Operational Safety](#operational-safety)). Once one
 is given, and before running `git push`:
 
-1. Run `/code-review` on everything the push would publish: the commits in `@{upstream}..HEAD`,
-   or the branch against `main` when it has no upstream yet. Uncommitted changes are not pushed;
-   commit or exclude them first.
+1. Ask git what the push would publish: run the real push command with `--dry-run --porcelain`
+   added, keeping all its other arguments and flags (such as `--force-with-lease` or
+   `--follow-tags`). For each ref it updates as `<old>..<new>`, run
+   `/code-review high <old>...<new>` (see [Code Review Level](#code-review-level)); for a
+   `[new branch]`, `/code-review high origin/main...<source>`, where `<source>` is the local side of
+   the refspec. Nothing to update means nothing to review. For forced, rejected, or deleted refs,
+   tags, or anything unclear, ask the user what to review. The review also reads uncommitted
+   changes: if there are any, ask the user how to handle them before reviewing.
 2. Fix every correctness finding, or report it to the user with the reason it was left. Push with
    open findings only after the user accepts them.
-3. After fixes, re-run the quality gates above and the `verify` skill, then review the new commits
-   again.
-4. In the handoff, say that the review ran, at which level, and what it found.
+3. After fixes, re-run the quality gates above and the `verify` skill, then run the dry run again
+   and review what it now reports: only the new fix commits
+   (`/code-review high <first fix>^...<new>`) when they were added on top of reviewed ones,
+   otherwise its whole range.
+4. In the handoff, say that the review ran, at which level, on which range, and what it found.
+
+## Code Review Level
+
+Every `/code-review` in this repository runs at `high`: before a push, when asked to review a
+change, a branch, or a pull request, after fixes, and whenever a skill calls for a review, whatever
+the size or kind of change (docs and configuration included). Always type the level and a target
+that names exactly what is reviewed (a three-dot commit range, branch, or pull request number), as
+in `/code-review high origin/main...HEAD`: with no level the command reuses the last one typed, and
+with no target it picks its own scope (allowed only when the user asks for a review of uncommitted
+changes). Use another level only when the user names it for that review; a level named once does not
+carry over to the next review.
 
 ## Working Agreements
 
