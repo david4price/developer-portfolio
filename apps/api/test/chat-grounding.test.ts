@@ -161,6 +161,11 @@ describe('architecture notes', () => {
       undefined,
       'two shared words are not enough',
     );
+    assert.equal(
+      knowledge.sourceFor(query, 3, 'Images in CI from Git.'),
+      undefined,
+      'three shared words are not enough, even at 60% of the note',
+    );
     const wide = new RegistryKnowledgeBase(
       testRegistry,
       createDocNotes({
@@ -227,12 +232,20 @@ describe('architecture notes', () => {
     ]);
   });
 
-  it('answer the starter question about deployment with the release note', () => {
+  it('answer deployment and CI questions with the release note', () => {
     const shipped = new RegistryKnowledgeBase(registry, docNotes);
-    const retrieved = shipped.search('How is this site deployed?', 3);
-    assert.ok(
-      retrieved.some((snippet) => snippet.endsWith('[[doc:gitops-release]]')),
-      retrieved.map(firstLine).join(' | '),
+    for (const question of ['How is this site deployed?', 'Which GitHub Actions run?']) {
+      const retrieved = shipped.search(question, 3);
+      assert.ok(
+        retrieved.some((snippet) => snippet.endsWith('[[doc:gitops-release]]')),
+        `${question}: ${retrieved.map(firstLine).join(' | ')}`,
+      );
+    }
+    const [chat] = shipped.search('What actions can the chat assistant take?', 1);
+    assert.equal(
+      firstLine(chat),
+      'How the chat assistant works',
+      'a common keyword never outranks a title',
     );
   });
 
