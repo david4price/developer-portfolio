@@ -1,7 +1,12 @@
 import type { MiniAppSummary, ProjectDetail, ProjectSummary } from '@portfolio/shared-types';
 import { registryData } from './data.js';
+import { docNotesData } from './docs-data.js';
 import { profileData } from './profile-data.js';
 import {
+  docNotesSchema,
+  type DocNote,
+  type DocNotes,
+  type DocNotesInput,
   profileSchema,
   registrySchema,
   type Profile,
@@ -16,6 +21,8 @@ export {
   INVISIBLE,
 } from './control-markup.js';
 export {
+  docNoteSchema,
+  docNotesSchema,
   experienceEntrySchema,
   miniAppSchema,
   profileLinkSchema,
@@ -24,7 +31,15 @@ export {
   registrySchema,
   slug,
 } from './schema.js';
-export type { ExperienceEntry, Profile, ProfileInput, RegistryInput } from './schema.js';
+export type {
+  DocNote,
+  DocNotes,
+  DocNotesInput,
+  ExperienceEntry,
+  Profile,
+  ProfileInput,
+  RegistryInput,
+} from './schema.js';
 
 export interface ProjectRegistry {
   readonly projects: readonly ProjectDetail[];
@@ -44,6 +59,23 @@ export function createProfile(input: ProfileInput): Profile {
 
 /** The validated owner profile shipped with this repository (home page, About, Experience). */
 export const profile: Profile = createProfile(profileData);
+
+export function createDocNotes(input: DocNotesInput): DocNotes {
+  return docNotesSchema.parse(input);
+}
+
+/** The validated architecture notes shipped with this repository, for the chat assistant. */
+export const docNotes: DocNotes = createDocNotes(docNotesData);
+
+export function findDocNote(slug: string, source: DocNotes = docNotes): DocNote | undefined {
+  return source.notes.find((note) => note.slug === slug);
+}
+
+/** Where a note's source opens on GitHub: `tree/` for a folder, `blob/` for a file. */
+export function docNoteUrl(note: DocNote, source: DocNotes = docNotes): string {
+  const view = note.source.endsWith('/') ? 'tree' : 'blob';
+  return `${source.repositoryUrl}/${view}/${source.branch}/${note.source}`;
+}
 
 export function toProjectSummary(project: ProjectDetail): ProjectSummary {
   const { slug, title, summary, kind, technologies, featured } = project;

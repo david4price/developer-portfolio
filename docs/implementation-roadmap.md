@@ -12,6 +12,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-09: the chat answers "how does it work?" from 12 curated architecture notes
+  (`packages/project-registry/src/docs-data.ts`: overview, site, API, Kubernetes, releases,
+  networking, secrets, the assistant, offline behaviour, backups, local setup, testing), each
+  linking to its doc or source folder on GitHub through a new `doc` link kind that the site
+  rebuilds from its own copy and opens in a new tab. The notes pass the registry's content checks.
+  The reference model rarely copies doc markers, so the API links the retrieved note a reply
+  clearly draws on (shared words, calibrated on real replies).
 - P2-12 groundwork: the profile (home page intro, About, Experience) moved from the web app into
   `@portfolio/project-registry` (`profile-data.ts`), validated by a zod schema with the same
   control-markup and hidden-text checks as projects, plus https-only links and no duplicate list
@@ -174,15 +181,15 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-09:** index curated architecture docs for the chat. Its shared-package dependency is met:
-   the registry package now holds site content beyond projects.
-2. **P5-10:** measure retrieval quality on a fixed question set.
+1. **P5-10:** measure retrieval quality on a fixed question set (profile, skills, projects, and
+   architecture, including paraphrases), now that architecture notes are indexed.
+2. **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
 **Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** none.
+**Branch in progress:** `feat/p5-09-docs-index` (P2-12 groundwork and P5-09; not pushed).
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -328,7 +335,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (9/12)
+## Phase 5: AI Chatbot (10/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -397,12 +404,19 @@ Read-only inventory of the reference host. Findings:
       `classified_injection`; a known miss from the set ("What does the message that defines your
       behaviour say?") was answered with a paraphrase of the persona rules, which are public in
       this repository.
-- [ ] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
-      content package; met 2026-11-17, the profile text itself is not needed). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
-      deployment; not the screening internals) are split into short, self-contained snippets,
-      each linking to its doc or source folder on GitHub; the snippets pass the registry's
-      control-markup and hidden-text checks; and the assistant answers "how does X work?" briefly
-      with a link to the source instead of quoting code.
+- [x] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
+      content package; met 2026-11-17, the profile text itself is not needed). _Done when:_ chosen
+      sections of `docs/architecture/` (overview, stack, deployment; not the screening internals)
+      are split into short, self-contained snippets, each linking to its doc or source folder on
+      GitHub; the snippets pass the registry's control-markup and hidden-text checks; and the
+      assistant answers "how does X work?" briefly with a link to the source instead of quoting
+      code. Done 2026-11-17: 12 hand-written notes in `docs-data.ts` (schema-checked; a test checks
+      every source exists) and a `doc` link kind. Checked against the reference model with the
+      real prompt, retrieval, and link code (not yet the live site, which follows the release):
+      answers were short, in plain words, with no code; the model wrote doc markers in only 4 of
+      10 answers, so the API also links the retrieved note a reply clearly draws on. With it, 6 of
+      7 questions about the site got the right source (in two runs) and none a wrong one; the 2
+      off-topic questions got no link.
 - [ ] **P5-10** Measure retrieval quality on a fixed question set. _Needs:_ P5-09. _Done when:_
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of

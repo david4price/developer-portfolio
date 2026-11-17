@@ -128,18 +128,24 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    [Turnstile guide](../deployment/turnstile.md) for setup and failure behavior.
 2. **Per-session lock (Confirmed):** a Redis lock with a short TTL. A second message while one is
    in flight returns `409 chat_busy`, so the conversation can't interleave.
-3. **Retrieval (Confirmed, P5-05):** in-memory keyword search over the project registry, behind a
-   `KnowledgeBase` port (`registry-knowledge-base.ts`). The registry ships with the API, so search
-   needs no I/O and every replica answers the same. Terms are lowercased, stop words dropped, and
-   simple plurals folded; title and slug matches count most, then technologies and summary, then
-   the description, each scaled by how rare the term is. The query is the new message plus the
+3. **Retrieval (Confirmed, P5-05; architecture notes P5-09):** in-memory keyword search over the
+   project registry and curated architecture notes, behind a `KnowledgeBase` port
+   (`registry-knowledge-base.ts`). Both ship with the API, so search needs no I/O and every replica
+   answers the same. Terms are lowercased, stop words dropped, and simple plurals folded; title and
+   slug matches count most, then technologies, summary, and a note's keywords, then descriptions
+   and note text, each scaled by how rare the term is. The query is the new message plus the
    previous question, so follow-ups ("what stack does it use?") keep their topic. The top 3
    matches (580 characters each at most, header fields included; URLs and markers that don't fit
-   are left out rather than cut) go into the prompt; when nothing matches, featured
-   projects do. The profile (home page, About, Experience) is in `@portfolio/project-registry`
-   under the same content checks; indexing it is **Proposed** and waits for the real text (P2-12),
-   so the assistant never repeats placeholders. A vector database is
-   added only if measured answer quality requires one.
+   are left out rather than cut) go into the prompt; when nothing matches, featured projects do.
+   The **architecture notes** (`packages/project-registry/src/docs-data.ts`) are short,
+   hand-written summaries of chosen parts of these docs (overview, stack, deployment, operations;
+   never the screening internals or private details), each with a `source`: a file or folder in
+   this repository. They pass the same control-markup and hidden-text checks as projects, a test
+   checks that every source exists, and their text is capped at 400 characters so a note always
+   reaches the prompt whole. The profile (home page, About, Experience) is in
+   `@portfolio/project-registry` under the same content checks; indexing it is **Proposed** and
+   waits for the real text (P2-12), so the assistant never repeats placeholders. A vector database
+   is added only if measured answer quality requires one (P5-10, P5-11).
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
    voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice
    (Confirmed in code) speaks as the developer's dog, named by `CHAT_ASSISTANT_NAME`: warm,
@@ -174,10 +180,18 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    gets
    what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
    about 900–1,500 characters.
-5. **Navigation (Confirmed, P5-05):** retrieved data names each page with a marker such as
-   `[[project:<slug>]]` or `[[mini-app:<slug>]]`, and the model may suggest pages only by copying
-   one. The API replaces each valid marker with the page title and returns it in `links` (`kind`,
-   `slug`, `title`, `path`; at most 3, de-duplicated). A marker may name its page by slug or title
+5. **Navigation (Confirmed, P5-05; doc sources P5-09):** retrieved data names each page with a
+   marker such as `[[project:<slug>]]` or `[[mini-app:<slug>]]`, and each architecture note with a
+   closing `Source: [[doc:<slug>]]` line; the model may suggest them only by copying one. The API
+   replaces each valid marker with its title and returns it in `links` (`kind`, `slug`, `title`,
+   `path`; at most 3, de-duplicated). A `doc` link's `path` is the source's URL on GitHub, built
+   from the registry's repository URL and branch (`blob/` for a file, `tree/` for a folder); the
+   site rebuilds it from its own copy of the notes and drops any link that differs, then opens it
+   in a new tab. The reference model leaves out doc markers in most answers even when told to
+   (4 of 10 kept them in a 2026-11-17 check), so when a reply has no doc link the API adds the
+   best-ranked retrieved note that the reply clearly draws on: it shares at least 4 of the note's
+   words and at least 30% of them. In that check, replies built on a note shared 31–89% of its
+   words and unrelated notes at most 24%; off-topic and "don't know" replies got no link. A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
    the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the
    text, so made-up slugs never reach the client. Other double-bracketed text, such as code
@@ -185,7 +199,8 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    token, never the prose after it. Only the text around a removed marker is tidied (including a
    list item left empty), so the rest of the reply stays as written. If nothing is left, the API
    answers with a fixed fallback message instead of an empty reply. The stored history keeps the
-   cleaned text.
+   cleaned text. The rules also ask for "how does it work?" answers in plain words, never code,
+   ending with the note's marker.
 6. **Output (Confirmed):** plain text. Clients render it as text, never as HTML, and don't turn
    URLs or paths in it into links: navigation goes only through `links`. A reply that quotes the
    system rules or the data framing is withheld (see below).

@@ -7,8 +7,8 @@ paths:
 
 - `shared-types`: HTTP contracts only (types and a few constants). No runtime logic, no database
   row types. Changing a contract means updating the API and web consumers in the same change.
-- `project-registry`: the single source of truth for site content: projects, mini-apps, and the
-  owner's profile (`profile-data.ts`). Every rule about valid content belongs in its zod schema and
+- `project-registry`: the single source of truth for site content: projects, mini-apps, the
+  owner's profile (`profile-data.ts`), and the chat's architecture notes (`docs-data.ts`). Every rule about valid content belongs in its zod schema and
   has a test. Use the `add-project` skill for projects and mini-apps.
 - `config`: framework-free environment helpers. No NestJS imports, no secret defaults, and errors
   name variables without echoing values.

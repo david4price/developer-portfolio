@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { registry } from '@portfolio/project-registry';
+import { docNotes, docNoteUrl, registry } from '@portfolio/project-registry';
 import { afterEach, describe, it, mock } from 'node:test';
 import { ChatRequestError, createChatSession, sendChatMessage } from '../src/lib/chat.js';
 
@@ -59,6 +59,33 @@ describe('chat browser requests', () => {
     assert.equal(response.reply, '<script>untrusted</script>');
     assert.deepEqual(response.links, [
       { kind: 'project', slug: project.slug, title: project.title, path },
+    ]);
+  });
+
+  it('accepts doc links only with the GitHub URL this build computes for the note', async () => {
+    const note = docNotes.notes[0];
+    assert.ok(note);
+    const url = docNoteUrl(note);
+    assert.match(url, /^https:\/\/github\.com\//);
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json({
+        reply: 'How it works.',
+        links: [
+          { kind: 'doc', slug: note.slug, path: url, title: 'untrusted title' },
+          { kind: 'doc', slug: note.slug, path: 'https://evil.example.com/' },
+          { kind: 'doc', slug: note.slug, path: `${url}?x=1` },
+          { kind: 'doc', slug: 'missing', path: url },
+          { kind: 'project', slug: note.slug, path: url },
+        ],
+      }),
+    );
+    const response = await sendChatMessage(
+      'https://api.example.com/api/v1/chat/messages',
+      'How does it work?',
+      signal(),
+    );
+    assert.deepEqual(response.links, [
+      { kind: 'doc', slug: note.slug, title: note.title, path: url },
     ]);
   });
 

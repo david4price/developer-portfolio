@@ -1,4 +1,4 @@
-import { findMiniApp, findProject } from '@portfolio/project-registry';
+import { docNoteUrl, findDocNote, findMiniApp, findProject } from '@portfolio/project-registry';
 import type {
   ChatLink,
   ChatMessageRequest,
@@ -71,6 +71,13 @@ export async function createChatSession(
 /** Resolve against this build's registry, never a model-supplied URL or link label. */
 function navigationLink(value: unknown): ChatLink | null {
   if (!record(value) || typeof value.slug !== 'string') return null;
+  if (value.kind === 'doc') {
+    const note = findDocNote(value.slug);
+    if (note === undefined) return null;
+    const url = docNoteUrl(note);
+    if (value.path !== url) return null;
+    return { kind: 'doc', slug: note.slug, title: note.title, path: url };
+  }
   if (value.kind !== 'project' && value.kind !== 'mini-app') return null;
   const entry = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
   if (entry === undefined) return null;

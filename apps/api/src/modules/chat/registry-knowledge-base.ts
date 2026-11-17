@@ -1,4 +1,11 @@
-import { miniAppPath, type ProjectRegistry, projectPath } from '@portfolio/project-registry';
+import {
+  type DocNote,
+  type DocNotes,
+  docNoteUrl,
+  miniAppPath,
+  type ProjectRegistry,
+  projectPath,
+} from '@portfolio/project-registry';
 import type {
   ChatLink,
   ChatLinkKind,
@@ -43,6 +50,8 @@ interface Entry {
   readonly fields: readonly Field[];
   readonly snippet: string;
   readonly featured: boolean;
+  /** For architecture notes: the words of the note text, to tell whether a reply drew on it. */
+  readonly noteTerms?: ReadonlySet<string>;
 }
 
 const field = (weight: number, ...texts: string[]): Field => ({
@@ -140,20 +149,36 @@ function miniAppSnippet(app: MiniAppSummary): string {
 }
 
 /**
- * Keyword retrieval over the project registry, held in memory: the registry ships with the API,
- * so search needs no I/O and every replica answers identically. Ranking is a weighted term match
- * (title and slug count most, then technologies and summary, then the description), scaled by how
- * rare each term is across the registry.
+ * The marker sits on a closing `Source:` line, where the reference model copies it far more often
+ * than from the header. The schema caps titles, slugs, and note text so the line always fits.
+ */
+function docSnippet(note: DocNote): string {
+  return new SnippetBuilder(note.title)
+    .prose('Notes', note.text)
+    .whole('Source', linkMarker('doc', note.slug))
+    .toString();
+}
+
+/** A reply draws on a note when it repeats at least this many of the note's words… */
+const SOURCE_MIN_SHARED_TERMS = 4;
+/** …and at least this share of them. */
+const SOURCE_MIN_SHARED_RATIO = 0.3;
+
+/**
+ * Keyword retrieval over the project registry and the architecture notes, held in memory: both
+ * ship with the API, so search needs no I/O and every replica answers identically. Ranking is a
+ * weighted term match (title and slug count most, then technologies, summary, and a note's
+ * keywords, then descriptions and note text), scaled by how rare each term is across all entries.
  */
 export class RegistryKnowledgeBase implements KnowledgeBase {
   private readonly entries: readonly Entry[];
-  /** Pages by name key, per kind and across kinds (projects win a clash across kinds). */
+  /** Links by name key, per kind and across kinds (projects, then mini-apps, then docs). */
   private readonly byKind: ReadonlyMap<string, ChatLink>;
   private readonly byName: ReadonlyMap<string, ChatLink>;
-  /** Inverse document frequency per term, computed once: the registry never changes at runtime. */
+  /** Inverse document frequency per term, computed once: the content never changes at runtime. */
   private readonly rarity: ReadonlyMap<string, number>;
 
-  constructor(registry: ProjectRegistry) {
+  constructor(registry: ProjectRegistry, docs: DocNotes) {
     const miniApps = new Map(registry.miniApps.map((app) => [app.slug, app]));
     const projectEntries = registry.projects.map((project): Entry => ({
       link: {
@@ -180,7 +205,15 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
       snippet: miniAppSnippet(app),
       featured: false,
     }));
-    this.entries = [...projectEntries, ...miniAppEntries];
+    const docEntries = docs.notes.map((note): Entry => ({
+      link: { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note, docs) },
+      fields: [field(3, note.title, note.slug), field(2, ...note.keywords), field(1, note.text)],
+      snippet: docSnippet(note),
+      featured: false,
+      noteTerms: new Set(searchTerms(note.text)),
+    }));
+    // Order matters: pages win a name shared across kinds, and earlier entries win score ties.
+    this.entries = [...projectEntries, ...miniAppEntries, ...docEntries];
 
     const byKind = new Map<string, ChatLink>();
     const byName = new Map<string, ChatLink>();
@@ -205,6 +238,29 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
   }
 
   search(query: string, limit: number): readonly string[] {
+    return this.retrieve(query, limit).map(({ snippet }) => snippet);
+  }
+
+  sourceFor(query: string, limit: number, reply: string): ChatLink | undefined {
+    const replyTerms = new Set(searchTerms(reply));
+    for (const { link, noteTerms } of this.retrieve(query, limit)) {
+      if (noteTerms === undefined || noteTerms.size === 0) continue;
+      const shared = [...noteTerms].filter((term) => replyTerms.has(term)).length;
+      if (shared >= SOURCE_MIN_SHARED_TERMS && shared / noteTerms.size >= SOURCE_MIN_SHARED_RATIO) {
+        return link;
+      }
+    }
+    return undefined;
+  }
+
+  resolve(name: string, kind?: ChatLinkKind): ChatLink | undefined {
+    const key = nameKey(name);
+    if (key === '') return undefined;
+    return kind === undefined ? this.byName.get(key) : this.byKind.get(`${kind}:${key}`);
+  }
+
+  /** The entries `search` returns, best first: matches, or featured projects when none match. */
+  private retrieve(query: string, limit: number): readonly Entry[] {
     if (limit <= 0) return [];
     const queryTerms = new Set(searchTerms(query));
     const scored = this.entries
@@ -216,13 +272,7 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
       scored.length > 0
         ? scored.map(({ entry }) => entry)
         : this.entries.filter((entry) => entry.featured);
-    return matches.slice(0, limit).map(({ snippet }) => snippet);
-  }
-
-  resolve(name: string, kind?: ChatLinkKind): ChatLink | undefined {
-    const key = nameKey(name);
-    if (key === '') return undefined;
-    return kind === undefined ? this.byName.get(key) : this.byKind.get(`${kind}:${key}`);
+    return matches.slice(0, limit);
   }
 
   private score(entry: Entry, queryTerms: ReadonlySet<string>): number {

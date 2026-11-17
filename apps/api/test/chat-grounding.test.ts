@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createRegistry } from '@portfolio/project-registry';
+import { createRegistry, docNotes, docNoteUrl, registry } from '@portfolio/project-registry';
 import {
   buildPrompt,
   CONTEXT_MAX_CHARS,
@@ -17,9 +17,9 @@ import {
   SNIPPET_MAX_CHARS,
   searchTerms,
 } from '../src/modules/chat/registry-knowledge-base.js';
-import { testRegistry } from './support/test-registry.js';
+import { noDocNotes, testDocNotes, testRegistry } from './support/test-registry.js';
 
-const knowledge = new RegistryKnowledgeBase(testRegistry);
+const knowledge = new RegistryKnowledgeBase(testRegistry, testDocNotes);
 const NAME = 'Pixel';
 /** The longest name config accepts (30 characters). */
 const LONGEST_NAME = `A${'b'.repeat(28)}c`;
@@ -83,7 +83,7 @@ describe('RegistryKnowledgeBase.search', () => {
       ],
       miniApps: [],
     });
-    const [snippet] = new RegistryKnowledgeBase(long).search('kubernetes', 1);
+    const [snippet] = new RegistryKnowledgeBase(long, noDocNotes).search('kubernetes', 1);
     assert.ok(snippet !== undefined && snippet.length <= SNIPPET_MAX_CHARS);
     assert.ok(snippet.endsWith('…'));
   });
@@ -107,10 +107,10 @@ describe('RegistryKnowledgeBase.search', () => {
       ],
       miniApps: [{ slug: 'm'.repeat(64), title: 'M'.repeat(80), summary: 'S', status: 'planned' }],
     });
-    for (const snippet of new RegistryKnowledgeBase(largest).search(slug, 2)) {
+    for (const snippet of new RegistryKnowledgeBase(largest, noDocNotes).search(slug, 2)) {
       assert.ok(snippet.length <= SNIPPET_MAX_CHARS, `snippet is ${snippet.length} characters`);
     }
-    const [project] = new RegistryKnowledgeBase(largest).search(slug, 1);
+    const [project] = new RegistryKnowledgeBase(largest, noDocNotes).search(slug, 1);
     assert.ok(project !== undefined && project.startsWith(`[[project:${slug}]]`));
     assert.ok(project.includes(`[[mini-app:${'m'.repeat(64)}]]`), 'link markers are kept whole');
     assert.ok(!project.includes('r'.repeat(300)), 'URLs that do not fit are left out, not cut');
@@ -126,6 +126,89 @@ describe('RegistryKnowledgeBase.search', () => {
       cluster ?? '',
       /Mini-app: \[\[mini-app:infrastructure-explorer\]\] Infrastructure Explorer \(planned, not built yet\)/,
     );
+  });
+});
+
+describe('architecture notes', () => {
+  const releaseUrl = 'https://github.com/example/portfolio/blob/main/docs/release.md';
+
+  it('are found by title, keywords, and text, with their marker on a closing source line', () => {
+    const [byKeyword] = knowledge.search('How do you deploy?', 1);
+    assert.equal(
+      byKeyword,
+      'Release Flow\nNotes: Images are built in CI and synced to the cluster from Git.\n' +
+        'Source: [[doc:release-flow]]',
+    );
+    assert.equal(firstLine(knowledge.search('what about typed errors', 1)[0]), 'API Design');
+  });
+
+  it('name the source a reply drew on, even without its marker', () => {
+    const query = 'How do you deploy?';
+    assert.equal(
+      knowledge.sourceFor(query, 3, 'Images get built in CI, then Git syncs them to the cluster.')
+        ?.path,
+      releaseUrl,
+    );
+    assert.equal(knowledge.sourceFor(query, 3, "I don't know."), undefined);
+    assert.equal(
+      knowledge.sourceFor(query, 3, 'It uses CI and Git.'),
+      undefined,
+      'two shared words are not enough',
+    );
+    assert.equal(
+      knowledge.sourceFor(
+        'recipes',
+        3,
+        'Images are built in CI and synced to the cluster from Git.',
+      ),
+      undefined,
+      'only notes retrieved for the question count',
+    );
+    assert.equal(knowledge.sourceFor(query, 0, 'Images built in CI, synced from Git.'), undefined);
+  });
+
+  it('never stand in for featured projects when nothing matches', () => {
+    for (const snippet of knowledge.search('zzz', 3)) assert.doesNotMatch(snippet, /\[\[doc:/);
+  });
+
+  it('resolve to their GitHub source, file or folder, only as docs', () => {
+    assert.deepEqual(knowledge.resolve('release-flow', 'doc'), {
+      kind: 'doc',
+      slug: 'release-flow',
+      title: 'Release Flow',
+      path: releaseUrl,
+    });
+    assert.equal(
+      knowledge.resolve('API design')?.path,
+      'https://github.com/example/portfolio/tree/main/apps/api/src/',
+    );
+    assert.equal(knowledge.resolve('release-flow', 'project'), undefined);
+  });
+
+  it('become links in replies; unknown doc markers are dropped', () => {
+    const resolved = resolveNavigationLinks(
+      'See [[doc:release-flow]] and [[doc:made-up]] for details.',
+      knowledge,
+    );
+    assert.equal(resolved.reply, 'See Release Flow and for details.');
+    assert.deepEqual(resolved.links, [
+      { kind: 'doc', slug: 'release-flow', title: 'Release Flow', path: releaseUrl },
+    ]);
+  });
+
+  it('ship whole: no shipped note is cut to fit its snippet', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    for (const note of docNotes.notes) {
+      const marker = `[[doc:${note.slug}]]`;
+      const snippet = shipped.search(note.title, 20).find((text) => text.endsWith(marker));
+      assert.ok(snippet !== undefined, `${note.slug} is found by its title`);
+      assert.ok(snippet.length <= SNIPPET_MAX_CHARS);
+      assert.ok(
+        snippet.endsWith(`\nNotes: ${note.text}\nSource: ${marker}`),
+        `${note.slug} is not truncated`,
+      );
+      assert.equal(shipped.resolve(note.slug, 'doc')?.path, docNoteUrl(note));
+    }
   });
 });
 
@@ -230,6 +313,7 @@ describe('resolveNavigationLinks', () => {
         ],
         miniApps: [],
       }),
+      noDocNotes,
     );
     const resolved = resolveNavigationLinks('See [[Homelab: K3s Cluster]].', colon);
     assert.equal(resolved.reply, 'See Homelab: K3s Cluster.');
@@ -260,6 +344,7 @@ describe('resolveNavigationLinks', () => {
           { slug: 'weather', title: 'Weather', summary: 'A mini-app.', status: 'planned' },
         ],
       }),
+      noDocNotes,
     );
     const resolved = resolveNavigationLinks('Try [[mini-app:weather]].', similar);
     assert.deepEqual(
@@ -287,6 +372,7 @@ describe('resolveNavigationLinks', () => {
         ],
         miniApps: [],
       }),
+      noDocNotes,
     );
     const resolved = resolveNavigationLinks('See [[Mini-App: Weather Dashboard]].', prefixed);
     assert.deepEqual(

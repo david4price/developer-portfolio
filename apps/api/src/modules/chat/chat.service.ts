@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
-import type { ChatMessageResponse } from '@portfolio/shared-types';
+import type { ChatLink, ChatMessageResponse } from '@portfolio/shared-types';
 import { ApiException } from '../../common/api-exception.js';
 import { API_CONFIG, type ApiConfig, type ChatConfig } from '../../config/api-config.js';
 import {
@@ -29,7 +29,7 @@ import {
   type RateLimiter,
 } from './limits.js';
 import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
-import { resolveNavigationLinks } from './navigation-links.js';
+import { MAX_REPLY_LINKS, resolveNavigationLinks } from './navigation-links.js';
 import { withoutEmoji } from './reply-emoji.js';
 import {
   CHALLENGE_REPLAY_STORE,
@@ -243,13 +243,12 @@ export class ChatService {
       }
       const question = screened.message;
 
-      const snippets = this.knowledge.search(
-        retrievalQuery(session.history, question),
-        RETRIEVAL_LIMIT,
-      );
+      const query = retrievalQuery(session.history, question);
+      const snippets = this.knowledge.search(query, RETRIEVAL_LIMIT);
       const messages = buildPrompt(snippets, session.history, question, this.limits.assistantName);
       const { reply, links } = this.screenReply(
         requestId,
+        query,
         await this.generate(messages, signal, quota),
       );
 
@@ -273,9 +272,10 @@ export class ChatService {
    * small models add them anyway), from link titles too. Both steps change text, which can join
    * markup that wasn't there (`<🐶portfolio_data>`, `<[[x:y]]/portfolio_data>`) or split markup
    * that was, so the guard screens the raw reply and the final form that is sent and stored.
-   * Withheld or empty replies become `FALLBACK_REPLY`.
+   * Withheld or empty replies become `FALLBACK_REPLY`, without links. A reply that explains how
+   * something works without the note's marker still links the note it drew on (`sourceFor`).
    */
-  private screenReply(requestId: string, raw: string): ChatMessageResponse {
+  private screenReply(requestId: string, query: string, raw: string): ChatMessageResponse {
     const resolved = resolveNavigationLinks(raw, this.knowledge);
     const reply = withoutEmoji(resolved.reply);
     const rejection =
@@ -284,7 +284,16 @@ export class ChatService {
       this.logger.warn({ message: 'Chat reply withheld', reason: rejection, requestId });
       return { reply: FALLBACK_REPLY, links: [] };
     }
-    return { reply: reply === '' ? FALLBACK_REPLY : reply, links: resolved.links };
+    if (reply === '') return { reply: FALLBACK_REPLY, links: [] };
+    return { reply, links: this.withSource(resolved.links, query, reply) };
+  }
+
+  private withSource(links: readonly ChatLink[], query: string, reply: string): ChatLink[] {
+    if (links.length >= MAX_REPLY_LINKS || links.some((link) => link.kind === 'doc')) {
+      return [...links];
+    }
+    const source = this.knowledge.sourceFor(query, RETRIEVAL_LIMIT, reply);
+    return source === undefined ? [...links] : [...links, source];
   }
 
   /**

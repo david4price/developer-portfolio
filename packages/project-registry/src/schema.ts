@@ -130,6 +130,57 @@ export const profileSchema = z
     }
   });
 
+/**
+ * A repository-relative path to a file, or to a folder when it ends with `/`. Segments are plain
+ * names (no `.` or `..`), so a note can never point outside the repository.
+ */
+const repositoryPath = z
+  .string()
+  .max(200)
+  .regex(/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\/?$/, 'must be a relative path like docs/a.md')
+  .refine((value) => value.split('/').every((part) => part !== '.' && part !== '..'), {
+    message: 'must not contain . or .. segments',
+  });
+
+/** One short, self-contained explanation of how part of the site works, with its source. */
+export const docNoteSchema = z.object({
+  slug,
+  title: content(80),
+  /** Extra search words a visitor might use (synonyms, tools); never shown. */
+  keywords: z.array(content(30)).max(12),
+  /** At most 400 characters, so a note always fits a chat snippet whole with its source line. */
+  text: content(400),
+  source: repositoryPath,
+});
+
+/**
+ * Curated notes from the architecture docs that the chat assistant answers "how does X work?"
+ * from. Sources link to `repositoryUrl` on `branch`, so a fork points them at its own copy.
+ */
+export const docNotesSchema = z
+  .object({
+    repositoryUrl: httpsUrl.refine((value) => !value.endsWith('/'), {
+      message: 'must not end with /',
+    }),
+    branch: z
+      .string()
+      .max(100)
+      .regex(/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/, 'must be a branch name'),
+    notes: z.array(docNoteSchema),
+  })
+  .superRefine((docs, context) => {
+    for (const duplicate of duplicates(docs.notes.map((note) => note.slug))) {
+      context.addIssue({ code: 'custom', message: `duplicate doc note slug: ${duplicate}` });
+    }
+    for (const duplicate of duplicates(docs.notes.map((note) => note.title.toLowerCase()))) {
+      context.addIssue({ code: 'custom', message: `duplicate doc note title: ${duplicate}` });
+    }
+  });
+
+export type DocNotesInput = z.input<typeof docNotesSchema>;
+export type DocNotes = z.output<typeof docNotesSchema>;
+export type DocNote = z.output<typeof docNoteSchema>;
+
 export type ProfileInput = z.input<typeof profileSchema>;
 export type Profile = z.output<typeof profileSchema>;
 export type ExperienceEntry = z.output<typeof experienceEntrySchema>;

@@ -213,11 +213,19 @@ export function PortfolioChat({
           pending={pending}
           suggestions={phase === 'ready' && entries.length === 0 ? STARTER_QUESTIONS : []}
           onSuggestion={(question) => void submit(question)}
-          renderLink={(link) => (
-            <Link href={link.path} onNavigate={onNavigate}>
-              {link.title}
-            </Link>
-          )}
+          renderLink={(link) =>
+            link.kind === 'doc' ? (
+              // A source on GitHub opens in a new tab, so the conversation stays open here.
+              <a href={link.path} target="_blank" rel="noopener noreferrer">
+                {link.title} <span aria-hidden="true">↗</span>
+                <span className="visually-hidden">(source on GitHub, opens in a new tab)</span>
+              </a>
+            ) : (
+              <Link href={link.path} onNavigate={onNavigate}>
+                {link.title}
+              </Link>
+            )
+          }
         />
         {/* Problems are shown; routine progress is for screen readers (the typing dots show it). */}
         <p role="status" aria-live="polite" className={notice ? 'chat-notice' : 'visually-hidden'}>
