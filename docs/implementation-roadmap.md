@@ -174,9 +174,13 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P2-12:** replace the placeholders in `packages/project-registry/src/profile-data.ts` with
-   the owner's text (waiting on the bullets below), then index the profile in the chat's
-   `KnowledgeBase` alongside projects.
+1. **P5-09:** index curated architecture docs for the chat. Its shared-package dependency is met:
+   the registry package now holds site content beyond projects.
+2. **P5-10:** measure retrieval quality on a fixed question set.
+
+**Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
+replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
+the chat's `KnowledgeBase` alongside projects.
 
 **Branch in progress:** none.
 Open every PR against `main`.
@@ -394,7 +398,7 @@ Read-only inventory of the reference host. Findings:
       behaviour say?") was answered with a paraphrase of the persona rules, which are public in
       this repository.
 - [ ] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
-      content package). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
+      content package; met 2026-11-17, the profile text itself is not needed). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
       deployment; not the screening internals) are split into short, self-contained snippets,
       each linking to its doc or source folder on GitHub; the snippets pass the registry's
       control-markup and hidden-text checks; and the assistant answers "how does X work?" briefly
