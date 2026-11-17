@@ -1,8 +1,7 @@
-import { registry, toProjectSummary } from '@portfolio/project-registry';
+import { profile, registry, toProjectSummary } from '@portfolio/project-registry';
 import Link from 'next/link';
 import { ApiStatus } from '@/components/api-status';
 import { ProjectCard } from '@/components/project-card';
-import { profile } from '@/content/profile';
 
 export default function HomePage() {
   const featured = registry.projects.filter((project) => project.featured).map(toProjectSummary);

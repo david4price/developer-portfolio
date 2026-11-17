@@ -136,8 +136,9 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    previous question, so follow-ups ("what stack does it use?") keep their topic. The top 3
    matches (580 characters each at most, header fields included; URLs and markers that don't fit
    are left out rather than cut) go into the prompt; when nothing matches, featured
-   projects do. Approved profile text is **Proposed**: it lives in the web app today and joins the
-   index once it moves into a shared package with the real content (P2-12). A vector database is
+   projects do. The profile (home page, About, Experience) is in `@portfolio/project-registry`
+   under the same content checks; indexing it is **Proposed** and waits for the real text (P2-12),
+   so the assistant never repeats placeholders. A vector database is
    added only if measured answer quality requires one.
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
    voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice

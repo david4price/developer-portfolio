@@ -133,7 +133,8 @@ one-shot jobs also use a read-only root filesystem.
 
 - Projects and mini-apps: `packages/project-registry/src/data.ts`. Entries are validated, so a bad
   slug, duplicate, or non-HTTPS link fails tests and the build. Run `pnpm db:seed` after changes.
-- Profile, About, and Experience: `apps/web/src/content/profile.ts`.
+- Profile, About, and Experience: `packages/project-registry/src/profile-data.ts` (validated by
+  the same schema checks as projects).
 
 ## Database Changes
 

@@ -1,6 +1,13 @@
 import type { MiniAppSummary, ProjectDetail, ProjectSummary } from '@portfolio/shared-types';
 import { registryData } from './data.js';
-import { registrySchema, type RegistryInput } from './schema.js';
+import { profileData } from './profile-data.js';
+import {
+  profileSchema,
+  registrySchema,
+  type Profile,
+  type ProfileInput,
+  type RegistryInput,
+} from './schema.js';
 
 export {
   type ControlMarkupKind,
@@ -8,8 +15,16 @@ export {
   controlMarkupIn,
   INVISIBLE,
 } from './control-markup.js';
-export { miniAppSchema, projectSchema, registrySchema, slug } from './schema.js';
-export type { RegistryInput } from './schema.js';
+export {
+  experienceEntrySchema,
+  miniAppSchema,
+  profileLinkSchema,
+  profileSchema,
+  projectSchema,
+  registrySchema,
+  slug,
+} from './schema.js';
+export type { ExperienceEntry, Profile, ProfileInput, RegistryInput } from './schema.js';
 
 export interface ProjectRegistry {
   readonly projects: readonly ProjectDetail[];
@@ -22,6 +37,13 @@ export function createRegistry(input: RegistryInput): ProjectRegistry {
 
 /** The validated registry shipped with this repository. */
 export const registry: ProjectRegistry = createRegistry(registryData);
+
+export function createProfile(input: ProfileInput): Profile {
+  return profileSchema.parse(input);
+}
+
+/** The validated owner profile shipped with this repository (home page, About, Experience). */
+export const profile: Profile = createProfile(profileData);
 
 export function toProjectSummary(project: ProjectDetail): ProjectSummary {
   const { slug, title, summary, kind, technologies, featured } = project;

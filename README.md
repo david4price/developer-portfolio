@@ -50,7 +50,7 @@ apps/web                    Static Next.js site
 apps/api                    NestJS REST API
 apps/worker                 BullMQ worker
 packages/shared-types       HTTP contracts shared by web and API
-packages/project-registry   Validated project and mini-app data
+packages/project-registry   Validated projects, mini-apps, and profile
 packages/config             Environment validation helpers
 packages/ui                 Shared React components
 infrastructure/docker       Container images

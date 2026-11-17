@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { profile } from '@/content/profile';
+import { profile } from '@portfolio/project-registry';
 
 export const metadata: Metadata = { title: 'About' };
 

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { profile } from '@/content/profile';
+import { profile } from '@portfolio/project-registry';
 import { FloatingChat } from '@/components/floating-chat';
 import './globals.css';
 

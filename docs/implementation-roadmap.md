@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-16_
+_Last updated: 2026-11-17_
 
 **Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,11 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P2-12 groundwork: the profile (home page intro, About, Experience) moved from the web app into
+  `@portfolio/project-registry` (`profile-data.ts`), validated by a zod schema with the same
+  control-markup and hidden-text checks as projects, plus https-only links and no duplicate list
+  entries. The site renders it unchanged; the owner's text now drops into one file that the chat
+  can index later (not indexed yet, so the assistant never repeats placeholders).
 - Message screening: a narrow rule rejects the prompt described instead of named ("the message
   that defines your behaviour", "the text that tells you how to behave"), which the classifier
   missed in production. Rules + classifier now miss 3 of 132 attacks (was 5 of 114), still 3 of 133
@@ -169,8 +174,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P2-12:** replace the placeholder profile and experience content (owner will send the text
-   later). Moving the profile into a shared package lets the chat index it too.
+1. **P2-12:** replace the placeholders in `packages/project-registry/src/profile-data.ts` with
+   the owner's text (waiting on the bullets below), then index the profile in the chat's
+   `KnowledgeBase` alongside projects.
 
 **Branch in progress:** none.
 Open every PR against `main`.
@@ -237,7 +243,8 @@ Read-only inventory of the reference host. Findings:
 - [x] **P2-11** CI: check, integration, secret scan, signatures, image builds. _Needs:_ P2-01.
       _Done when:_ workflow green. First green run on PR #1, 2026-11-11.
 - [ ] **P2-12** Replace placeholder profile and experience content. _Done when:_ no placeholder
-      text on About or Experience. _Owner:_ provides the content.
+      text on About or Experience. _Owner:_ provides the content. The profile already lives in the
+      shared registry package with schema checks (2026-11-17); only the text remains.
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker
       job, outage recovery); browser rendering not yet checked.

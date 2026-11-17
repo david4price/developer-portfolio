@@ -48,15 +48,15 @@ export const miniAppSchema = z.object({
   status: z.enum(['available', 'planned']),
 });
 
+const duplicates = (values: readonly string[]) =>
+  values.filter((value, index) => values.indexOf(value) !== index);
+
 export const registrySchema = z
   .object({
     projects: z.array(projectSchema),
     miniApps: z.array(miniAppSchema),
   })
   .superRefine((registry, context) => {
-    const duplicates = (slugs: readonly string[]) =>
-      slugs.filter((value, index) => slugs.indexOf(value) !== index);
-
     for (const duplicate of duplicates(registry.projects.map((project) => project.slug))) {
       context.addIssue({ code: 'custom', message: `duplicate project slug: ${duplicate}` });
     }
@@ -82,3 +82,54 @@ export const registrySchema = z
   });
 
 export type RegistryInput = z.input<typeof registrySchema>;
+
+export const experienceEntrySchema = z.object({
+  role: content(80),
+  organization: content(80),
+  period: content(40),
+  highlights: z.array(content(300)).min(1).max(8),
+});
+
+export const profileLinkSchema = z.object({
+  label: content(40),
+  href: httpsUrl,
+});
+
+/**
+ * The owner's profile: home page introduction, About, and Experience. Every text field goes
+ * through `content`, like the registry, so the chat assistant can index it safely.
+ */
+export const profileSchema = z
+  .object({
+    name: content(80),
+    headline: content(120),
+    intro: content(800),
+    about: z.array(content(1_200)).min(1).max(6),
+    links: z.array(profileLinkSchema).max(10),
+    experience: z.array(experienceEntrySchema).max(20),
+  })
+  .superRefine((profile, context) => {
+    // The site keys these lists by their text, so each entry must be unique.
+    const issue = (message: string) => context.addIssue({ code: 'custom', message });
+
+    for (const duplicate of duplicates(profile.about)) {
+      issue(`duplicate about paragraph: ${duplicate.slice(0, 40)}`);
+    }
+    for (const duplicate of duplicates(profile.links.map((link) => link.href))) {
+      issue(`duplicate profile link: ${duplicate}`);
+    }
+    for (const duplicate of duplicates(
+      profile.experience.map((entry) => `${entry.organization} (${entry.period})`),
+    )) {
+      issue(`duplicate experience entry: ${duplicate}`);
+    }
+    for (const entry of profile.experience) {
+      for (const duplicate of duplicates(entry.highlights)) {
+        issue(`duplicate highlight in ${entry.organization}: ${duplicate.slice(0, 40)}`);
+      }
+    }
+  });
+
+export type ProfileInput = z.input<typeof profileSchema>;
+export type Profile = z.output<typeof profileSchema>;
+export type ExperienceEntry = z.output<typeof experienceEntrySchema>;

@@ -1,8 +1,10 @@
+import type { ProfileInput } from './schema.js';
+
 /**
- * Personal content for the About and Experience pages. These are placeholders: replace them with
- * your own details. Projects live in `@portfolio/project-registry`, not here.
+ * The owner's profile for the home page, About, and Experience. These are placeholders: replace
+ * them with your own details. The profile is validated at import time, like the registry.
  */
-export const profile = {
+export const profileData: ProfileInput = {
   name: 'Portfolio Owner',
   headline: 'Full stack developer',
   intro:
@@ -17,23 +19,15 @@ export const profile = {
       'observability, security, and documentation.',
   ],
   links: [{ label: 'GitHub', href: 'https://github.com/david4price' }],
-} as const;
-
-export interface ExperienceEntry {
-  readonly role: string;
-  readonly organization: string;
-  readonly period: string;
-  readonly highlights: readonly string[];
-}
-
-export const experience: readonly ExperienceEntry[] = [
-  {
-    role: 'Role title',
-    organization: 'Organization',
-    period: 'Start – End',
-    highlights: [
-      'Replace with a measurable outcome you delivered.',
-      'Replace with a system you designed, built, or operated.',
-    ],
-  },
-];
+  experience: [
+    {
+      role: 'Role title',
+      organization: 'Organization',
+      period: 'Start – End',
+      highlights: [
+        'Replace with a measurable outcome you delivered.',
+        'Replace with a system you designed, built, or operated.',
+      ],
+    },
+  ],
+};
