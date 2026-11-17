@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createRegistry, docNotes, docNoteUrl, registry } from '@portfolio/project-registry';
+import {
+  createDocNotes,
+  createRegistry,
+  docNotes,
+  docNoteUrl,
+  registry,
+} from '@portfolio/project-registry';
 import {
   buildPrompt,
   CONTEXT_MAX_CHARS,
@@ -154,6 +160,31 @@ describe('architecture notes', () => {
       knowledge.sourceFor(query, 3, 'It uses CI and Git.'),
       undefined,
       'two shared words are not enough',
+    );
+    const wide = new RegistryKnowledgeBase(
+      testRegistry,
+      createDocNotes({
+        ...testDocNotes,
+        notes: [
+          {
+            slug: 'wide',
+            title: 'Wide Note',
+            keywords: [],
+            text: 'alpha bravo charlie delta echo foxtrot golf hotel india juliet',
+            source: 'docs/wide.md',
+          },
+        ],
+      }),
+    );
+    assert.equal(
+      wide.sourceFor('wide note', 3, 'alpha bravo charlie delta echo')?.slug,
+      'wide',
+      'half of the words is enough',
+    );
+    assert.equal(
+      wide.sourceFor('wide note', 3, 'alpha bravo charlie delta'),
+      undefined,
+      'four shared words but under half of them are not',
     );
     assert.equal(
       knowledge.sourceFor(

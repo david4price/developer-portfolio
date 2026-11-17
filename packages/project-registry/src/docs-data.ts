@@ -59,7 +59,17 @@ export const docNotesData: DocNotesInput = {
     {
       slug: 'gitops-release',
       title: 'Releases and GitOps',
-      keywords: ['deploy', 'deployed', 'deployment', 'ci', 'cd', 'argo', 'pipeline', 'github'],
+      keywords: [
+        'deploy',
+        'deployed',
+        'deployment',
+        'ci',
+        'cd',
+        'argo',
+        'pipeline',
+        'github',
+        'actions',
+      ],
       text:
         'GitHub Actions lints, tests, and builds every change. After a merge to main, a release ' +
         'workflow pushes the API and worker images to GitHub Container Registry and commits ' +

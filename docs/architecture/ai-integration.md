@@ -192,11 +192,11 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    the note's marker" rule it kept them in 4 of 10 answers (2026-11-17). The rule now applies
    only when an answer uses a note, and as a safety net, when a reply has no doc link the API
    adds the best-ranked retrieved note that the reply clearly draws on: it shares at least 4 of
-   the note's words and at least half of them. Measured on two runs of 10 questions
-   (2026-11-17): answers built on a note shared 53–92% of its words, while retrieved notes a reply
-   didn't use shared at most 35%; 13 of 14 answers about the site got the right source (by marker
-   or fallback), none a wrong one, and off-topic or project answers got no doc link. Brief
-   answers that barely touch a note (3–36%) get no fallback link. Keyword search matches only
+   the note's words and at least half of them. Measured with this search and threshold on four runs
+   of 10 questions (2026-11-17): answers built on a note shared 53–96% of its words, while
+   retrieved notes a reply didn't use shared at most 35%; 27 of 28 answers about the site got the
+   right source (by marker or fallback), none a wrong one, and off-topic or project answers got no
+   doc link. Brief answers that barely touch a note (3–36%) get no fallback link. Keyword search matches only
    exact words and simple plurals, so notes list other forms visitors use ("deployed") as
    keywords; P5-10 measures how often that misses. A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
