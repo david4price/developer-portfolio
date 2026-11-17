@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { registry } from '@portfolio/project-registry';
+import { docNotes, docNoteUrl, registry } from '@portfolio/project-registry';
 import { afterEach, describe, it, mock } from 'node:test';
 import { ChatRequestError, createChatSession, sendChatMessage } from '../src/lib/chat.js';
 
@@ -33,33 +33,81 @@ describe('chat browser requests', () => {
     assert.equal(requestSignal?.aborted, true);
   });
 
-  it('renders replies as data and accepts only canonical links from this build’s registry', async () => {
+  it('renders replies as data and builds links from this build’s registry, never the response', async () => {
     const project = registry.projects[0];
-    assert.ok(project);
+    const app = registry.miniApps[0];
+    assert.ok(project && app);
     const path = `/projects/${project.slug}/`;
-    mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
-      assert.deepEqual(JSON.parse(String(init.body)), { message: 'Tell me about the projects' });
-      return Response.json({
-        reply: '<script>untrusted</script>',
-        links: [
-          { kind: 'project', slug: project.slug, path, title: 'untrusted title' },
-          { kind: 'project', slug: project.slug, path: 'https://evil.example.com/' },
-          { kind: 'project', slug: 'missing', path: '/projects/missing/' },
-          { kind: 'project', slug: project.slug, path: '//evil.example.com/' },
-          { kind: 'project', slug: project.slug, path: 'javascript:alert(1)' },
-          null,
-        ],
+    const reply = async (links: unknown[]) => {
+      mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+        assert.deepEqual(JSON.parse(String(init.body)), { message: 'Tell me about the projects' });
+        return Response.json({ reply: '<script>untrusted</script>', links });
       });
-    });
+      const response = await sendChatMessage(
+        'https://api.example.com/api/v1/chat/messages',
+        'Tell me about the projects',
+        signal(),
+      );
+      assert.equal(response.reply, '<script>untrusted</script>');
+      return response.links;
+    };
+
+    for (const untrusted of [
+      'https://evil.example.com/',
+      '//evil.example.com/',
+      'javascript:alert(1)',
+      '/projects/old/',
+    ]) {
+      assert.deepEqual(
+        await reply([{ kind: 'project', slug: project.slug, path: untrusted, title: 'untrusted' }]),
+        [{ kind: 'project', slug: project.slug, title: project.title, path }],
+        untrusted,
+      );
+    }
+    assert.deepEqual(
+      await reply([{ kind: 'mini-app', slug: app.slug, path: 'https://evil.example.com/' }]),
+      [{ kind: 'mini-app', slug: app.slug, title: app.title, path: `/apps/${app.slug}/` }],
+    );
+    assert.deepEqual(
+      await reply([
+        { kind: 'project', slug: 'missing', path: '/projects/missing/' },
+        { kind: 'javascript', slug: project.slug, path },
+        { kind: 'project', slug: project.slug, path },
+        { kind: 'project', slug: project.slug, path },
+        null,
+      ]),
+      [{ kind: 'project', slug: project.slug, title: project.title, path }],
+      'unknown slugs and kinds are dropped, and repeats of one page too',
+    );
+  });
+
+  it('builds doc links from this build’s notes by slug, never from the API’s URL', async () => {
+    const note = docNotes.notes[0];
+    assert.ok(note);
+    const url = docNoteUrl(note);
+    assert.match(url, /^https:\/\/github\.com\//);
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json({
+        reply: 'How it works.',
+        links: [
+          { kind: 'doc', slug: note.slug, path: 'https://evil.example.com/', title: 'untrusted' },
+          { kind: 'doc', slug: note.slug, path: url },
+          { kind: 'doc', slug: note.slug, path: `${url}?x=1` },
+          { kind: 'doc', slug: 'missing', path: url },
+          { kind: 'project', slug: note.slug, path: url },
+        ],
+      }),
+    );
     const response = await sendChatMessage(
       'https://api.example.com/api/v1/chat/messages',
-      'Tell me about the projects',
+      'How does it work?',
       signal(),
     );
-    assert.equal(response.reply, '<script>untrusted</script>');
-    assert.deepEqual(response.links, [
-      { kind: 'project', slug: project.slug, title: project.title, path },
-    ]);
+    assert.deepEqual(
+      response.links,
+      [{ kind: 'doc', slug: note.slug, title: note.title, path: url }],
+      'the API’s URL and title are replaced, and repeats of one note are dropped',
+    );
   });
 
   for (const code of [

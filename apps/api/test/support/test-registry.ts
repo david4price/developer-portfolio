@@ -1,4 +1,9 @@
-import { createRegistry, type ProjectRegistry } from '@portfolio/project-registry';
+import {
+  createDocNotes,
+  createRegistry,
+  type DocNotes,
+  type ProjectRegistry,
+} from '@portfolio/project-registry';
 
 /** A small, fixed registry so retrieval tests don't depend on the shipped portfolio content. */
 export const testRegistry: ProjectRegistry = createRegistry({
@@ -48,4 +53,33 @@ export const testRegistry: ProjectRegistry = createRegistry({
       status: 'planned',
     },
   ],
+});
+
+/** Fixed architecture notes for retrieval and link tests. */
+export const testDocNotes: DocNotes = createDocNotes({
+  repositoryUrl: 'https://github.com/example/portfolio',
+  branch: 'main',
+  notes: [
+    {
+      slug: 'release-flow',
+      title: 'Release Flow',
+      keywords: ['deploy', 'pipeline'],
+      text: 'Images are built in CI and synced to the cluster from Git.',
+      source: 'docs/release.md',
+    },
+    {
+      slug: 'api-design',
+      title: 'API Design',
+      keywords: ['backend', 'endpoints'],
+      text: 'One modular monolith with validated inputs and typed errors.',
+      source: 'apps/api/src/',
+    },
+  ],
+});
+
+/** No architecture notes, for tests about registry items alone. */
+export const noDocNotes: DocNotes = createDocNotes({
+  repositoryUrl: 'https://github.com/example/portfolio',
+  branch: 'main',
+  notes: [],
 });

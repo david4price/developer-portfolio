@@ -1,4 +1,11 @@
-import { findMiniApp, findProject } from '@portfolio/project-registry';
+import {
+  docNoteUrl,
+  findDocNote,
+  findMiniApp,
+  findProject,
+  miniAppPath,
+  projectPath,
+} from '@portfolio/project-registry';
 import type {
   ChatLink,
   ChatMessageRequest,
@@ -71,12 +78,21 @@ export async function createChatSession(
 /** Resolve against this build's registry, never a model-supplied URL or link label. */
 function navigationLink(value: unknown): ChatLink | null {
   if (!record(value) || typeof value.slug !== 'string') return null;
-  if (value.kind !== 'project' && value.kind !== 'mini-app') return null;
-  const entry = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
-  if (entry === undefined) return null;
-  const path = `/${value.kind === 'project' ? 'projects' : 'apps'}/${entry.slug}/`;
-  if (value.path !== path) return null;
-  return { kind: value.kind, slug: entry.slug, title: entry.title, path };
+  // Paths and URLs come from this build alone (by slug), never from the response, so an API
+  // released separately can't break or redirect a link.
+  if (value.kind === 'doc') {
+    const note = findDocNote(value.slug);
+    return note === undefined
+      ? null
+      : { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note) };
+  }
+  if (value.kind === 'project' || value.kind === 'mini-app') {
+    const page = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
+    if (page === undefined) return null;
+    const path = value.kind === 'project' ? projectPath(page.slug) : miniAppPath(page.slug);
+    return { kind: value.kind, slug: page.slug, title: page.title, path };
+  }
+  return null;
 }
 
 export async function sendChatMessage(
@@ -89,9 +105,12 @@ export async function sendChatMessage(
   if (!record(data) || typeof data.reply !== 'string' || !Array.isArray(data.links)) {
     throw new ChatRequestError('unavailable');
   }
-  const links = data.links.flatMap((value: unknown) => {
+  const links = new Map<string, ChatLink>();
+  for (const value of data.links as unknown[]) {
     const link = navigationLink(value);
-    return link === null ? [] : [link];
-  });
-  return { reply: data.reply, links: links.slice(0, 3) };
+    if (link !== null && !links.has(`${link.kind}:${link.slug}`)) {
+      links.set(`${link.kind}:${link.slug}`, link);
+    }
+  }
+  return { reply: data.reply, links: [...links.values()].slice(0, 3) };
 }

@@ -27,7 +27,7 @@ import { HeuristicMessageGuard } from '../src/modules/chat/heuristic-message-gua
 import { KNOWLEDGE_BASE } from '../src/modules/chat/knowledge-base.js';
 import { MESSAGE_GUARD } from '../src/modules/chat/message-guard.js';
 import { RegistryKnowledgeBase } from '../src/modules/chat/registry-knowledge-base.js';
-import { testRegistry } from './support/test-registry.js';
+import { testDocNotes, testRegistry } from './support/test-registry.js';
 import { API_CONFIG, type ApiConfig, type ChatConfig } from '../src/config/api-config.js';
 import { clientAddress, clientBucket } from '../src/modules/chat/client-address.js';
 import {
@@ -109,7 +109,7 @@ function chatProviders(
     { provide: AI_PROVIDER, useValue: ai },
     { provide: RATE_LIMITER, useValue: rateLimiter },
     { provide: AI_CONCURRENCY, useValue: concurrency },
-    { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry) },
+    { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry, testDocNotes) },
     { provide: MESSAGE_GUARD, useValue: new HeuristicMessageGuard() },
     { provide: API_CONFIG, useValue: { chat: limits } as unknown as ApiConfig },
   ];
@@ -392,6 +392,32 @@ describe('chat sessions and messages', () => {
     const data = (system?.content ?? '').split('\n\n<portfolio_data>\n')[1] ?? '';
     assert.ok(data.startsWith('[[project:homelab-cluster]] Homelab Cluster'), data);
     assert.ok(data.endsWith('</portfolio_data>'));
+  });
+
+  it('links the note a reply drew on when the model leaves out its marker', async () => {
+    const cookie = await startSession();
+    const release = {
+      kind: 'doc',
+      slug: 'release-flow',
+      title: 'Release Flow',
+      path: 'https://github.com/example/portfolio/blob/main/docs/release.md',
+    };
+    ai.replyWith = 'Images are built in CI, then synced to the cluster from Git.';
+    const drewOn = await send(cookie, 'How do you deploy?');
+    assert.deepEqual(drewOn.json<ChatMessageResponse>().links, [release]);
+
+    ai.replyWith = "I don't know that one.";
+    const unrelated = await send(cookie, 'How do you deploy?');
+    assert.deepEqual(unrelated.json<ChatMessageResponse>().links, []);
+
+    ai.replyWith =
+      'See [[doc:api-design]]. Images are built in CI and synced to the cluster from Git.';
+    const marked = await send(cookie, 'How do you deploy?');
+    assert.deepEqual(
+      marked.json<ChatMessageResponse>().links.map(({ slug }) => slug),
+      ['api-design'],
+      'a doc link the model wrote is kept, and no second one is added',
+    );
   });
 
   it('returns only links to registry slugs and stores the cleaned reply', async () => {

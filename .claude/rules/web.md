@@ -10,7 +10,7 @@ paths:
   route handlers, server actions, middleware, `cookies()`/`headers()`, ISR/revalidate, or image
   optimization. Dynamic routes use `generateStaticParams()` from `@portfolio/project-registry`
   and `export const dynamicParams = false`.
-- Content comes from the registry (projects, mini-apps) and `src/content/profile.ts`. Don't
+- Content comes from `@portfolio/project-registry` (projects, mini-apps, and `profile`). Don't
   hard-code project data in pages.
 - The API is optional at runtime. Every API-backed component must render distinct
   "not configured", "unavailable", and loaded states; use `apiUrl()` from `src/lib/api.ts`,

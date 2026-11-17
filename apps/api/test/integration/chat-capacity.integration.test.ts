@@ -24,7 +24,7 @@ import {
   RedisRateLimiter,
 } from '../../src/modules/chat/redis-limits.js';
 import { RegistryKnowledgeBase } from '../../src/modules/chat/registry-knowledge-base.js';
-import { testRegistry } from '../support/test-registry.js';
+import { testDocNotes, testRegistry } from '../support/test-registry.js';
 import { createTestApp } from '../support/test-app.js';
 import {
   CHALLENGE_REPLAY_STORE,
@@ -246,7 +246,10 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
           { provide: CHALLENGE_REPLAY_STORE, useValue: new RedisChallengeReplayStore(redis) },
           { provide: CHAT_SESSION_STORE, useValue: new RedisChatSessionStore(redis) },
           { provide: AI_PROVIDER, useValue: slowAi },
-          { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry) },
+          {
+            provide: KNOWLEDGE_BASE,
+            useValue: new RegistryKnowledgeBase(testRegistry, testDocNotes),
+          },
           { provide: MESSAGE_GUARD, useValue: new HeuristicMessageGuard() },
           { provide: RATE_LIMITER, useValue: new RedisRateLimiter(redis) },
           {

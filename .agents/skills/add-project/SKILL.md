@@ -1,6 +1,6 @@
 ---
 name: add-project
-description: Add, update, or remove a portfolio project or integrated mini-app in the project registry, then re-seed and verify the static routes and API. Use for portfolio content changes in packages/project-registry; not for profile/About/Experience text (apps/web/src/content/profile.ts) or for building a mini-app's functionality.
+description: Add, update, or remove a portfolio project or integrated mini-app in the project registry, then re-seed and verify the static routes and API. Use for portfolio content changes in packages/project-registry; not for profile/About/Experience text (packages/project-registry/src/profile-data.ts) or for building a mini-app's functionality.
 ---
 
 # Add or Update a Portfolio Project

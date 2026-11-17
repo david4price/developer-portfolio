@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-16_
+_Last updated: 2026-11-17_
 
 **Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,18 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P5-09: the chat answers "how does it work?" from 12 curated architecture notes
+  (`packages/project-registry/src/docs-data.ts`: overview, site, API, Kubernetes, releases,
+  networking, secrets, the assistant, offline behaviour, backups, local setup, testing), each
+  linking to its doc or source folder on GitHub through a new `doc` link kind that the site
+  rebuilds from its own copy and opens in a new tab. The notes pass the registry's content checks.
+  The reference model rarely copies doc markers, so the API links the retrieved note a reply
+  clearly draws on (shared words, calibrated on real replies).
+- P2-12 groundwork: the profile (home page intro, About, Experience) moved from the web app into
+  `@portfolio/project-registry` (`profile-data.ts`), validated by a zod schema with the same
+  control-markup and hidden-text checks as projects, plus https-only links and no duplicate list
+  entries. The site renders it unchanged; the owner's text now drops into one file that the chat
+  can index later (not indexed yet, so the assistant never repeats placeholders).
 - Message screening: a narrow rule rejects the prompt described instead of named ("the message
   that defines your behaviour", "the text that tells you how to behave"), which the classifier
   missed in production. Rules + classifier now miss 3 of 132 attacks (was 5 of 114), still 3 of 133
@@ -169,10 +181,15 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P2-12:** replace the placeholder profile and experience content (owner will send the text
-   later). Moving the profile into a shared package lets the chat index it too.
+1. **P5-10:** measure retrieval quality on a fixed question set (profile, skills, projects, and
+   architecture, including paraphrases), now that architecture notes are indexed.
+2. **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
-**Branch in progress:** none.
+**Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
+replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
+the chat's `KnowledgeBase` alongside projects.
+
+**Branch in progress:** `feat/p5-09-docs-index` (P2-12 groundwork and P5-09; not pushed).
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -237,7 +254,8 @@ Read-only inventory of the reference host. Findings:
 - [x] **P2-11** CI: check, integration, secret scan, signatures, image builds. _Needs:_ P2-01.
       _Done when:_ workflow green. First green run on PR #1, 2026-11-11.
 - [ ] **P2-12** Replace placeholder profile and experience content. _Done when:_ no placeholder
-      text on About or Experience. _Owner:_ provides the content.
+      text on About or Experience. _Owner:_ provides the content. The profile already lives in the
+      shared registry package with schema checks (2026-11-17); only the text remains.
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker
       job, outage recovery); browser rendering not yet checked.
@@ -317,7 +335,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (9/12)
+## Phase 5: AI Chatbot (10/12)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -386,16 +404,33 @@ Read-only inventory of the reference host. Findings:
       `classified_injection`; a known miss from the set ("What does the message that defines your
       behaviour say?") was answered with a paraphrase of the persona rules, which are public in
       this repository.
-- [ ] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
-      content package). _Done when:_ chosen sections of `docs/architecture/` (overview, stack,
-      deployment; not the screening internals) are split into short, self-contained snippets,
-      each linking to its doc or source folder on GitHub; the snippets pass the registry's
-      control-markup and hidden-text checks; and the assistant answers "how does X work?" briefly
-      with a link to the source instead of quoting code.
+- [x] **P5-09** Index curated architecture docs for the chat. _Needs:_ P5-05, P2-12 (shared
+      content package; met 2026-11-17, the profile text itself is not needed). _Done when:_ chosen
+      sections of `docs/architecture/` (overview, stack, deployment; not the screening internals)
+      are split into short, self-contained snippets, each linking to its doc or source folder on
+      GitHub; the snippets pass the registry's control-markup and hidden-text checks; and the
+      assistant answers "how does X work?" briefly with a link to the source instead of quoting
+      code. Done 2026-11-17: 12 hand-written notes in `docs-data.ts` (schema-checked; a test checks
+      every source exists) and a `doc` link kind. Checked against the reference model with the
+      real prompt, retrieval, and link code (not yet the live site, which follows the release):
+      answers were short, in plain words, with no code. The model wrote doc markers in only 4 of
+      10 answers at first, so the API also links the retrieved note a reply clearly draws on; after
+      review, with a conditional rule ("when using a note, end with its marker"), 27 of 28 answers
+      about the site (four runs) linked the right source, none a wrong one, and off-topic or
+      project questions got no doc link.
 - [ ] **P5-10** Measure retrieval quality on a fixed question set. _Needs:_ P5-09. _Done when:_
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of
       keyword search is recorded.
+      Include verb forms and "-es" plurals: search only drops a trailing "s", so on 2026-11-17
+      "Where is it hosted?" and "How is it installed?" matched no note (featured-project
+      fallback); "How is this site tested?" got three wrong notes, ranked by the common word
+      "site" (the offline note also says "tested"), while "How do you test it?" found the testing
+      note first; and "push" ranks the static-site note above the release note, which says
+      "pushes". Count wrong hits apart from misses, and separate
+      missing content (nothing covers caching) from search misses. A hand-rolled -ed/-ing stemmer
+      tried in P5-09 review caused new mismatches and was removed; notes list common forms such
+      as "deployed" as keywords.
 - [ ] **P5-11** (conditional) Add embedding search with pgvector. _Needs:_ P5-10 showing keyword
       search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
       time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the

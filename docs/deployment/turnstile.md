@@ -51,8 +51,9 @@ page; reopening the launcher returns to the same conversation.
 Successful session creation focuses the composer after it mounts, only while chat is open.
 Short viewports hide the dog and speech-bubble tail so the controls retain the full dialog height.
 
-Answers render as plain text. Only separately returned links that match this build's registry
-and canonical relative paths become anchors; their titles come from the registry too. The UI
+Answers render as plain text. Only separately returned links whose kind and slug exist in this
+build's registry become anchors, and their titles, paths, and (for architecture notes) GitHub URLs
+come from that registry too, never from the response; repeats of one item are dropped. The UI
 keeps at most 20 exchanges, disables duplicate sends, bounds input to the shared 1,000-character
 limit, and gives distinct not-configured, unavailable, verification, and loaded states.
 

@@ -114,7 +114,7 @@ export function ChatConversation({
               answer.links.length > 0 && (
                 <ul className="chat-links" aria-label="Suggested pages">
                   {answer.links.map((link) => (
-                    <li key={link.path}>{renderLink(link)}</li>
+                    <li key={`${link.kind}:${link.slug}`}>{renderLink(link)}</li>
                   ))}
                 </ul>
               )
