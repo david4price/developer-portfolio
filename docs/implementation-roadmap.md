@@ -422,10 +422,12 @@ Read-only inventory of the reference host. Findings:
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of
       keyword search is recorded.
-      Include verb forms: search only drops a plural "s", so on 2026-11-17 "Where is it hosted?"
-      and "How is it installed?" matched no note (featured-project fallback), and "How is this
-      site tested?" got three wrong notes, ranked by the common word "site", while "How do you
-      test it?" found the testing note first. Count wrong hits apart from misses, and separate
+      Include verb forms and "-es" plurals: search only drops a trailing "s", so on 2026-11-17
+      "Where is it hosted?" and "How is it installed?" matched no note (featured-project
+      fallback); "How is this site tested?" got three wrong notes, ranked by the common word
+      "site" (the offline note also says "tested"), while "How do you test it?" found the testing
+      note first; and "push" ranks the static-site note above the release note, which says
+      "pushes". Count wrong hits apart from misses, and separate
       missing content (nothing covers caching) from search misses. A hand-rolled -ed/-ing stemmer
       tried in P5-09 review caused new mismatches and was removed; notes list common forms such
       as "deployed" as keywords.

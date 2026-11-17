@@ -37,7 +37,7 @@ const dataBlockOf = (system: string | undefined) => {
 };
 
 describe('searchTerms', () => {
-  it('lowercases, splits on punctuation, drops stop words, and drops a plural s', () => {
+  it('lowercases, splits on punctuation, drops stop words, and drops a trailing s', () => {
     assert.deepEqual(searchTerms('Which projects use Next.js and Kubernetes?'), [
       'next',
       'js',
