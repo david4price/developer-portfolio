@@ -37,7 +37,7 @@ const dataBlockOf = (system: string | undefined) => {
 };
 
 describe('searchTerms', () => {
-  it('lowercases, splits on punctuation, drops stop words, and folds plurals', () => {
+  it('lowercases, splits on punctuation, drops stop words, and drops a plural s', () => {
     assert.deepEqual(searchTerms('Which projects use Next.js and Kubernetes?'), [
       'next',
       'js',
@@ -245,7 +245,7 @@ describe('architecture notes', () => {
     assert.equal(
       firstLine(chat),
       'How the chat assistant works',
-      'a common keyword never outranks a title',
+      'the chat note\'s title outranks the release note\'s "actions" keyword',
     );
   });
 

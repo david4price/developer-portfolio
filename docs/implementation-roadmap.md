@@ -422,12 +422,13 @@ Read-only inventory of the reference host. Findings:
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of
       keyword search is recorded.
-      Include verb forms and "-es" plurals: search removes only a trailing "s", so "Where is it
-      hosted?" and "pushes" vs "push" miss their notes today, and "How is this site tested?"
-      retrieves the wrong notes (secrets and offline behaviour say "tested"; the testing note
-      doesn't). Count wrong hits apart from misses, and separate missing content (nothing covers
-      caching) from search misses. A hand-rolled -ed/-ing stemmer tried in P5-09 review caused
-      new mismatches and was removed; notes list common forms such as "deployed" as keywords.
+      Include verb forms: search only drops a plural "s", so on 2026-11-17 "Where is it hosted?"
+      and "How is it installed?" matched no note (featured-project fallback), and "How is this
+      site tested?" got three wrong notes, ranked by the common word "site", while "How do you
+      test it?" found the testing note first. Count wrong hits apart from misses, and separate
+      missing content (nothing covers caching) from search misses. A hand-rolled -ed/-ing stemmer
+      tried in P5-09 review caused new mismatches and was removed; notes list common forms such
+      as "deployed" as keywords.
 - [ ] **P5-11** (conditional) Add embedding search with pgvector. _Needs:_ P5-10 showing keyword
       search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
       time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the

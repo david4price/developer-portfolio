@@ -28,7 +28,10 @@ const STOP_WORDS = new Set(
   ).split(' '),
 );
 
-/** Folds simple plurals so "projects" matches "project". Applied to queries and content alike. */
+/**
+ * Drops a plural "s" from words over three letters not ending in "ss", so "projects" matches
+ * "project" (but "pushes" becomes "pushe"). Applied to queries and content alike.
+ */
 const stem = (word: string) =>
   word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word;
 

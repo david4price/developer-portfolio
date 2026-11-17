@@ -131,7 +131,7 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
 3. **Retrieval (Confirmed, P5-05; architecture notes P5-09):** in-memory keyword search over the
    project registry and curated architecture notes, behind a `KnowledgeBase` port
    (`registry-knowledge-base.ts`). Both ship with the API, so search needs no I/O and every replica
-   answers the same. Terms are lowercased, stop words dropped, and a trailing "s" removed; title and
+   answers the same. Terms are lowercased, stop words dropped, and a plural "s" dropped; title and
    slug matches count most, then technologies, summary, and a note's keywords, then descriptions
    and note text, each scaled by how rare the term is. The query is the new message plus the
    previous question, so follow-ups ("what stack does it use?") keep their topic. The top 3
@@ -197,9 +197,9 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    retrieved notes a reply didn't use shared at most 35%; 27 of 28 answers about the site got the
    right source (by marker or fallback), none a wrong one, and off-topic or project answers got no
    doc link. Brief answers that barely touch a note (3–36%) get no fallback link. Keyword search
-   matches exact words with only a trailing "s" removed ("pushes" becomes "pushe", not "push"),
-   so notes list other forms visitors use ("deployed") as keywords; P5-10 measures how often
-   that misses. A marker may name its page by slug or title
+   matches exact words apart from that plural "s" (dropped from words over three letters not
+   ending in "ss", so "projects" matches "project" but "pushes" becomes "pushe"); notes list other
+   forms visitors use ("deployed") as keywords, and P5-10 measures how often search misses. A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
    the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the
    text, so made-up slugs never reach the client. Other double-bracketed text, such as code
