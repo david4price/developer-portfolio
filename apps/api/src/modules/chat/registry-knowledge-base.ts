@@ -28,9 +28,16 @@ const STOP_WORDS = new Set(
   ).split(' '),
 );
 
-/** Folds simple plurals so "projects" matches "project". Applied to queries and content alike. */
-const stem = (word: string) =>
-  word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word;
+/**
+ * Folds simple plurals and -ed/-ing forms, so "projects" matches "project" and "deployed" or
+ * "deploying" matches "deploy". Applied to queries and content alike, so a rough stem ("string" →
+ * "str") still matches itself; only words over five letters lose -ed or -ing.
+ */
+function stem(word: string): string {
+  if (word.length > 5 && word.endsWith('ing')) return word.slice(0, -3);
+  if (word.length > 5 && word.endsWith('ed')) return word.slice(0, -2);
+  return word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word;
+}
 
 /** Lowercase search terms; punctuation separates words ("Next.js" → "next", "js"). */
 export function searchTerms(text: string): string[] {
@@ -205,13 +212,16 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
       snippet: miniAppSnippet(app),
       featured: false,
     }));
-    const docEntries = docs.notes.map((note): Entry => ({
-      link: { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note, docs) },
-      fields: [field(3, note.title, note.slug), field(2, ...note.keywords), field(1, note.text)],
-      snippet: docSnippet(note),
-      featured: false,
-      noteTerms: new Set(searchTerms(note.text)),
-    }));
+    const docEntries = docs.notes.map((note): Entry => {
+      const text = field(1, note.text);
+      return {
+        link: { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note, docs) },
+        fields: [field(3, note.title, note.slug), field(2, ...note.keywords), text],
+        snippet: docSnippet(note),
+        featured: false,
+        noteTerms: text.terms,
+      };
+    });
     // Order matters: pages win a name shared across kinds, and earlier entries win score ties.
     this.entries = [...projectEntries, ...miniAppEntries, ...docEntries];
 

@@ -2,7 +2,7 @@
   "name": "@portfolio/project-registry",
   "version": "0.0.0",
   "private": true,
-  "description": "Validated portfolio content: projects, mini-apps, and the owner profile",
+  "description": "Validated portfolio content: projects, mini-apps, the owner profile, and chat architecture notes",
   "type": "module",
   "files": [
     "dist"

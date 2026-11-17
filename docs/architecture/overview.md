@@ -78,7 +78,7 @@ apps/web                 Next.js static site
 apps/api                 NestJS REST API (/api/v1)
 apps/worker              BullMQ worker (Nest standalone context)
 packages/shared-types    API contracts
-packages/project-registry  Typed, validated projects and profile
+packages/project-registry  Projects, profile, chat notes
 packages/ui              Shared React components
 packages/config          Shared TypeScript / lint presets
 infrastructure/docker    Container images

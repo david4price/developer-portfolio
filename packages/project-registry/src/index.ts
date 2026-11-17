@@ -21,6 +21,7 @@ export {
   INVISIBLE,
 } from './control-markup.js';
 export {
+  experienceKey,
   docNoteSchema,
   docNotesSchema,
   experienceEntrySchema,

@@ -72,11 +72,12 @@ export async function createChatSession(
 function navigationLink(value: unknown): ChatLink | null {
   if (!record(value) || typeof value.slug !== 'string') return null;
   if (value.kind === 'doc') {
+    // The URL comes from this build alone, so an API released with other repository settings
+    // still links the note's source as this site knows it.
     const note = findDocNote(value.slug);
-    if (note === undefined) return null;
-    const url = docNoteUrl(note);
-    if (value.path !== url) return null;
-    return { kind: 'doc', slug: note.slug, title: note.title, path: url };
+    return note === undefined
+      ? null
+      : { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note) };
   }
   if (value.kind !== 'project' && value.kind !== 'mini-app') return null;
   const entry = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
@@ -96,9 +97,12 @@ export async function sendChatMessage(
   if (!record(data) || typeof data.reply !== 'string' || !Array.isArray(data.links)) {
     throw new ChatRequestError('unavailable');
   }
-  const links = data.links.flatMap((value: unknown) => {
+  const links = new Map<string, ChatLink>();
+  for (const value of data.links as unknown[]) {
     const link = navigationLink(value);
-    return link === null ? [] : [link];
-  });
-  return { reply: data.reply, links: links.slice(0, 3) };
+    if (link !== null && !links.has(`${link.kind}:${link.slug}`)) {
+      links.set(`${link.kind}:${link.slug}`, link);
+    }
+  }
+  return { reply: data.reply, links: [...links.values()].slice(0, 3) };
 }

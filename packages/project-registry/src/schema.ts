@@ -95,6 +95,11 @@ export const profileLinkSchema = z.object({
   href: httpsUrl,
 });
 
+/** Identifies an experience entry, also as the Experience page's list key (unambiguous JSON). */
+export function experienceKey(entry: { organization: string; period: string }): string {
+  return JSON.stringify([entry.organization, entry.period]);
+}
+
 /**
  * The owner's profile: home page introduction, About, and Experience. Every text field goes
  * through `content`, like the registry, so the chat assistant can index it safely.
@@ -118,11 +123,12 @@ export const profileSchema = z
     for (const duplicate of duplicates(profile.links.map((link) => link.href))) {
       issue(`duplicate profile link: ${duplicate}`);
     }
-    for (const duplicate of duplicates(
-      profile.experience.map((entry) => `${entry.organization} (${entry.period})`),
-    )) {
-      issue(`duplicate experience entry: ${duplicate}`);
-    }
+    const keys = profile.experience.map(experienceKey);
+    profile.experience.forEach((entry, index) => {
+      if (keys.indexOf(experienceKey(entry)) !== index) {
+        issue(`duplicate experience entry: ${entry.organization} (${entry.period})`);
+      }
+    });
     for (const entry of profile.experience) {
       for (const duplicate of duplicates(entry.highlights)) {
         issue(`duplicate highlight in ${entry.organization}: ${duplicate.slice(0, 40)}`);

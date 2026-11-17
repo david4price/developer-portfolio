@@ -185,12 +185,16 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    closing `Source: [[doc:<slug>]]` line; the model may suggest them only by copying one. The API
    replaces each valid marker with its title and returns it in `links` (`kind`, `slug`, `title`,
    `path`; at most 3, de-duplicated). A `doc` link's `path` is the source's URL on GitHub, built
-   from the registry's repository URL and branch (`blob/` for a file, `tree/` for a folder); the
-   site rebuilds it from its own copy of the notes and drops any link that differs, then opens it
-   in a new tab. The reference model leaves out doc markers in most answers even when told to
-   (4 of 10 kept them in a 2026-11-17 check), so when a reply has no doc link the API adds the
+   from the registry's repository URL and branch (`blob/` for a file, `tree/` for a folder). The
+   site never uses that URL: it looks the slug up in its own copy of the notes, builds the URL
+   itself (so an API released with other repository settings can't break or redirect links), and
+   opens it in a new tab. The reference model often leaves out doc markers: with an unconditional "end with
+   the note's marker" rule it kept them in 4 of 10 answers (2026-11-17); with the rule as it is now
+   ("when using a note, end with its marker") one run of 7 questions about the site linked all 7.
+   As a safety net, when a reply has no doc link the API adds the
    best-ranked retrieved note that the reply clearly draws on: it shares at least 4 of the note's
-   words and at least 30% of them. In that check, replies built on a note shared 31–89% of its
+   words and at least 30% of them. Search folds plurals and -ed/-ing endings, so "deployed" finds
+   "deploy". In that check, replies built on a note shared 31–89% of its
    words and unrelated notes at most 24%; off-topic and "don't know" replies got no link. A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
    the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the

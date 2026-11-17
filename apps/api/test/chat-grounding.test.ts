@@ -31,6 +31,16 @@ const dataBlockOf = (system: string | undefined) => {
 };
 
 describe('searchTerms', () => {
+  it('folds -ed and -ing endings of longer words, so "deployed" finds "deploy"', () => {
+    assert.deepEqual(searchTerms('deployed deploying tested hosting need'), [
+      'deploy',
+      'deploy',
+      'test',
+      'host',
+      'need',
+    ]);
+  });
+
   it('lowercases, splits on punctuation, drops stop words, and folds plurals', () => {
     assert.deepEqual(searchTerms('Which projects use Next.js and Kubernetes?'), [
       'next',
@@ -194,6 +204,15 @@ describe('architecture notes', () => {
     assert.deepEqual(resolved.links, [
       { kind: 'doc', slug: 'release-flow', title: 'Release Flow', path: releaseUrl },
     ]);
+  });
+
+  it('answer the starter question about deployment with the release note', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const retrieved = shipped.search('How is this site deployed?', 3);
+    assert.ok(
+      retrieved.some((snippet) => snippet.endsWith('[[doc:gitops-release]]')),
+      retrieved.map(firstLine).join(' | '),
+    );
   });
 
   it('ship whole: no shipped note is cut to fit its snippet', () => {

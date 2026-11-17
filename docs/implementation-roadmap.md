@@ -413,10 +413,11 @@ Read-only inventory of the reference host. Findings:
       code. Done 2026-11-17: 12 hand-written notes in `docs-data.ts` (schema-checked; a test checks
       every source exists) and a `doc` link kind. Checked against the reference model with the
       real prompt, retrieval, and link code (not yet the live site, which follows the release):
-      answers were short, in plain words, with no code; the model wrote doc markers in only 4 of
-      10 answers, so the API also links the retrieved note a reply clearly draws on. With it, 6 of
-      7 questions about the site got the right source (in two runs) and none a wrong one; the 2
-      off-topic questions got no link.
+      answers were short, in plain words, with no code. The model wrote doc markers in only 4 of
+      10 answers at first, so the API also links the retrieved note a reply clearly draws on; after
+      review, a conditional rule ("when using a note, end with its marker") got all 7 questions
+      about the site linked to the right source in one run, none to a wrong one, and no link on
+      off-topic or project questions.
 - [ ] **P5-10** Measure retrieval quality on a fixed question set. _Needs:_ P5-09. _Done when:_
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of

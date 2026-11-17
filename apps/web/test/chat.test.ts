@@ -62,7 +62,7 @@ describe('chat browser requests', () => {
     ]);
   });
 
-  it('accepts doc links only with the GitHub URL this build computes for the note', async () => {
+  it('builds doc links from this build’s notes by slug, never from the API’s URL', async () => {
     const note = docNotes.notes[0];
     assert.ok(note);
     const url = docNoteUrl(note);
@@ -71,8 +71,8 @@ describe('chat browser requests', () => {
       Response.json({
         reply: 'How it works.',
         links: [
-          { kind: 'doc', slug: note.slug, path: url, title: 'untrusted title' },
-          { kind: 'doc', slug: note.slug, path: 'https://evil.example.com/' },
+          { kind: 'doc', slug: note.slug, path: 'https://evil.example.com/', title: 'untrusted' },
+          { kind: 'doc', slug: note.slug, path: url },
           { kind: 'doc', slug: note.slug, path: `${url}?x=1` },
           { kind: 'doc', slug: 'missing', path: url },
           { kind: 'project', slug: note.slug, path: url },
@@ -84,9 +84,11 @@ describe('chat browser requests', () => {
       'How does it work?',
       signal(),
     );
-    assert.deepEqual(response.links, [
-      { kind: 'doc', slug: note.slug, title: note.title, path: url },
-    ]);
+    assert.deepEqual(
+      response.links,
+      [{ kind: 'doc', slug: note.slug, title: note.title, path: url }],
+      'the API’s URL and title are replaced, and repeats of one note are dropped',
+    );
   });
 
   for (const code of [
