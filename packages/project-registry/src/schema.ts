@@ -123,12 +123,13 @@ export const profileSchema = z
     for (const duplicate of duplicates(profile.links.map((link) => link.href))) {
       issue(`duplicate profile link: ${duplicate}`);
     }
-    const keys = profile.experience.map(experienceKey);
-    profile.experience.forEach((entry, index) => {
-      if (keys.indexOf(keys[index] ?? '') !== index) {
+    const seen = new Set<string>();
+    for (const entry of profile.experience) {
+      const key = experienceKey(entry);
+      if (seen.has(key))
         issue(`duplicate experience entry: ${entry.organization} (${entry.period})`);
-      }
-    });
+      seen.add(key);
+    }
     for (const entry of profile.experience) {
       for (const duplicate of duplicates(entry.highlights)) {
         issue(`duplicate highlight in ${entry.organization}: ${duplicate.slice(0, 40)}`);

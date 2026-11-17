@@ -86,22 +86,11 @@ function navigationLink(value: unknown): ChatLink | null {
       ? null
       : { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note) };
   }
-  if (value.kind === 'project') {
-    const project = findProject(value.slug);
-    return project === undefined
-      ? null
-      : {
-          kind: 'project',
-          slug: project.slug,
-          title: project.title,
-          path: projectPath(project.slug),
-        };
-  }
-  if (value.kind === 'mini-app') {
-    const app = findMiniApp(value.slug);
-    return app === undefined
-      ? null
-      : { kind: 'mini-app', slug: app.slug, title: app.title, path: miniAppPath(app.slug) };
+  if (value.kind === 'project' || value.kind === 'mini-app') {
+    const page = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
+    if (page === undefined) return null;
+    const path = value.kind === 'project' ? projectPath(page.slug) : miniAppPath(page.slug);
+    return { kind: value.kind, slug: page.slug, title: page.title, path };
   }
   return null;
 }

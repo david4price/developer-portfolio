@@ -33,33 +33,52 @@ describe('chat browser requests', () => {
     assert.equal(requestSignal?.aborted, true);
   });
 
-  it('renders replies as data and accepts only canonical links from this build’s registry', async () => {
+  it('renders replies as data and builds links from this build’s registry, never the response', async () => {
     const project = registry.projects[0];
-    assert.ok(project);
+    const app = registry.miniApps[0];
+    assert.ok(project && app);
     const path = `/projects/${project.slug}/`;
-    mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
-      assert.deepEqual(JSON.parse(String(init.body)), { message: 'Tell me about the projects' });
-      return Response.json({
-        reply: '<script>untrusted</script>',
-        links: [
-          { kind: 'project', slug: project.slug, path, title: 'untrusted title' },
-          { kind: 'project', slug: project.slug, path: 'https://evil.example.com/' },
-          { kind: 'project', slug: 'missing', path: '/projects/missing/' },
-          { kind: 'project', slug: project.slug, path: '//evil.example.com/' },
-          { kind: 'project', slug: project.slug, path: 'javascript:alert(1)' },
-          null,
-        ],
+    const reply = async (links: unknown[]) => {
+      mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+        assert.deepEqual(JSON.parse(String(init.body)), { message: 'Tell me about the projects' });
+        return Response.json({ reply: '<script>untrusted</script>', links });
       });
-    });
-    const response = await sendChatMessage(
-      'https://api.example.com/api/v1/chat/messages',
-      'Tell me about the projects',
-      signal(),
+      const response = await sendChatMessage(
+        'https://api.example.com/api/v1/chat/messages',
+        'Tell me about the projects',
+        signal(),
+      );
+      assert.equal(response.reply, '<script>untrusted</script>');
+      return response.links;
+    };
+
+    for (const untrusted of [
+      'https://evil.example.com/',
+      '//evil.example.com/',
+      'javascript:alert(1)',
+      '/projects/old/',
+    ]) {
+      assert.deepEqual(
+        await reply([{ kind: 'project', slug: project.slug, path: untrusted, title: 'untrusted' }]),
+        [{ kind: 'project', slug: project.slug, title: project.title, path }],
+        untrusted,
+      );
+    }
+    assert.deepEqual(
+      await reply([{ kind: 'mini-app', slug: app.slug, path: 'https://evil.example.com/' }]),
+      [{ kind: 'mini-app', slug: app.slug, title: app.title, path: `/apps/${app.slug}/` }],
     );
-    assert.equal(response.reply, '<script>untrusted</script>');
-    assert.deepEqual(response.links, [
-      { kind: 'project', slug: project.slug, title: project.title, path },
-    ]);
+    assert.deepEqual(
+      await reply([
+        { kind: 'project', slug: 'missing', path: '/projects/missing/' },
+        { kind: 'javascript', slug: project.slug, path },
+        { kind: 'project', slug: project.slug, path },
+        { kind: 'project', slug: project.slug, path },
+        null,
+      ]),
+      [{ kind: 'project', slug: project.slug, title: project.title, path }],
+      'unknown slugs and kinds are dropped, and repeats of one page too',
+    );
   });
 
   it('builds doc links from this build’s notes by slug, never from the API’s URL', async () => {

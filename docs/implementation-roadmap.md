@@ -415,9 +415,9 @@ Read-only inventory of the reference host. Findings:
       real prompt, retrieval, and link code (not yet the live site, which follows the release):
       answers were short, in plain words, with no code. The model wrote doc markers in only 4 of
       10 answers at first, so the API also links the retrieved note a reply clearly draws on; after
-      review, with a conditional rule ("when using a note, end with its marker") and better word
-      folding, 13 of 14 answers about the site (two runs) linked the right source, none a wrong
-      one, and off-topic or project questions got no doc link.
+      review, with a conditional rule ("when using a note, end with its marker"), 13 of 14 answers
+      about the site (two runs) linked the right source, none a wrong one, and off-topic or
+      project questions got no doc link.
 - [ ] **P5-10** Measure retrieval quality on a fixed question set. _Needs:_ P5-09. _Done when:_
       20–30 typical visitor questions (profile, skills, projects, code/architecture, including
       paraphrased ones) are checked into tests with their expected snippets, and the hit rate of
