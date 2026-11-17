@@ -28,23 +28,41 @@ const STOP_WORDS = new Set(
   ).split(' '),
 );
 
+/** Folds simple plurals so "projects" matches "project". */
+const singular = (word: string) =>
+  word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word;
+
+/** Doubled final consonants that belong to the word itself ("install", "pass", "buzz"). */
+const KEPT_DOUBLE = /(?:ll|ss|zz)$/;
+const DOUBLED_CONSONANT = /([b-df-hj-np-tv-z])\1$/;
+
 /**
- * Folds simple plurals and -ed/-ing forms, so "projects" matches "project" and "deployed" or
- * "deploying" matches "deploy". Applied to queries and content alike, so a rough stem ("string" →
- * "str") still matches itself; only words over five letters lose -ed or -ing.
+ * Folds -ed and -ing endings, a doubled consonant before them, and a final silent e, so
+ * "deployed" matches "deploy", "shipped" matches "ship", and "cache", "cached", and "caching"
+ * all become "cach". Only words over five letters lose -ed or -ing. The stems are rough, but
+ * queries and content get the same ones, so each still matches its own forms.
  */
-function stem(word: string): string {
-  if (word.length > 5 && word.endsWith('ing')) return word.slice(0, -3);
-  if (word.length > 5 && word.endsWith('ed')) return word.slice(0, -2);
-  return word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word;
+function stemEnding(word: string): string {
+  let base = word;
+  if (word.length > 5 && word.endsWith('ing')) base = word.slice(0, -3);
+  else if (word.length > 5 && word.endsWith('ed')) base = word.slice(0, -2);
+  if (base !== word && DOUBLED_CONSONANT.test(base) && !KEPT_DOUBLE.test(base)) {
+    base = base.slice(0, -1);
+  }
+  return base.length > 4 && base.endsWith('e') ? base.slice(0, -1) : base;
 }
 
-/** Lowercase search terms; punctuation separates words ("Next.js" → "next", "js"). */
+/**
+ * Lowercase search terms; punctuation separates words ("Next.js" → "next", "js"). Stop words are
+ * dropped before and after folding plurals ("projects"), but not after -ed/-ing folding, which
+ * would otherwise turn real terms such as "building" into the stop word "build".
+ */
 export function searchTerms(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
     .filter((word) => word.length > 1 && !STOP_WORDS.has(word))
-    .map(stem)
-    .filter((word) => !STOP_WORDS.has(word));
+    .map(singular)
+    .filter((word) => !STOP_WORDS.has(word))
+    .map(stemEnding);
 }
 
 interface Field {
@@ -169,7 +187,7 @@ function docSnippet(note: DocNote): string {
 /** A reply draws on a note when it repeats at least this many of the note's words… */
 const SOURCE_MIN_SHARED_TERMS = 4;
 /** …and at least this share of them. */
-const SOURCE_MIN_SHARED_RATIO = 0.3;
+const SOURCE_MIN_SHARED_RATIO = 0.4;
 
 /**
  * Keyword retrieval over the project registry and the architecture notes, held in memory: both

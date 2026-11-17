@@ -125,7 +125,7 @@ export const profileSchema = z
     }
     const keys = profile.experience.map(experienceKey);
     profile.experience.forEach((entry, index) => {
-      if (keys.indexOf(experienceKey(entry)) !== index) {
+      if (keys.indexOf(keys[index] ?? '') !== index) {
         issue(`duplicate experience entry: ${entry.organization} (${entry.period})`);
       }
     });

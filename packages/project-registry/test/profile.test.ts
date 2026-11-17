@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createProfile, profile, type ProfileInput } from '../src/index.js';
+import { createProfile, experienceKey, profile, type ProfileInput } from '../src/index.js';
 
 const validProfile: ProfileInput = {
   name: 'Example Person',
@@ -54,6 +54,18 @@ describe('createProfile', () => {
     assert.throws(() =>
       createProfile({ ...validProfile, links: [{ label: 'Site', href: 'http://example.com' }] }),
     );
+  });
+
+  it('keeps experience entries apart even when joined text would collide', () => {
+    const [entry] = validProfile.experience;
+    assert.ok(entry);
+    const entries = [
+      { ...entry, organization: 'A-B', period: 'C' },
+      { ...entry, organization: 'A', period: 'B-C' },
+    ];
+    const created = createProfile({ ...validProfile, experience: entries });
+    assert.equal(created.experience.length, 2);
+    assert.notEqual(experienceKey(entries[0] ?? entry), experienceKey(entries[1] ?? entry));
   });
 
   it('rejects duplicates the site would use as list keys', () => {

@@ -31,21 +31,31 @@ const dataBlockOf = (system: string | undefined) => {
 };
 
 describe('searchTerms', () => {
-  it('folds -ed and -ing endings of longer words, so "deployed" finds "deploy"', () => {
-    assert.deepEqual(searchTerms('deployed deploying tested hosting need'), [
-      'deploy',
-      'deploy',
-      'test',
-      'host',
-      'need',
-    ]);
+  it('folds -ed and -ing endings, doubled consonants, and a silent e', () => {
+    const same = (forms: string, stem: string) =>
+      assert.deepEqual(
+        searchTerms(forms),
+        forms.split(' ').map(() => stem),
+        forms,
+      );
+    same('deploy deploys deployed deploying', 'deploy');
+    same('setting settings', 'set');
+    same('cache cached caching', 'cach');
+    same('ship shipped shipping', 'ship');
+    same('string strings', 'str');
+    same('install installed', 'install');
+    assert.deepEqual(searchTerms('need needed speed'), ['need', 'need', 'speed']);
+  });
+
+  it('keeps -ing words whose stem is a stop word, such as "building"', () => {
+    assert.deepEqual(searchTerms('What is he building? Working on it.'), ['build', 'work']);
   });
 
   it('lowercases, splits on punctuation, drops stop words, and folds plurals', () => {
     assert.deepEqual(searchTerms('Which projects use Next.js and Kubernetes?'), [
       'next',
       'js',
-      'kubernete',
+      'kubernet',
     ]);
   });
 });

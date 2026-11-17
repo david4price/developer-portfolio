@@ -1,4 +1,11 @@
-import { docNoteUrl, findDocNote, findMiniApp, findProject } from '@portfolio/project-registry';
+import {
+  docNoteUrl,
+  findDocNote,
+  findMiniApp,
+  findProject,
+  miniAppPath,
+  projectPath,
+} from '@portfolio/project-registry';
 import type {
   ChatLink,
   ChatMessageRequest,
@@ -71,20 +78,32 @@ export async function createChatSession(
 /** Resolve against this build's registry, never a model-supplied URL or link label. */
 function navigationLink(value: unknown): ChatLink | null {
   if (!record(value) || typeof value.slug !== 'string') return null;
+  // Paths and URLs come from this build alone (by slug), never from the response, so an API
+  // released separately can't break or redirect a link.
   if (value.kind === 'doc') {
-    // The URL comes from this build alone, so an API released with other repository settings
-    // still links the note's source as this site knows it.
     const note = findDocNote(value.slug);
     return note === undefined
       ? null
       : { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note) };
   }
-  if (value.kind !== 'project' && value.kind !== 'mini-app') return null;
-  const entry = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);
-  if (entry === undefined) return null;
-  const path = `/${value.kind === 'project' ? 'projects' : 'apps'}/${entry.slug}/`;
-  if (value.path !== path) return null;
-  return { kind: value.kind, slug: entry.slug, title: entry.title, path };
+  if (value.kind === 'project') {
+    const project = findProject(value.slug);
+    return project === undefined
+      ? null
+      : {
+          kind: 'project',
+          slug: project.slug,
+          title: project.title,
+          path: projectPath(project.slug),
+        };
+  }
+  if (value.kind === 'mini-app') {
+    const app = findMiniApp(value.slug);
+    return app === undefined
+      ? null
+      : { kind: 'mini-app', slug: app.slug, title: app.title, path: miniAppPath(app.slug) };
+  }
+  return null;
 }
 
 export async function sendChatMessage(

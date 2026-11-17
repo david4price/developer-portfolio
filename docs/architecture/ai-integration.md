@@ -189,13 +189,15 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    site never uses that URL: it looks the slug up in its own copy of the notes, builds the URL
    itself (so an API released with other repository settings can't break or redirect links), and
    opens it in a new tab. The reference model often leaves out doc markers: with an unconditional "end with
-   the note's marker" rule it kept them in 4 of 10 answers (2026-11-17); with the rule as it is now
-   ("when using a note, end with its marker") one run of 7 questions about the site linked all 7.
-   As a safety net, when a reply has no doc link the API adds the
-   best-ranked retrieved note that the reply clearly draws on: it shares at least 4 of the note's
-   words and at least 30% of them. Search folds plurals and -ed/-ing endings, so "deployed" finds
-   "deploy". In that check, replies built on a note shared 31–89% of its
-   words and unrelated notes at most 24%; off-topic and "don't know" replies got no link. A marker may name its page by slug or title
+   the note's marker" rule it kept them in 4 of 10 answers (2026-11-17). The rule now applies
+   only when an answer uses a note, and as a safety net, when a reply has no doc link the API
+   adds the best-ranked retrieved note that the reply clearly draws on: it shares at least 4 of
+   the note's words and at least 40% of them. Search folds plurals, -ed/-ing endings, doubled
+   consonants, and a final silent e, so "deployed" finds "deploy" and "caching" finds "cache".
+   Measured on two runs of 10 questions (2026-11-17): answers built on a note shared 41–96% of its
+   words, while retrieved notes a reply didn't use shared at most 29%; 13 of 14 answers about the
+   site got the right source (by marker or fallback), none a wrong one, and off-topic or project
+   answers got no doc link. Brief answers that barely touch a note get no fallback link. A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
    the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the
    text, so made-up slugs never reach the client. Other double-bracketed text, such as code
@@ -204,7 +206,7 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    list item left empty), so the rest of the reply stays as written. If nothing is left, the API
    answers with a fixed fallback message instead of an empty reply. The stored history keeps the
    cleaned text. The rules also ask for "how does it work?" answers in plain words, never code,
-   ending with the note's marker.
+   and, when an answer uses a note, for its marker at the end.
 6. **Output (Confirmed):** plain text. Clients render it as text, never as HTML, and don't turn
    URLs or paths in it into links: navigation goes only through `links`. A reply that quotes the
    system rules or the data framing is withheld (see below).
