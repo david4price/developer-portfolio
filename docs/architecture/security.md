@@ -132,7 +132,7 @@ The public surface is a static site and a small REST API. The main risks:
   - desired, available, and ready counts
   - rollout progress
   - a coarse failure category
-  - the last-updated time
+  - the last-updated time, and the snapshot's age when served (`ageSeconds`, derived from it)
   - the last deployed GitOps revision: short commit SHA and deployment time from Argo CD
     history (P6-03); never the pending comparison target or raw Application object
   - **Proposed addition** (already in the `InfrastructureSnapshot` type and filled with sample

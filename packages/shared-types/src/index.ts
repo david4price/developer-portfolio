@@ -177,6 +177,12 @@ export type InfrastructureSyncStatus = 'synced' | 'out-of-sync' | 'unknown';
 export interface InfrastructureSnapshot {
   /** When the server built this snapshot (ISO 8601); clients treat old snapshots as unavailable. */
   readonly generatedAt: string;
+  /**
+   * How old the snapshot was when served, in whole seconds on the server's own clock, so clients
+   * can judge staleness without comparing their clock with the server's. Set by the endpoint;
+   * absent from older servers and from sample data.
+   */
+  readonly ageSeconds?: number;
   /** Argo CD sync status of the portfolio Application. */
   readonly sync: InfrastructureSyncStatus;
   /**

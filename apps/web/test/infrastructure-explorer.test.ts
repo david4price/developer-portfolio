@@ -10,8 +10,10 @@ import {
   ExplorerTable,
   InfrastructureExplorer,
   livePower,
+  type LiveState,
   NOT_CONNECTED,
   receiveLive,
+  refreshDue,
 } from '../src/mini-apps/infrastructure-explorer/infrastructure-explorer.js';
 import {
   fetchLiveSnapshot,
@@ -460,6 +462,7 @@ describe('live snapshot', () => {
   it('accepts exactly the API shape', () => {
     const value = live();
     assert.deepEqual(parseSnapshot(value), value);
+    assert.deepEqual(parseSnapshot({ ...value, ageSeconds: 7 })?.ageSeconds, 7);
     assert.deepEqual(parseSnapshot({ ...value, release: null })?.release, null);
   });
 
@@ -471,6 +474,8 @@ describe('live snapshot', () => {
       'snapshot',
       { ...value, generatedAt: 'yesterday' },
       { ...value, sync: 'maybe' },
+      { ...value, ageSeconds: -1 },
+      { ...value, ageSeconds: '7' },
       { ...value, release: { commit: '', pinnedAt: value.generatedAt } },
       { ...value, components: [...components, components[0]] },
       { ...value, components: [{ ...components[0], id: 'database' }] },
@@ -546,12 +551,12 @@ describe('live snapshot', () => {
 });
 
 describe('livePower', () => {
-  const answer = (generatedAt: number): LiveResult => {
+  const answer = (ageSeconds?: number): LiveResult => {
     const snapshot = sampleSnapshot('steady', NOW);
     assert.ok(snapshot);
     return {
       kind: 'snapshot',
-      snapshot: { ...snapshot, generatedAt: new Date(generatedAt).toISOString() },
+      snapshot: { ...snapshot, ...(ageSeconds === undefined ? {} : { ageSeconds }) },
     };
   };
 
@@ -561,40 +566,56 @@ describe('livePower', () => {
       on: false,
       reason: 'unavailable',
     });
-    const first = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
+    const first = receiveLive(NOT_CONNECTED, answer(4), NOW);
     const failed = receiveLive(first, { kind: 'unavailable' }, NOW + 12_000);
     assert.equal(livePower(failed, NOW + 13_000).on, true);
-    assert.deepEqual(livePower(failed, NOW + STALE_AFTER_MS + 1), { on: false, reason: 'stale' });
+    assert.deepEqual(livePower(failed, NOW + STALE_AFTER_MS), { on: false, reason: 'stale' });
   });
 
-  it('goes stale when the server keeps serving one snapshot, judged on the visitor clock alone', () => {
-    // The visitor's clock is far ahead of the server's: generatedAt looks old, but new snapshots
-    // keep arriving, so the map stays on.
-    let state = receiveLive(NOT_CONNECTED, answer(NOW - 10 * 60_000), NOW);
-    state = receiveLive(state, answer(NOW - 10 * 60_000 + 12_000), NOW + 12_000);
-    assert.equal(livePower(state, NOW + 70_000).on, true, 'new snapshots keep it fresh');
-    // The server is stuck: the same generatedAt for over a minute powers it down.
-    let stuck = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
-    for (const t of [12_000, 24_000, 36_000, 48_000, 60_000]) {
-      stuck = receiveLive(stuck, answer(NOW), NOW + t);
-    }
-    assert.deepEqual(livePower(stuck, NOW + 61_000), { on: false, reason: 'stale' });
+  it('catches an old snapshot at once by its age on the server clock, even on first load', () => {
+    const fallback = receiveLive(NOT_CONNECTED, answer(2 * 3_600), NOW);
+    assert.deepEqual(livePower(fallback, NOW), { on: false, reason: 'stale' });
+  });
+
+  it('never compares the visitor clock with the server clock', () => {
+    // generatedAt far in the past by the visitor's clock, but served 3 s old: fresh.
+    const snapshot = sampleSnapshot('steady', NOW - 30 * 60_000);
+    assert.ok(snapshot);
+    const state = receiveLive(
+      NOT_CONNECTED,
+      { kind: 'snapshot', snapshot: { ...snapshot, ageSeconds: 3 } },
+      NOW,
+    );
+    assert.equal(livePower(state, NOW + 1_000).on, true);
+  });
+
+  it('keeps a still-valid snapshot while a due refresh is on its way, and says connecting if stale', () => {
+    const good = receiveLive(NOT_CONNECTED, answer(4), NOW);
+    const refreshing: LiveState = { ...good, latest: null };
+    assert.equal(livePower(refreshing, NOW + 15_000).on, true, 'a 15 s absence keeps the map');
+    assert.deepEqual(livePower(refreshing, NOW + 5 * 60_000), { on: false, reason: 'connecting' });
   });
 
   it('fills in the website once, on arrival', () => {
-    const state = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
+    const state = receiveLive(NOT_CONNECTED, answer(4), NOW);
     assert.ok(state.good);
     assert.equal(componentById(state.good.snapshot, 'web').health, 'healthy');
   });
 
   it('powers down as soon as the API says the view is off', () => {
     const state = receiveLive(
-      receiveLive(NOT_CONNECTED, answer(NOW), NOW),
+      receiveLive(NOT_CONNECTED, answer(4), NOW),
       { kind: 'disabled' },
       NOW,
     );
     assert.deepEqual(livePower(state, NOW), { on: false, reason: 'disabled' });
     assert.equal(state.good, null);
+  });
+
+  it('refreshes when the last refresh is due or one was skipped in a hidden tab', () => {
+    assert.equal(refreshDue(NOW + 11_000, NOW, false), false);
+    assert.equal(refreshDue(NOW + 12_000, NOW, false), true);
+    assert.equal(refreshDue(NOW + 1_000, NOW, true), true);
   });
 
   it('says why it is off, on the map and in the text view', () => {

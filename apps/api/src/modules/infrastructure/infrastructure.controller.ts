@@ -25,7 +25,10 @@ export class InfrastructureController {
   @Header('Cache-Control', 'no-store')
   async get(): Promise<InfrastructureSnapshot> {
     try {
-      return await this.snapshots.snapshot();
+      const snapshot = await this.snapshots.snapshot();
+      // The age on this server's clock: a fallback snapshot served after failed reads shows it.
+      const ageMs = Date.now() - Date.parse(snapshot.generatedAt);
+      return { ...snapshot, ageSeconds: Math.max(0, Math.floor(ageMs / 1_000)) };
     } catch (error) {
       if (error instanceof InfrastructureDisabledError) {
         throw new ApiException(

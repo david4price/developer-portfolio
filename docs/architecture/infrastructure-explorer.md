@@ -73,15 +73,16 @@ through: steady, rollout in progress, Redis down, API offline, and stale data. A
 API address (`NEXT_PUBLIC_API_BASE_URL` unset, as in local static builds and Pages previews) shows
 the switch disabled and opens on the simulation.
 
-- Live states: "connecting" before the first answer (and after returning to a tab whose data
-  fell due, so a fresh view never flashes stale); the last good snapshot, kept through failed
-  refreshes until no new snapshot has arrived for 60 s (then "too old to trust"); "not enabled
-  here" as soon as the API answers `infrastructure_disabled`; "unavailable" when no snapshot has
-  arrived. All but the fresh snapshot power the map down rather than show "healthy".
-- Staleness is judged on the visitor's clock alone: a snapshot is fresh while new ones (a new
-  `generatedAt`) keep arriving, so a visitor whose clock is off from the server's still sees the
-  live map, and a server stuck on one snapshot still powers it down after 60 s. Nothing is
-  requested from a hidden tab, including on first load.
+- Live states: "connecting" before the first answer, and when returning to a tab whose last
+  snapshot has gone stale; the last good snapshot, kept through failed refreshes until stale (then
+  "too old to trust"); "not enabled here" as soon as the API answers `infrastructure_disabled`;
+  "unavailable" when no snapshot has arrived. All but a fresh snapshot power the map down rather
+  than show "healthy".
+- Staleness (over 60 s) is judged on each clock alone, never by comparing them: the snapshot's age
+  when served, on the server's clock (`ageSeconds`, which the endpoint adds; an old fallback after
+  failed cluster reads is caught at once, even on first load), plus how long ago the browser
+  received it. A visitor whose clock is off from the server's still sees the live map. Refreshes
+  come 12 s after the previous one, and nothing is requested from a hidden tab.
 - `live-snapshot.ts` checks every field of the response (known component ids, health, failure,
   traffic, and sync values; bounded strings and counts; no duplicates) and treats anything else as
   unavailable.

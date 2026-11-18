@@ -136,19 +136,14 @@ const LIVE_TIMEOUT_MS = 8_000;
 
 type Mode = 'live' | 'simulation';
 
-/** The last good live snapshot, already filled in from the visitor's side. */
+/** The last good live snapshot (already filled in from the visitor's side) and its arrival. */
 interface GoodSnapshot {
   readonly snapshot: InfrastructureSnapshot;
-  /**
-   * When this snapshot's `generatedAt` was first seen, on the visitor's clock. A server that keeps
-   * serving the same snapshot leaves it unchanged, so staleness never compares the visitor's clock
-   * with the server's.
-   */
-  readonly freshSince: number;
+  readonly receivedAt: number;
 }
 
 export interface LiveState {
-  /** The latest answer, or `null` before the first one (or after reconnecting). */
+  /** The latest answer; `null` before the first one, and while a due refresh is on its way. */
   readonly latest: LiveResult | null;
   /** Kept through failed refreshes until stale; cleared when the API says the view is off. */
   readonly good: GoodSnapshot | null;
@@ -160,30 +155,38 @@ export const NOT_CONNECTED: LiveState = { latest: null, good: null };
 export function receiveLive(previous: LiveState, result: LiveResult, time: number): LiveState {
   if (result.kind === 'disabled') return { latest: result, good: null };
   if (result.kind === 'unavailable') return { latest: result, good: previous.good };
-  const sameSnapshot = previous.good?.snapshot.generatedAt === result.snapshot.generatedAt;
   return {
     latest: result,
-    good: {
-      snapshot: withVisitorWebsite(result.snapshot),
-      freshSince: sameSnapshot && previous.good !== null ? previous.good.freshSince : time,
-    },
+    good: { snapshot: withVisitorWebsite(result.snapshot), receivedAt: time },
   };
 }
 
+/** A refresh is due when the last one is `REFRESH_MS` old, or one was skipped in a hidden tab. */
+export function refreshDue(now: number, fetchedAt: number, skippedWhileHidden: boolean): boolean {
+  return skippedWhileHidden || now - fetchedAt >= REFRESH_MS;
+}
+
 /**
- * What the live view shows: the last good snapshot until no new one has arrived for
- * `STALE_AFTER_MS` (refreshes failing, or the server stuck on an old snapshot); "disabled" as soon
- * as the API says the view is off; "connecting" before the first answer; "unavailable" when no
- * snapshot has arrived.
+ * Stale when either clock says so, each judged alone: the server's (`ageSeconds`, how old the
+ * snapshot was when served, e.g. a fallback after failed cluster reads) or the visitor's (how long
+ * ago it arrived, e.g. refreshes failing). The two clocks are never compared, so a visitor whose
+ * clock is off still sees the live map.
+ */
+function isStale({ snapshot, receivedAt }: GoodSnapshot, now: number): boolean {
+  const servedAge = (snapshot.ageSeconds ?? 0) * 1_000;
+  return now - receivedAt + servedAge > STALE_AFTER_MS;
+}
+
+/**
+ * What the live view shows: the last good snapshot until it is stale; "connecting" before the
+ * first answer, or while a due refresh is on its way and the snapshot it would replace is stale;
+ * "disabled" as soon as the API says the view is off; "unavailable" when no snapshot has arrived.
  */
 export function livePower({ latest, good }: LiveState, now: number): MapPower {
   if (latest?.kind === 'disabled') return { on: false, reason: 'disabled' };
-  if (good !== null) {
-    return now - good.freshSince > STALE_AFTER_MS
-      ? { on: false, reason: 'stale' }
-      : { on: true, snapshot: good.snapshot };
-  }
-  return { on: false, reason: latest === null ? 'connecting' : 'unavailable' };
+  if (good !== null && !isStale(good, now)) return { on: true, snapshot: good.snapshot };
+  if (latest === null) return { on: false, reason: 'connecting' };
+  return { on: false, reason: good === null ? 'unavailable' : 'stale' };
 }
 
 export interface InfrastructureExplorerProps {
@@ -199,7 +202,9 @@ export interface InfrastructureExplorerProps {
 export function InfrastructureExplorer({
   liveUrl = apiUrl('infrastructure'),
 }: InfrastructureExplorerProps) {
-  const [mode, setMode] = useState<Mode>(liveUrl === null ? 'simulation' : 'live');
+  const [chosenMode, setMode] = useState<Mode>('live');
+  // Without an endpoint (now or later) the only view is the simulation.
+  const mode: Mode = liveUrl === null ? 'simulation' : chosenMode;
   const [live, setLive] = useState<LiveState>(NOT_CONNECTED);
   const [scenario, setScenario] = useState<SampleScenario>('steady');
   const [now, setNow] = useState(() => Date.now());
@@ -230,35 +235,37 @@ export function InfrastructureExplorer({
     return () => query.removeEventListener('change', update);
   }, []);
 
-  // A refresh every REFRESH_MS (a new sample, or a live request); the clock ticks every second,
-  // so ages count up and a snapshot that stops refreshing goes stale on time. Hidden tabs skip
-  // both, so nothing re-renders or calls the API unseen.
+  // The clock ticks every second, so ages count up and data that stops refreshing goes stale on
+  // time; hidden tabs skip it, so nothing re-renders unseen.
   useEffect(() => {
-    const refresh = setInterval(() => {
-      if (!document.hidden) setFetchedAt(Date.now());
-    }, REFRESH_MS);
     const clock = setInterval(() => {
       if (!document.hidden) setNow(Date.now());
     }, CLOCK_MS);
-    return () => {
-      clearInterval(refresh);
-      clearInterval(clock);
-    };
+    return () => clearInterval(clock);
   }, []);
 
-  // Animations pause while the tab is hidden. Coming back refreshes if a refresh fell due (or one
-  // was skipped). In live mode a refresh that fell due means the data may be stale, so the map
-  // says "connecting" until the new answer instead of flashing "too old to trust".
+  // The next refresh (a new sample, or a live request) comes REFRESH_MS after the last one,
+  // whatever started it, so a refresh is never cut short by a timer running on its own schedule.
+  // In a hidden tab it is skipped and made as soon as the tab is shown.
+  useEffect(() => {
+    const next = setTimeout(() => {
+      if (document.hidden) skippedWhileHidden.current = true;
+      else setFetchedAt(Date.now());
+    }, REFRESH_MS);
+    return () => clearTimeout(next);
+  }, [fetchedAt]);
+
+  // Animations pause while the tab is hidden. Coming back refreshes if one fell due; the last good
+  // live snapshot stays until the answer, unless it is already stale (then "connecting").
   useEffect(() => {
     const update = () => {
       setPaused(document.hidden);
       if (document.hidden) return;
       const time = Date.now();
       setNow(time);
-      const due = time - fetchedAtRef.current >= REFRESH_MS || skippedWhileHidden.current;
+      if (!refreshDue(time, fetchedAtRef.current, skippedWhileHidden.current)) return;
       skippedWhileHidden.current = false;
-      if (!due) return;
-      if (modeRef.current === 'live') setLive(NOT_CONNECTED);
+      if (modeRef.current === 'live') setLive((previous) => ({ ...previous, latest: null }));
       setFetchedAt(time);
     };
     setPaused(document.hidden);

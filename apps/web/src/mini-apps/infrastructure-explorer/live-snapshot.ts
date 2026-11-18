@@ -72,7 +72,15 @@ function parseComponent(value: unknown): InfrastructureComponent | undefined {
 /** The snapshot if the response has exactly the expected shape, otherwise `null`. */
 export function parseSnapshot(value: unknown): InfrastructureSnapshot | null {
   if (!record(value) || !isTime(value.generatedAt) || !oneOf(SYNC, value.sync)) return null;
-  const { release, components } = value;
+  const { release, components, ageSeconds } = value;
+  const age =
+    typeof ageSeconds === 'number' &&
+    Number.isInteger(ageSeconds) &&
+    ageSeconds >= 0 &&
+    ageSeconds <= 10 ** 9
+      ? ageSeconds
+      : undefined;
+  if (ageSeconds !== undefined && age === undefined) return null;
   let parsedRelease: InfrastructureSnapshot['release'] = null;
   if (release !== null) {
     if (!record(release) || !shortText(release.commit, 40) || !isTime(release.pinnedAt)) {
@@ -87,6 +95,7 @@ export function parseSnapshot(value: unknown): InfrastructureSnapshot | null {
   if (new Set(list.map(({ id }) => id)).size !== list.length) return null;
   return {
     generatedAt: value.generatedAt,
+    ...(age === undefined ? {} : { ageSeconds: age }),
     sync: value.sync as InfrastructureSnapshot['sync'],
     release: parsedRelease,
     components: list,

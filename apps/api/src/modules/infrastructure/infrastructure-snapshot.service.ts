@@ -55,7 +55,8 @@ export interface SnapshotServiceOptions {
  * Serves the Infrastructure Explorer's snapshot. Visitors never reach the cluster directly: a
  * snapshot is reused for `ttlMs`, concurrent requests share one read, and a failed read is not
  * retried before `ttlMs` has passed. After a failure the last good snapshot is served as it was;
- * its `generatedAt` lets the page power the map down once it is too old.
+ * the endpoint adds its age on this server's clock (`ageSeconds`), and the page powers the map
+ * down once that passes a minute.
  */
 export class InfrastructureSnapshotService implements SnapshotSource {
   private readonly logger = new Logger('InfrastructureSnapshotService');
