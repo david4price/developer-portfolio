@@ -292,13 +292,14 @@ describe('health and failure rules', () => {
       containerStatuses: [{ ready: false, state: { waiting: { reason: 'PodInitializing' } } }],
     });
     assert.equal(health(down, 2, [evicted]).failure, null, 'an evicted pod is history');
+    const running = pod('api', {
+      phase: 'Running',
+      containerStatuses: [{ ready: false, state: {} }],
+    });
     const terminating = {
-      ...pod('api', { phase: 'Running', containerStatuses: [{ ready: false, state: {} }] }),
+      ...running,
+      metadata: { ...running.metadata, deletionTimestamp: NOW.toISOString() },
     };
-    terminating.metadata = {
-      ...terminating.metadata,
-      deletionTimestamp: NOW.toISOString(),
-    } as never;
     assert.equal(health(down, 2, [terminating]).failure, null, 'a terminating pod is going away');
     assert.equal(health(down, 2, [initCrash]).failure, 'crash-loop');
     const off = health({ ...counts, readyReplicas: 0 }, 0, [initCrash]);
