@@ -1,36 +1,48 @@
 # Infrastructure Explorer: Visual Design
 
-**Status: Proposed (Phase 6, P6-04).** The data rules are in [Security](security.md#infrastructure-explorer-proposed-phase-6);
+**Status: prototype Confirmed on sample data (P6-04, 2026-11-18); live data Proposed (needs
+P6-02).** The data rules are in [Security](security.md#infrastructure-explorer-proposed-phase-6);
 this document covers what the page looks like and how data drives it.
 
 ## Concept
 
-A live map of the whole deployment, laid out as a grid of nodes joined by glowing conduits, in a
-retro "temporal engine" style **inspired by** the flux capacitor from _Back to the Future_: a
-Y-shaped core, neon tubes, and energy pulses running along the connections. It is an original
-design that nods to the reference; it does not reproduce the film prop or its artwork.
+A live map of the whole deployment drawn as a **blueprint of a power grid**: a dark schematic sheet
+with a fine grid, where each component is a **building seen from above** whose windows light up
+when it runs, joined by power lines with **electric sparks** travelling along them. A title block
+in the corner, as on an engineering drawing, gives the release as the drawing's revision. (The
+first draft, a neon "temporal engine" look, read as generic and was replaced on 2026-11-18.)
 
 ## Layout
 
-- **Nodes** (cards on a grid): `web` (Cloudflare Pages), Cloudflare tunnel, `api`, `worker`,
-  PostgreSQL, Redis, Argo CD, and the inference runtime as an opaque "AI" node.
-- **Delivery path** drawn as its own conduit: GitHub Actions → GHCR → `images.yaml` pin → Argo CD →
+- **Buildings** on the grid: `web` (Cloudflare Pages), Cloudflare tunnel, `api`, `worker`,
+  PostgreSQL, Redis, Argo CD, and the inference runtime as an opaque "AI model" building. Labels
+  sit on plates in the paper's colour, so wires pass under them as on a schematic.
+- **Delivery path** drawn as its own line: GitHub Actions → GHCR → `images.yaml` pin → Argo CD →
   cluster.
-- **Core:** a Y-shaped junction where the three flows meet (build, deploy, runtime). It flickers
-  while a rollout is in progress.
+- **The cluster's flux capacitor** where the three flows meet (build from the registry, deploy from
+  Argo CD, runtime down to the workloads): a grey box with a gasketed window and three glass tubes
+  in a Y, an homage to the device in _Back to the Future_. It is drawn from scratch in SVG; its
+  label tapes carry our own text ("K3s cluster" and the cluster's state), not the film's labels,
+  name, or artwork.
 
 ## Data Mapping
 
 Every effect means something; nothing animates without a data source.
 
-| Visual                           | Driven by                                                    |
-| -------------------------------- | ------------------------------------------------------------ |
-| Line colour (green/amber/red)    | Health of the node at each end                               |
-| Pulse speed along a line         | Coarse request rate (bucketed, e.g. idle/low/busy)           |
-| Burst along the delivery path    | A new release pinned in `images.yaml`, then the Argo CD sync |
-| Core flicker                     | Rollout in progress (desired ≠ ready)                        |
-| Node badge                       | Image version (tag only), ready/desired counts, last updated |
-| Whole map dark, core powered off | Snapshot unavailable or stale: label says **"unavailable"**  |
+| Visual                        | Driven by                                                         |
+| ----------------------------- | ----------------------------------------------------------------- |
+| Lit windows                   | Ready replicas: all lit, a share, or dark when down               |
+| Flickering windows            | Component degraded                                                |
+| Windows blinking awake        | Replicas still coming up during a rollout                         |
+| Red roof beacon               | Component down                                                    |
+| Line colour (cyan/amber/red)  | Health of the building at each end; broken line when down         |
+| Spark speed along a line      | Coarse request rate (bucketed, e.g. idle/low/busy)                |
+| Burst along the delivery path | A new release pinned in `images.yaml`, then the Argo CD sync      |
+| Capacitor tubes glow          | Cluster deployed (Argo CD synced, nothing rolling out)            |
+| Pulses into the capacitor's Y | Rollout in progress (a component progressing)                     |
+| Capacitor dim / dark          | Waiting to sync (out of sync or unknown) / no data                |
+| Labels and title block        | Status text, ready/desired counts, release, age (ticks every 1 s) |
+| Whole grid dark               | Snapshot unavailable or stale: label says **"unavailable"**       |
 
 The page must never show "healthy" when it cannot know: offline or stale data powers the map
 down instead of freezing the last good state.
@@ -52,8 +64,45 @@ the `images.yaml` pin or the public GitHub Actions API).
   same data.
 - Animations pause when the tab is hidden.
 
-## Prototype
+## Prototype (Confirmed, sample data)
 
-A clickable prototype with fake data can be built before the backend exists, to tune the look and
-motion. It must use the same snapshot shape the API will return, so swapping in live data needs
-no layout changes.
+`/apps/infrastructure-explorer/` shows the map on sample data, labelled as a prototype, with five
+scenarios to click through: steady, rollout in progress, Redis down, API offline, and stale data.
+It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
+`@portfolio/shared-types`), so live data replaces `sample-snapshots.ts` without layout changes.
+
+- Code: `apps/web/src/mini-apps/infrastructure-explorer/`. `map-model.ts` holds the rules as pure,
+  tested functions; `explorer-map.tsx` draws the SVG; the page loads it with `next/dynamic` and
+  `ssr: false` (it shows times relative to now).
+- Rules as built: a snapshot older than 60 s, or none at all, powers the map down with
+  "unavailable"; a component the snapshot omits is "unknown", never healthy; a conduit takes the
+  worse health of its two ends; pulses run only where traffic data exists (none yet, until P7-01)
+  and never into a down component; the core flickers only while a component is progressing, so a
+  crash-looping component shows as down, not as a rollout; the delivery path bursts for 15 minutes
+  after a release is pinned.
+- Window rule (`windowStates`): each building has 24 windows, lit in a fixed scattered order; the
+  lit share is ready ÷ desired replicas (all for components without replicas), 60 % of that with
+  some flickering when degraded, and none when down, unknown, or without data. During a rollout
+  the windows still to light blink.
+- Styling uses classes only (the site CSP blocks inline styles), on a blueprint sheet that looks
+  the same in both themes. Reduced motion removes sparks, bursts, and all flicker; animations
+  pause in hidden tabs; a table lists the same data as text.
+- **Layouts:** a landscape drawing (920 × 710) for wider screens and a portrait one (450 × 1250,
+  labels 1.2× larger) for phones (≤ 640 px), chosen by a media query and switched on resize. Each
+  layout (`WIDE_LAYOUT`, `NARROW_LAYOUT` in `map-model.ts`) places every building and routes every
+  wire explicitly; tests check, for both, that no two wires share a stretch and that each route
+  runs from inside its source building to inside its target. The landscape map scrolls inside its
+  frame if the screen is a little too narrow; the page itself never scrolls sideways.
+- Staleness is judged from when the snapshot arrived (it goes stale once refreshes stop for
+  60 s), and from how old it already was on arrival, so a visitor's slow clock doesn't power the
+  map down.
+- **Cards:** every building, delivery stage, and the flux capacitor is a button (Tab, Enter, or
+  a click; rows in the text table have a "Details" button too). It opens a card in a modal
+  `<dialog>` that shows the piece close up, then flips to its details: what it is (short copy in
+  `card-content.ts`), its live facts (only the allowlisted snapshot fields: status, version,
+  replicas, traffic, age; release and sync for the cluster and the pin), and a link to the
+  architecture note it belongs to on GitHub, from the same notes the chat uses. Only the visible
+  face is interactive (`inert`); Esc, a click outside, or Close shuts it and returns focus; reduced
+  motion swaps the flip and pop for an instant change.
+- Next: P6-02 serves the real snapshot. The page then fetches it every 12 s with the "not
+  configured", "unavailable", and loaded states the web rules require.

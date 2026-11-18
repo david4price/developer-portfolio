@@ -112,6 +112,12 @@ The public surface is a static site and a small REST API. The main risks:
   - rollout progress
   - a coarse failure category
   - the last-updated time
+  - **Proposed additions** (already in the `InfrastructureSnapshot` type in
+    `@portfolio/shared-types`, filled with sample data by the P6-04 prototype; P6-02 adds them to
+    the serializer and its leak tests before any live value is shown):
+    - the latest release: short commit SHA and the time it was pinned in `images.yaml`
+    - a bucketed request rate per component (`idle`, `low`, `busy`; from P7-01 metrics, never
+      raw counts or anything per client)
 - Results are cached for 10–15 s. Visitors never trigger live Kubernetes API calls directly.
 - Never exposed:
   - IP addresses

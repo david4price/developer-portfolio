@@ -12,6 +12,12 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P6-04 prototype: the Infrastructure Explorer as a power-grid blueprint on sample data at
+  `/apps/infrastructure-explorer/` (steady, rollout, Redis down, API offline, stale): buildings
+  seen from above light their windows by ready replicas, sparks run along the lines, in the
+  snapshot shape the API will return (`InfrastructureSnapshot` in `@portfolio/shared-types`).
+  Without fresh data the grid goes dark and says "unavailable"; it has a reduced-motion version
+  and a text table.
 - Chat search: architecture notes list the word forms visitors use ("hosted", "installed",
   "tested", "pushed", "loss"), "happen" is a stop word so the offline note no longer takes every
   "what happens" question, and the P5-09 review follow-ups are closed. P5-10 itself is parked
@@ -157,7 +163,7 @@ Phase 2 lacks only the owner's content (P2-12).
   tailnet-only via `tailscale serve`. NetworkPolicies verified enforced: another namespace can't
   reach PostgreSQL, Redis, or the API, and the API has no internet egress.
 - P6-04 design: [Infrastructure Explorer visual design](architecture/infrastructure-explorer.md)
-  (flux-capacitor-inspired animated map).
+  (first drafted as a flux-capacitor-inspired map; now a power-grid blueprint, see P6-04).
 - P3-03: K3s v1.37.2 installed with Traefik and ServiceLB off, behind the `kube-port-guard`
   nftables table. The LAN can't reach 6443/10250. The rollback drill found two uninstaller
   pitfalls, now in the [deployment guide](deployment/kubernetes.md#2-install-k3s-approval-required).
@@ -185,15 +191,17 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. Owner content: P2-12's text and more projects.
-2. **P5-10** once that content is indexed, then **P5-11** only if P5-10 shows keyword search
-   missing paraphrased questions.
+1. **P6-02:** the allowlist serializer and snapshot endpoint (with leak tests), first against a
+   fake Kubernetes client; then 🔒 P6-01 and P6-03 for the read-only cluster and Argo CD access,
+   and the live map (P6-04).
+2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
+   shows keyword search missing paraphrased questions.
 
 **Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p5-10-search-word-forms` (search word forms and P5-09 follow-ups).
+**Branch in progress:** `feat/p6-04-explorer-prototype` (P6-04 prototype on sample data).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -465,9 +473,15 @@ Read-only inventory of the reference host. Findings:
       scoped to one Application.
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
-      Design: animated infrastructure map in a flux-capacitor-inspired style
-      ([visual design](architecture/infrastructure-explorer.md)). A prototype with fake data can come
-      first.
+      Design: an animated blueprint of a power grid, with buildings lit by their replicas and
+      sparks on the lines ([visual design](architecture/infrastructure-explorer.md)). A prototype
+      with fake data can come first.
+      Prototype done 2026-11-18: the map runs on sample data at `/apps/infrastructure-explorer/`
+      (labelled as such) with five scenarios, in the snapshot shape the API will return. The
+      owner found the first neon look generic; it is now a power-grid blueprint, with the cluster
+      drawn as a flux capacitor that glows when deployed and pulses during a rollout. Each piece
+      opens a card that flips to what it is, its live facts, and its architecture note. Still
+      open: live data (P6-02) and the offline drill.
 
 ## Phase 7: Hardening (0/5)
 
