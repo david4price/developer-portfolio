@@ -24,7 +24,18 @@ export const docNotesData: DocNotesInput = {
     {
       slug: 'static-site',
       title: 'The static site on Cloudflare Pages',
-      keywords: ['frontend', 'hosting', 'pages', 'cdn', 'react', 'csp', 'headers', 'preview'],
+      keywords: [
+        'frontend',
+        'website',
+        'hosting',
+        'hosted',
+        'pages',
+        'cdn',
+        'react',
+        'csp',
+        'headers',
+        'preview',
+      ],
       text:
         'The Next.js site is exported to plain files and served by Cloudflare Pages, with no ' +
         'server of its own. Cloudflare builds every push to main and a preview for every pull ' +
@@ -69,6 +80,8 @@ export const docNotesData: DocNotesInput = {
         'pipeline',
         'github',
         'actions',
+        'push',
+        'pushed',
       ],
       text:
         'GitHub Actions lints, tests, and builds every change. After a merge to main, a release ' +
@@ -127,7 +140,17 @@ export const docNotesData: DocNotesInput = {
     {
       slug: 'backups',
       title: 'Database backups',
-      keywords: ['backup', 'restore', 'postgresql', 'database', 'recovery', 'cronjob'],
+      keywords: [
+        'backup',
+        'restore',
+        'postgresql',
+        'database',
+        'recovery',
+        'cronjob',
+        'loss',
+        'lost',
+        'lose',
+      ],
       text:
         'A Kubernetes CronJob dumps PostgreSQL every night, checks each dump before keeping it, ' +
         'and keeps 7 daily and 4 weekly copies. A restore was drilled: the dump restored ' +
@@ -137,7 +160,18 @@ export const docNotesData: DocNotesInput = {
     {
       slug: 'local-development',
       title: 'Running the project yourself',
-      keywords: ['setup', 'install', 'docker', 'compose', 'clone', 'run', 'locally', 'contribute'],
+      keywords: [
+        'setup',
+        'install',
+        'installed',
+        'installation',
+        'docker',
+        'compose',
+        'clone',
+        'run',
+        'locally',
+        'contribute',
+      ],
       text:
         'Anyone can clone the repository and run it with Node.js, pnpm, and Docker Compose, ' +
         'which starts PostgreSQL and Redis or the whole stack. It needs none of the author’s ' +
@@ -148,7 +182,17 @@ export const docNotesData: DocNotesInput = {
     {
       slug: 'testing',
       title: 'Testing and quality checks',
-      keywords: ['tests', 'ci', 'lint', 'typecheck', 'quality', 'integration', 'scan'],
+      keywords: [
+        'tests',
+        'tested',
+        'testing',
+        'ci',
+        'lint',
+        'typecheck',
+        'quality',
+        'integration',
+        'scan',
+      ],
       text:
         'Every pull request runs formatting, lint, type checks, and unit tests, then integration tests ' +
         'against real PostgreSQL and Redis, Helm chart validation, a secret scan, and container ' +

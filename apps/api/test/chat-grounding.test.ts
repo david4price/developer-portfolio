@@ -44,6 +44,22 @@ describe('searchTerms', () => {
       'kubernete',
     ]);
   });
+
+  it('drops a trailing s only from words over three letters that do not end in ss', () => {
+    assert.deepEqual(searchTerms('servers status pushes class gas'), [
+      'server',
+      'statu',
+      'pushe',
+      'class',
+      'gas',
+    ]);
+  });
+
+  it('drops every form of "happen", which says nothing about a topic', () => {
+    assert.deepEqual(searchTerms('Could it happen? It happens, happened, is happening: backups'), [
+      'backup',
+    ]);
+  });
 });
 
 describe('RegistryKnowledgeBase.search', () => {
@@ -246,6 +262,30 @@ describe('architecture notes', () => {
       firstLine(chat),
       'How the chat assistant works',
       'the chat note\'s title outranks the release note\'s "actions" keyword',
+    );
+  });
+
+  it('find notes by the word forms visitors use', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const firstNote: readonly [string, string][] = [
+      ['Where is it hosted?', 'static-site'],
+      ['How is it installed?', 'local-development'],
+      ['Is anything tested automatically?', 'testing'],
+      ['What if you lose data?', 'backups'],
+      // "happen" is a stop word, so the offline note's "What happens…" title doesn't win.
+      ['What happens when you push to main?', 'gitops-release'],
+    ];
+    for (const [question, slug] of firstNote) {
+      const retrieved = shipped.search(question, 3);
+      assert.ok(
+        retrieved[0]?.endsWith(`[[doc:${slug}]]`),
+        `${question}: ${retrieved.map(firstLine).join(' | ')}`,
+      );
+    }
+    const general = shipped.search('Where is data stored?', 3);
+    assert.ok(
+      !general.some((snippet) => snippet.endsWith('[[doc:backups]]')),
+      `"data" is not a backups keyword: ${general.map(firstLine).join(' | ')}`,
     );
   });
 

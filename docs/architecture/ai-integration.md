@@ -177,8 +177,7 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    of the prompt, never edited, and so is the whole block if joining snippets formed markup. Content is otherwise sent exactly as written
    (`Array<string>`, `10⁶`, `<PortfolioData />`). Then trimmed history and the new message. The
    whole prompt is held to 6,000 characters (≈1,500 tokens): data gets at most 1,800, and history
-   gets
-   what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
+   gets what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
    about 900–1,500 characters.
 5. **Navigation (Confirmed, P5-05; doc sources P5-09):** retrieved data names each page with a
    marker such as `[[project:<slug>]]` or `[[mini-app:<slug>]]`, and each architecture note with a
@@ -199,8 +198,12 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    doc link. Brief answers that barely touch a note (3–36%) get no fallback link.
    Keyword search matches exact words apart from that trailing "s" (dropped from any word over
    three letters not ending in "ss": "projects" matches "project", but "pushes" becomes "pushe"
-   and "status" becomes "statu"); notes list other forms visitors use ("deployed") as keywords,
-   and P5-10 measures how often search misses.
+   and "status" becomes "statu"); notes list other forms visitors use as keywords ("deployed",
+   "hosted", "installed", "tested", "pushed", "loss"), but not words common to many questions
+   ("data" pulled the backups note into every question about data). "happen" is a stop word:
+   the offline note's title ("What happens when…") otherwise took every "what happens" question.
+   Measuring retrieval on a fixed question set (P5-10) waits for real profile and project
+   content.
    A marker may name its page by slug or title
    (`[[project: Recipe Finder]]`), with or without the kind. Markers with an unknown page, a page of
    the wrong kind, a made-up kind, or a slug-shaped name that matches nothing are removed from the

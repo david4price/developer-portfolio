@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-17_
+_Last updated: 2026-11-18_
 
 **Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- Chat search: architecture notes list the word forms visitors use ("hosted", "installed",
+  "tested", "pushed", "loss"), "happen" is a stop word so the offline note no longer takes every
+  "what happens" question, and the P5-09 review follow-ups are closed. P5-10 itself is parked
+  (see below).
 - P5-09: the chat answers "how does it work?" from 12 curated architecture notes
   (`packages/project-registry/src/docs-data.ts`: overview, site, API, Kubernetes, releases,
   networking, secrets, the assistant, offline behaviour, backups, local setup, testing), each
@@ -181,15 +185,17 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P5-10:** measure retrieval quality on a fixed question set (profile, skills, projects, and
-   architecture, including paraphrases), now that architecture notes are indexed.
-2. **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
+1. Owner content: P2-12's text and more projects.
+2. **P5-10** once that content is indexed, then **P5-11** only if P5-10 shows keyword search
+   missing paraphrased questions.
 
 **Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p5-09-docs-index` (P2-12 groundwork and P5-09; not pushed).
+**Branch in progress:** `feat/p5-10-search-word-forms` (search word forms and P5-09 follow-ups).
+A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
+questions and a test harness), for when real content exists.
 Open every PR against `main`.
 
 **Waiting on the owner** (the domain for Phase 4 is ready)
@@ -425,12 +431,17 @@ Read-only inventory of the reference host. Findings:
       Include verb forms and "-es" plurals: search only drops a trailing "s", so on 2026-11-17
       "Where is it hosted?" and "How is it installed?" matched no note (featured-project
       fallback); "How is this site tested?" got three wrong notes, ranked by the common word
-      "site" (the offline note also says "tested"), while "How do you test it?" found the testing
-      note first; and "push" ranks the static-site note above the release note, which says
-      "pushes". Count wrong hits apart from misses, and separate
-      missing content (nothing covers caching) from search misses. A hand-rolled -ed/-ing stemmer
-      tried in P5-09 review caused new mismatches and was removed; notes list common forms such
-      as "deployed" as keywords.
+      "site" (the offline and secrets notes also say "tested"), while "How do you test it?" found
+      the testing note first; and "push" missed the release note, which says "pushes" (searched
+      as "pushe"). Count wrong hits apart from misses, and separate missing content (nothing
+      covers caching) from search misses. A hand-rolled -ed/-ing stemmer tried in P5-09 review
+      caused new mismatches and was removed; notes list common forms such as "deployed" as
+      keywords.
+      Parked 2026-11-18: with one project and the profile not indexed, only architecture
+      questions can be scored, and a draft harness kept growing rules instead of telling us
+      anything. The word forms found while drafting it ("hosted", "installed", "tested", "pushed",
+      "loss") are now note keywords and "happen" a stop word, each with a test. Resume once
+      P2-12's text and more projects are indexed.
 - [ ] **P5-11** (conditional) Add embedding search with pgvector. _Needs:_ P5-10 showing keyword
       search misses paraphrased questions. _Done when:_ embeddings are computed on CPU at release
       time and stored in the portfolio's own PostgreSQL (no new service, no GPU use), behind the
