@@ -6,7 +6,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CARD_IDS, cardDetails } from '../src/mini-apps/infrastructure-explorer/card-content.js';
 import { ExplorerCard } from '../src/mini-apps/infrastructure-explorer/explorer-card.js';
 import { ExplorerMap } from '../src/mini-apps/infrastructure-explorer/explorer-map.js';
-import { ExplorerTable } from '../src/mini-apps/infrastructure-explorer/infrastructure-explorer.js';
+import {
+  ExplorerTable,
+  InfrastructureExplorer,
+  livePower,
+} from '../src/mini-apps/infrastructure-explorer/infrastructure-explorer.js';
+import {
+  fetchLiveSnapshot,
+  parseSnapshot,
+  withVisitorWebsite,
+} from '../src/mini-apps/infrastructure-explorer/live-snapshot.js';
 import {
   componentById,
   componentStatus,
@@ -16,6 +25,7 @@ import {
   layoutWires,
   type MapLayout,
   NARROW_LAYOUT,
+  OFF_REASONS,
   type Point,
   RUNTIME_CONDUITS,
   WIDE_LAYOUT,
@@ -435,4 +445,157 @@ describe('layouts', () => {
       }
     });
   }
+});
+
+describe('live snapshot', () => {
+  const live = () => {
+    const snapshot = sampleSnapshot('steady', NOW);
+    assert.ok(snapshot);
+    return JSON.parse(JSON.stringify(snapshot)) as Record<string, unknown>;
+  };
+
+  it('accepts exactly the API shape', () => {
+    const value = live();
+    assert.deepEqual(parseSnapshot(value), value);
+    assert.deepEqual(parseSnapshot({ ...value, release: null })?.release, null);
+  });
+
+  it('rejects anything unexpected rather than drawing it', () => {
+    const value = live();
+    const components = value.components as Record<string, unknown>[];
+    const bad = [
+      null,
+      'snapshot',
+      { ...value, generatedAt: 'yesterday' },
+      { ...value, sync: 'maybe' },
+      { ...value, release: { commit: '', pinnedAt: value.generatedAt } },
+      { ...value, components: [...components, components[0]] },
+      { ...value, components: [{ ...components[0], id: 'database' }] },
+      { ...value, components: [{ ...components[0], health: 'great' }] },
+      {
+        ...value,
+        components: [{ ...components[0], replicas: { desired: -1, available: 0, ready: 0 } }],
+      },
+      { ...value, components: [{ ...components[0], version: 'x'.repeat(65) }] },
+      { ...value, components: [{ ...components[0], traffic: 'heavy' }] },
+    ];
+    for (const candidate of bad)
+      assert.equal(parseSnapshot(candidate), null, JSON.stringify(candidate).slice(0, 80));
+  });
+
+  const respond = (status: number, body: unknown) =>
+    (async () =>
+      new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      })) as unknown as typeof fetch;
+  const fetchWith = (impl: typeof fetch) =>
+    fetchLiveSnapshot(
+      'https://api.example.com/api/v1/infrastructure',
+      AbortSignal.timeout(1_000),
+      impl,
+    );
+
+  it('tells a snapshot, a disabled view, and every failure apart', async () => {
+    assert.equal((await fetchWith(respond(200, live()))).kind, 'snapshot');
+    assert.deepEqual(
+      await fetchWith(respond(503, { error: { code: 'infrastructure_disabled', message: 'off' } })),
+      { kind: 'disabled' },
+    );
+    for (const impl of [
+      respond(503, { error: { code: 'infrastructure_unavailable', message: 'down' } }),
+      respond(500, 'oops'),
+      respond(200, 'not json'),
+      respond(200, { generatedAt: 'nope' }),
+      (async () => {
+        throw new TypeError('network');
+      }) as unknown as typeof fetch,
+    ]) {
+      assert.deepEqual(await fetchWith(impl), { kind: 'unavailable' });
+    }
+  });
+
+  it('asks without cookies or caches', async () => {
+    let init: RequestInit | undefined;
+    await fetchWith((async (_url: string, options: RequestInit) => {
+      init = options;
+      return new Response(JSON.stringify(live()), { status: 200 });
+    }) as unknown as typeof fetch);
+    assert.equal(init?.credentials, 'omit');
+    assert.equal(init?.cache, 'no-store');
+  });
+
+  it('fills in only the website, which the visitor is looking at', () => {
+    const snapshot = sampleSnapshot('steady', NOW);
+    assert.ok(snapshot);
+    const unknownWeb = {
+      ...snapshot,
+      components: snapshot.components.map((component) =>
+        component.id === 'web' || component.id === 'ai'
+          ? { ...component, health: 'unknown' as const }
+          : component,
+      ),
+    };
+    const seen = withVisitorWebsite(unknownWeb);
+    assert.equal(componentById(seen, 'web').health, 'healthy');
+    assert.equal(componentById(seen, 'ai').health, 'unknown');
+  });
+});
+
+describe('livePower', () => {
+  const good = () => {
+    const snapshot = sampleSnapshot('steady', NOW);
+    assert.ok(snapshot);
+    return { snapshot, receivedAt: NOW - 1_000 };
+  };
+
+  it('connects first, then shows the last good snapshot until it goes stale', () => {
+    assert.deepEqual(livePower({ latest: null, good: null }, NOW), {
+      on: false,
+      reason: 'connecting',
+    });
+    assert.deepEqual(livePower({ latest: { kind: 'unavailable' }, good: null }, NOW), {
+      on: false,
+      reason: 'unavailable',
+    });
+    const kept = livePower({ latest: { kind: 'unavailable' }, good: good() }, NOW);
+    assert.equal(kept.on, true, 'one failed refresh keeps the last good snapshot');
+    assert.deepEqual(
+      livePower({ latest: { kind: 'unavailable' }, good: good() }, NOW + STALE_AFTER_MS),
+      {
+        on: false,
+        reason: 'stale',
+      },
+    );
+  });
+
+  it('powers down as soon as the API says the view is off', () => {
+    assert.deepEqual(livePower({ latest: { kind: 'disabled' }, good: good() }, NOW), {
+      on: false,
+      reason: 'disabled',
+    });
+  });
+
+  it('says why it is off, on the map and in the text view', () => {
+    for (const reason of ['connecting', 'disabled', 'unavailable', 'stale'] as const) {
+      const map = renderToStaticMarkup(
+        createElement(ExplorerMap, { power: { on: false, reason }, now: NOW }),
+      );
+      assert.ok(map.includes(OFF_REASONS[reason].map), reason);
+      assert.ok(!/healthy/i.test(map), `${reason}: never healthy without data`);
+      const table = renderToStaticMarkup(
+        createElement(ExplorerTable, { power: { on: false, reason }, now: NOW }),
+      );
+      assert.ok(table.includes(OFF_REASONS[reason].text), reason);
+    }
+  });
+});
+
+describe('InfrastructureExplorer without an API', () => {
+  it('opens on the simulation, with the live switch off and disabled', () => {
+    const html = renderToStaticMarkup(createElement(InfrastructureExplorer));
+    assert.match(html, /role="switch"[^>]*aria-checked="false"[^>]*disabled=""/);
+    assert.match(html, /Not available on this build/);
+    assert.match(html, /Simulated scenario/);
+  });
 });

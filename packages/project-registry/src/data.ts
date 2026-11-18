@@ -28,13 +28,13 @@ export const registryData: RegistryInput = {
       slug: 'infrastructure-explorer',
       title: 'Infrastructure Explorer',
       summary: 'Live, sanitized view of the Kubernetes deployment that serves this site.',
-      status: 'planned',
+      status: 'available',
     },
     {
       slug: 'portfolio-assistant',
       title: 'Portfolio Assistant',
       summary: 'Ask questions about projects and experience, grounded in this registry.',
-      status: 'planned',
+      status: 'available',
     },
   ],
 };
