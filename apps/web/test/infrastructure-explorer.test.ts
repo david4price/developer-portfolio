@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import type { InfrastructureComponent, InfrastructureSnapshot } from '@portfolio/shared-types';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { CARD_IDS, cardDetails } from '../src/mini-apps/infrastructure-explorer/card-content.js';
+import { ExplorerCard } from '../src/mini-apps/infrastructure-explorer/explorer-card.js';
 import { ExplorerMap } from '../src/mini-apps/infrastructure-explorer/explorer-map.js';
 import { ExplorerTable } from '../src/mini-apps/infrastructure-explorer/infrastructure-explorer.js';
 import {
@@ -196,7 +198,8 @@ describe('ExplorerMap', () => {
       createElement(ExplorerMap, { power: mapPower(steady(), NOW), now: NOW }),
     );
     for (const { label } of MAP_NODES) assert.ok(html.includes(label), label);
-    assert.match(html, /role="img"/);
+    assert.match(html, /role="group"/);
+    assert.ok(!html.includes('role="button"'), 'no controls without onSelect');
     assert.match(html, /8 of 8 components healthy/);
     assert.match(html, /Healthy, 1\/1 ready/);
     assert.ok(!html.includes('explorer-map--off'));
@@ -258,5 +261,72 @@ describe('ExplorerTable', () => {
     assert.match(off, /role="status"/);
     assert.match(off, /Status unavailable/);
     assert.ok(!off.includes('<table'));
+  });
+});
+
+describe('cards', () => {
+  const power = () => mapPower(steady(), NOW);
+
+  it('give every piece of the map copy and a link to an existing architecture note', () => {
+    assert.equal(CARD_IDS.length, 12);
+    for (const id of CARD_IDS) {
+      const details = cardDetails(id, power(), NOW);
+      assert.ok(details.about.length > 20, id);
+      assert.ok(
+        details.more?.url.startsWith('https://github.com/'),
+        `${id} links to its note on GitHub`,
+      );
+    }
+  });
+
+  it('show live facts only from the snapshot, and say so when there are none', () => {
+    const api = cardDetails('api', power(), NOW);
+    assert.deepEqual(
+      api.facts.map(([label]) => label),
+      ['Status', 'Version', 'Replicas', 'Traffic', 'Updated'],
+    );
+    assert.ok(api.facts.some(([, value]) => value === '1 ready, 1 available, 1 desired'));
+    assert.equal(api.noFacts, null);
+
+    const cluster = cardDetails('cluster', power(), NOW);
+    assert.ok(cluster.facts.some(([label, value]) => label === 'State' && value === 'Deployed'));
+    const pin = cardDetails('pin', power(), NOW);
+    assert.ok(pin.facts.some(([label, value]) => label === 'Release' && value === 'a1b2c3d'));
+    assert.equal(cardDetails('actions', power(), NOW).noFacts, 'No live data for this stage yet.');
+
+    const off = cardDetails('api', mapPower(null, NOW), NOW);
+    assert.deepEqual(off.facts, []);
+    assert.equal(off.noFacts, 'Live status unavailable.');
+  });
+
+  it('open from every building and the capacitor on the map, and from each table row', () => {
+    const map = renderToStaticMarkup(
+      createElement(ExplorerMap, { power: power(), now: NOW, onSelect() {} }),
+    );
+    assert.equal(map.match(/role="button"/g)?.length, 12);
+    assert.match(map, /aria-label="API: Healthy, 1\/1 ready\. Open details\."/);
+    assert.match(map, /aria-label="K3s cluster: Deployed\. Open details\."/);
+
+    const table = renderToStaticMarkup(
+      createElement(ExplorerTable, { power: power(), now: NOW, onSelect() {} }),
+    );
+    assert.equal(table.match(/class="explorer-table__details"/g)?.length, 8);
+  });
+
+  it('open on the front, with only the visible face interactive, and link out safely', () => {
+    const closed = renderToStaticMarkup(
+      createElement(ExplorerCard, { id: null, power: power(), now: NOW, onClose() {} }),
+    );
+    assert.ok(!closed.includes('explorer-card__face'));
+
+    const html = renderToStaticMarkup(
+      createElement(ExplorerCard, { id: 'api', power: power(), now: NOW, onClose() {} }),
+    );
+    assert.match(html, /<dialog[^>]*aria-labelledby=/);
+    assert.match(html, /explorer-card__face--back"[^>]*inert/);
+    assert.ok(!/explorer-card__face--front"[^>]*inert/.test(html));
+    assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+    assert.match(html, /Read more: The REST API/);
+    assert.ok(!/\sstyle=/.test(html), 'no inline styles (CSP)');
   });
 });

@@ -1159,6 +1159,192 @@ main {
   font-size: 11px;
 }
 
+/* Selectable pieces of the map: a pointer, and a gold outline on focus. */
+.explorer-select {
+  cursor: pointer;
+}
+
+.explorer-select:focus {
+  outline: none;
+}
+
+.explorer-select:hover .explorer-node__footprint,
+.explorer-select:hover .explorer-core__box {
+  stroke-width: 3;
+}
+
+.explorer-select:focus-visible .explorer-node__footprint,
+.explorer-select:focus-visible .explorer-core__box {
+  stroke: #ffd677;
+  stroke-width: 3.5;
+}
+
+.explorer-table__details {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* The card: a blueprint sheet that pops up and flips from its front to its details. */
+.explorer-card {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  perspective: 1400px;
+}
+
+.explorer-card::backdrop {
+  background: rgb(2 8 20 / 0.6);
+}
+
+.explorer-card[open] {
+  animation: explorer-card-in 0.25s ease-out;
+}
+
+@keyframes explorer-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.explorer-card__flipper {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.explorer-card__flipper[data-flipped] {
+  transform: rotateY(180deg);
+}
+
+.explorer-card__face {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--bp-ink);
+  border-radius: 12px;
+  background-color: var(--bp-paper);
+  background-image:
+    linear-gradient(var(--bp-grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid-minor) 1px, transparent 1px);
+  background-size: 20px 20px;
+  color: var(--bp-text);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  backface-visibility: hidden;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
+  overflow-y: auto;
+}
+
+.explorer-card__face--back {
+  transform: rotateY(180deg);
+}
+
+.explorer-piece {
+  min-width: 0;
+  max-height: 16rem;
+  margin-top: 1rem;
+}
+
+.explorer-card__title {
+  margin: 0;
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.explorer-card__subtitle {
+  margin: -0.5rem 0 0;
+  color: var(--bp-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.explorer-card__about {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.explorer-card__facts {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid rgb(169 205 245 / 0.35);
+  font-size: 0.85rem;
+}
+
+.explorer-card__facts div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.explorer-card__facts dt {
+  color: var(--bp-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+}
+
+.explorer-card__facts dd {
+  margin: 0;
+}
+
+.explorer-card__no-facts {
+  margin: 0;
+  color: var(--bp-muted);
+  font-size: 0.85rem;
+}
+
+.explorer-card__more {
+  color: var(--bp-healthy);
+  font-size: 0.85rem;
+}
+
+.explorer-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.explorer-card__actions button {
+  font: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--bp-ink);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bp-text);
+  cursor: pointer;
+}
+
+.explorer-card__actions button:first-child {
+  border-color: var(--bp-window-lit);
+  color: var(--bp-window-lit);
+}
+
+.explorer-card__actions button:focus-visible,
+.explorer-card__more:focus-visible {
+  outline: 2px solid var(--bp-window-lit);
+  outline-offset: 2px;
+}
+
 .explorer[data-paused] .explorer-map * {
   animation-play-state: paused;
 }
@@ -1185,6 +1371,15 @@ main {
 
   .explorer-window--waking {
     opacity: 0.4;
+  }
+
+  /* No flip or pop: the card's faces swap at once. */
+  .explorer-card[open] {
+    animation: none;
+  }
+
+  .explorer-card__flipper {
+    transition: none;
   }
 }
 

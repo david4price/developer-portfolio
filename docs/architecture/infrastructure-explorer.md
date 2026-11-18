@@ -87,5 +87,13 @@ It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
 - Styling uses classes only (the site CSP blocks inline styles), on a blueprint sheet that looks
   the same in both themes. Reduced motion removes sparks, bursts, and all flicker; animations
   pause in hidden tabs; a table lists the same data as text.
+- **Cards:** every building, delivery stage, and the flux capacitor is a button (Tab, Enter, or
+  a click; rows in the text table have a "Details" button too). It opens a card in a modal
+  `<dialog>` that shows the piece close up, then flips to its details: what it is (short copy in
+  `card-content.ts`), its live facts (only the allowlisted snapshot fields: status, version,
+  replicas, traffic, age; release and sync for the cluster and the pin), and a link to the
+  architecture note it belongs to on GitHub, from the same notes the chat uses. Only the visible
+  face is interactive (`inert`); Esc, a click outside, or Close shuts it and returns focus; reduced
+  motion swaps the flip and pop for an instant change.
 - Next: P6-02 serves the real snapshot. The page then fetches it every 12 s with the "not
   configured", "unavailable", and loaded states the web rules require.

@@ -479,7 +479,8 @@ Read-only inventory of the reference host. Findings:
       Prototype done 2026-11-18: the map runs on sample data at `/apps/infrastructure-explorer/`
       (labelled as such) with five scenarios, in the snapshot shape the API will return. The
       owner found the first neon look generic; it is now a power-grid blueprint, with the cluster
-      drawn as a flux capacitor that glows when deployed and pulses during a rollout. Still
+      drawn as a flux capacitor that glows when deployed and pulses during a rollout. Each piece
+      opens a card that flips to what it is, its live facts, and its architecture note. Still
       open: live data (P6-02) and the offline drill.
 
 ## Phase 7: Hardening (0/5)

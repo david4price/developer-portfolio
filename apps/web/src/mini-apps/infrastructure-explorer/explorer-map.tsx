@@ -26,6 +26,8 @@ import {
   windowStates,
   worseHealth,
 } from './map-model.ts';
+import type { CardId } from './card-content.ts';
+import type { ReactNode } from 'react';
 
 const VIEW_WIDTH = 920;
 const VIEW_HEIGHT = 710;
@@ -310,6 +312,112 @@ function TitleBlock({ snapshot, now }: TitleBlockProps) {
   );
 }
 
+interface SelectableProps {
+  readonly label: string;
+  readonly onSelect: (() => void) | undefined;
+  readonly children: ReactNode;
+}
+
+/** Makes a piece of the map a button that opens its card, by click, Enter, or Space. */
+function Selectable({ label, onSelect, children }: SelectableProps) {
+  if (onSelect === undefined) return children;
+  return (
+    <g
+      className="explorer-select"
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      aria-haspopup="dialog"
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      {children}
+    </g>
+  );
+}
+
+type BuildingId = Exclude<CardId, 'cluster'>;
+
+/** Delivery stages have no health of their own: lit in a fixed pattern while there is data. */
+function deliveryWindows(snapshot: InfrastructureSnapshot | null): readonly WindowState[] {
+  return Array.from({ length: WINDOW_COLUMNS * WINDOW_ROWS }, (_, index) =>
+    snapshot !== null && index % 3 !== 1 ? 'lit' : 'dark',
+  );
+}
+
+/** How a component or delivery stage is drawn, from the snapshot (or `null` for no data). */
+function buildingProps(id: BuildingId, snapshot: InfrastructureSnapshot | null): BuildingProps {
+  const stage = DELIVERY_STAGES.find((candidate) => candidate.id === id);
+  if (stage !== undefined) {
+    return {
+      x: stage.x,
+      y: stage.y,
+      label: stage.label,
+      status:
+        snapshot === null
+          ? 'No data'
+          : stage.id === 'pin' && snapshot.release !== null
+            ? `Release ${snapshot.release.commit}`
+            : '',
+      tone: snapshot === null ? 'off' : 'delivery',
+      windows: deliveryWindows(snapshot),
+    };
+  }
+  const node = MAP_NODES.find((candidate) => candidate.id === id);
+  if (node === undefined) throw new Error(`no map piece for ${id}`);
+  const current = snapshot === null ? null : componentById(snapshot, node.id);
+  return {
+    x: node.x,
+    y: node.y,
+    label: node.label,
+    detail: node.detail,
+    status: current === null ? 'No data' : componentHealthText(current),
+    note: current?.failure ? FAILURE_LABELS[current.failure] : undefined,
+    tone: current?.health ?? 'off',
+    windows: windowStates(current),
+    beacon: current?.health === 'down',
+  };
+}
+
+const BUILDING_IDS: readonly BuildingId[] = [
+  ...DELIVERY_STAGES.map(({ id }) => id),
+  ...MAP_NODES.map(({ id }) => id),
+];
+
+/**
+ * One piece of the map on its own, for the front of its card. It reuses the map's filters, which
+ * stay in the page while a card is open.
+ */
+export function MapPiece({ id, power }: { readonly id: CardId; readonly power: MapPower }) {
+  const snapshot = power.on ? power.snapshot : null;
+  if (id === 'cluster') {
+    return (
+      <svg
+        className="explorer-map explorer-piece"
+        viewBox={`${CORE.x - 80} ${CORE.y - 88} 160 176`}
+        aria-hidden="true"
+      >
+        <Core state={coreState(snapshot)} />
+      </svg>
+    );
+  }
+  const props = buildingProps(id, snapshot);
+  return (
+    <svg
+      className="explorer-map explorer-piece"
+      viewBox={`${props.x - 100} ${props.y - 50} 200 ${props.note === undefined ? 135 : 150}`}
+      aria-hidden="true"
+    >
+      <Building {...props} />
+    </svg>
+  );
+}
+
 function summary(snapshot: InfrastructureSnapshot): string {
   const healthy = MAP_NODES.filter(
     ({ id }) => componentById(snapshot, id).health === 'healthy',
@@ -320,6 +428,8 @@ function summary(snapshot: InfrastructureSnapshot): string {
 export interface ExplorerMapProps {
   readonly power: MapPower;
   readonly now: number;
+  /** Opens a piece's card; without it, the map is a picture with no controls. */
+  readonly onSelect?: (id: CardId) => void;
 }
 
 /**
@@ -327,7 +437,7 @@ export interface ExplorerMapProps {
  * snapshot; without fresh data the grid powers down and says "unavailable" instead of showing the
  * last known state.
  */
-export function ExplorerMap({ power, now }: ExplorerMapProps) {
+export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
   const snapshot = power.on ? power.snapshot : null;
   const component = (id: InfrastructureComponentId): InfrastructureComponent | null =>
     snapshot === null ? null : componentById(snapshot, id);
@@ -346,17 +456,12 @@ export function ExplorerMap({ power, now }: ExplorerMapProps) {
     const second = component(b);
     return first === null || second === null ? 'off' : worseHealth(first.health, second.health);
   };
-  // Delivery stages have no health of their own: lit in a fixed pattern while there is data.
-  const deliveryWindows: readonly WindowState[] = Array.from(
-    { length: WINDOW_COLUMNS * WINDOW_ROWS },
-    (_, index) => (snapshot !== null && index % 3 !== 1 ? 'lit' : 'dark'),
-  );
-
+  const select = (id: CardId) => (onSelect === undefined ? undefined : () => onSelect(id));
   return (
     <svg
       className={`explorer-map${snapshot === null ? ' explorer-map--off' : ''}`}
       viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-      role="img"
+      role="group"
       aria-label={
         snapshot === null
           ? 'Deployment map, powered off: the cluster status is unavailable.'
@@ -438,40 +543,24 @@ export function ExplorerMap({ power, now }: ExplorerMapProps) {
         })}
       </g>
 
-      <Core state={coreState(snapshot)} />
+      <Selectable
+        label={`K3s cluster: ${CORE_STATE_LABELS[coreState(snapshot)]}. Open details.`}
+        onSelect={select('cluster')}
+      >
+        <Core state={coreState(snapshot)} />
+      </Selectable>
 
-      {DELIVERY_STAGES.map((stage) => (
-        <Building
-          key={stage.id}
-          x={stage.x}
-          y={stage.y}
-          label={stage.label}
-          status={
-            snapshot === null
-              ? 'No data'
-              : stage.id === 'pin' && snapshot.release !== null
-                ? `Release ${snapshot.release.commit}`
-                : ''
-          }
-          tone={delivery}
-          windows={deliveryWindows}
-        />
-      ))}
-      {MAP_NODES.map(({ id, label, detail, x, y }) => {
-        const current = component(id);
+      {BUILDING_IDS.map((id) => {
+        const props = buildingProps(id, snapshot);
+        const status = props.status === '' ? 'delivery stage' : props.status;
         return (
-          <Building
+          <Selectable
             key={id}
-            x={x}
-            y={y}
-            label={label}
-            detail={detail}
-            status={current === null ? 'No data' : componentHealthText(current)}
-            note={current?.failure ? FAILURE_LABELS[current.failure] : undefined}
-            tone={tone(id)}
-            windows={windowStates(current)}
-            beacon={current?.health === 'down'}
-          />
+            label={`${props.label}: ${status}. Open details.`}
+            onSelect={select(id)}
+          >
+            <Building {...props} />
+          </Selectable>
         );
       })}
 

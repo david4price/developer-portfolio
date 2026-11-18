@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { CardId } from './card-content.ts';
+import { ExplorerCard } from './explorer-card.tsx';
 import { ExplorerMap } from './explorer-map.tsx';
 import { componentById, componentStatus, MAP_NODES, type MapPower, mapPower } from './map-model.ts';
 import {
@@ -23,8 +25,15 @@ function secondsAgo(time: string, now: number): string {
   return seconds < 120 ? `${seconds} s ago` : `${Math.round(seconds / 60)} min ago`;
 }
 
+export interface ExplorerTableProps {
+  readonly power: MapPower;
+  readonly now: number;
+  /** Opens a component's card; without it, the table has no buttons. */
+  readonly onSelect?: (id: CardId) => void;
+}
+
 /** The same data as the map, as text: the accessible view that needs no animation or colour. */
-export function ExplorerTable({ power, now }: { readonly power: MapPower; readonly now: number }) {
+export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
   if (!power.on) {
     return (
       <p className="explorer-status" role="status">
@@ -49,6 +58,11 @@ export function ExplorerTable({ power, now }: { readonly power: MapPower; readon
           <th scope="col">Status</th>
           <th scope="col">Version</th>
           <th scope="col">Traffic</th>
+          {onSelect !== undefined && (
+            <th scope="col">
+              <span className="visually-hidden">Details</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -60,6 +74,18 @@ export function ExplorerTable({ power, now }: { readonly power: MapPower; readon
               <td>{componentStatus(component)}</td>
               <td>{component.version ?? '—'}</td>
               <td>{component.traffic ?? '—'}</td>
+              {onSelect !== undefined && (
+                <td>
+                  <button
+                    type="button"
+                    className="explorer-table__details"
+                    aria-haspopup="dialog"
+                    onClick={() => onSelect(id)}
+                  >
+                    Details<span className="visually-hidden"> for {label}</span>
+                  </button>
+                </td>
+              )}
             </tr>
           );
         })}
@@ -76,6 +102,7 @@ export function InfrastructureExplorer() {
   const [scenario, setScenario] = useState<SampleScenario>('steady');
   const [now, setNow] = useState(() => Date.now());
   const [paused, setPaused] = useState(false);
+  const [card, setCard] = useState<CardId | null>(null);
 
   const [fetchedAt, setFetchedAt] = useState(() => Date.now());
 
@@ -110,7 +137,8 @@ export function InfrastructureExplorer() {
       <p className="explorer-note">
         Prototype with sample data: this map is not connected to the live cluster yet. Lit windows
         show running replicas, sparks show traffic, and a red beacon marks a component that is down.
-        The cluster&rsquo;s flux capacitor glows when deployed and pulses during a rollout.
+        The cluster&rsquo;s flux capacitor glows when deployed and pulses during a rollout. Select
+        any building or the capacitor for its card.
       </p>
       <fieldset className="explorer-scenarios">
         <legend>Sample scenario</legend>
@@ -137,9 +165,10 @@ export function InfrastructureExplorer() {
         {power.on ? '' : ': the map is powered off and the status is unavailable'}.
       </p>
       <div className="explorer-frame">
-        <ExplorerMap power={power} now={now} />
+        <ExplorerMap power={power} now={now} onSelect={setCard} />
       </div>
-      <ExplorerTable power={power} now={now} />
+      <ExplorerTable power={power} now={now} onSelect={setCard} />
+      <ExplorerCard id={card} power={power} now={now} onClose={() => setCard(null)} />
     </section>
   );
 }
