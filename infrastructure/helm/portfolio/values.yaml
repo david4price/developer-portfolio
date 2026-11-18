@@ -82,6 +82,19 @@ api:
   # default: the endpoint then answers `infrastructure_disabled` and no token is mounted.
   infrastructure:
     enabled: false
+    # Optional P6-03 source. Secret is mounted only in the API; token and TLS CA rotate in place.
+    argocd:
+      enabled: false
+      serverUrl: https://argocd-server.argocd.svc
+      application: portfolio
+      project: portfolio
+      existingSecret: ''
+      tokenKey: token
+      caKey: ca.crt
+      namespace: argocd
+      podLabels:
+        app.kubernetes.io/name: argocd-server
+      port: 8080
     # Egress to the Kubernetes API server, required with NetworkPolicies on. Pods reach it through
     # the `kubernetes` Service, which forwards to the node's address on the API server port, and
     # policies see that translated destination.

@@ -2,6 +2,11 @@ import { Logger } from '@nestjs/common';
 import type { InfrastructureSnapshot } from '@portfolio/shared-types';
 import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
+import {
+  DeploymentReadError,
+  type DeploymentReader,
+  type DeploymentStatus,
+} from './deployment-reader.js';
 
 export const INFRASTRUCTURE_SNAPSHOTS = Symbol('INFRASTRUCTURE_SNAPSHOTS');
 
@@ -43,6 +48,7 @@ export interface SnapshotServiceOptions {
   readonly ttlMs?: number;
   readonly timeoutMs?: number;
   readonly now?: () => number;
+  readonly deploymentReader?: DeploymentReader;
 }
 
 /**
@@ -83,11 +89,30 @@ export class InfrastructureSnapshotService implements SnapshotSource {
 
   private async refresh(): Promise<InfrastructureSnapshot> {
     try {
-      const objects = await this.reader.read(AbortSignal.timeout(this.timeoutMs));
-      const snapshot = serializeSnapshot(objects, {
+      const signal = AbortSignal.timeout(this.timeoutMs);
+      const [objects, deployment] = await Promise.all([
+        this.reader.read(signal),
+        this.readDeployment(signal),
+      ]);
+      const workloads = serializeSnapshot(objects, {
         namespace: this.options.namespace,
         now: new Date(this.now()),
       });
+      const snapshot =
+        deployment === null
+          ? workloads
+          : {
+              ...workloads,
+              ...deployment,
+              components: workloads.components.map((component) =>
+                component.id === 'argocd'
+                  ? {
+                      ...component,
+                      health: 'healthy' as const,
+                    }
+                  : component,
+              ),
+            };
       this.cached = { snapshot, at: this.now() };
       this.failedAt = null;
       return snapshot;
@@ -112,5 +137,20 @@ export class InfrastructureSnapshotService implements SnapshotSource {
     return this.cached === null
       ? Promise.reject(new InfrastructureUnavailableError())
       : Promise.resolve(this.cached.snapshot);
+  }
+
+  private async readDeployment(signal: AbortSignal): Promise<DeploymentStatus | null> {
+    if (this.options.deploymentReader === undefined) return null;
+    try {
+      return await this.options.deploymentReader.read(signal);
+    } catch (error) {
+      const failure = error instanceof DeploymentReadError ? error : null;
+      this.logger.warn({
+        message: 'Deployment status refresh failed',
+        reason: failure?.reason ?? 'unexpected',
+        status: failure?.status ?? null,
+      });
+      return null;
+    }
   }
 }

@@ -30,6 +30,9 @@ api:
   # port only.
   infrastructure:
     enabled: true
+    argocd:
+      enabled: true
+      existingSecret: portfolio-argocd-reader
     apiServerEgress:
       cidr: 192.168.0.0/16
       port: 6443

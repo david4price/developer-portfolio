@@ -19,6 +19,14 @@ export const messageGuardNames = ['rules', 'classifier'] as const;
 
 export const infrastructureSourceNames = ['disabled', 'kubernetes'] as const;
 
+export interface ArgoCdConfig {
+  readonly serverUrl: string;
+  readonly application: string;
+  readonly project: string;
+  readonly tokenFile: string;
+  readonly caFile: string;
+}
+
 /**
  * Where the Infrastructure Explorer's snapshot comes from (P6-02). `kubernetes` reads the
  * workloads in one namespace through the in-cluster API server, with the pod's service account
@@ -32,6 +40,7 @@ export type InfrastructureConfig =
       readonly namespace: string;
       /** `https://<host>:<port>` of the API server, from the variables Kubernetes injects. */
       readonly apiServerUrl: string;
+      readonly argocd?: ArgoCdConfig;
     };
 
 /**
@@ -160,11 +169,52 @@ const apiEnvironmentSchema = z
     CHAT_GUARD_TIMEOUT_MS: count(50, 10_000).default(2_000),
     INFRASTRUCTURE_SOURCE: z.enum(infrastructureSourceNames).default('disabled'),
     INFRASTRUCTURE_NAMESPACE: namespaceName.default('portfolio'),
+    ARGOCD_ENABLED: booleanFromEnv.default(false),
+    ARGOCD_SERVER_URL: optionalSetting(
+      z.url().refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === 'https:' &&
+          !url.username &&
+          !url.password &&
+          url.pathname === '/' &&
+          !url.search &&
+          !url.hash
+        );
+      }, 'must be an HTTPS origin without credentials, path, query, or fragment'),
+    ),
+    ARGOCD_APPLICATION: optionalSetting(namespaceName),
+    ARGOCD_PROJECT: optionalSetting(namespaceName),
+    ARGOCD_TOKEN_FILE: optionalSetting(z.string().startsWith('/')),
+    ARGOCD_CA_FILE: optionalSetting(z.string().startsWith('/')),
     // Injected by Kubernetes into every pod; only read when INFRASTRUCTURE_SOURCE=kubernetes.
     KUBERNETES_SERVICE_HOST: optionalSetting(z.string().trim().min(1)),
     KUBERNETES_SERVICE_PORT: optionalSetting(portFromEnv),
   })
   .superRefine((environment, context) => {
+    if (environment.ARGOCD_ENABLED) {
+      if (environment.INFRASTRUCTURE_SOURCE !== 'kubernetes') {
+        context.addIssue({
+          code: 'custom',
+          path: ['ARGOCD_ENABLED'],
+          message: 'requires INFRASTRUCTURE_SOURCE=kubernetes',
+        });
+      }
+      for (const key of [
+        'ARGOCD_SERVER_URL',
+        'ARGOCD_APPLICATION',
+        'ARGOCD_PROJECT',
+        'ARGOCD_TOKEN_FILE',
+        'ARGOCD_CA_FILE',
+      ] as const) {
+        if (environment[key] === undefined)
+          context.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required when ARGOCD_ENABLED=true',
+          });
+      }
+    }
     if (environment.INFRASTRUCTURE_SOURCE === 'kubernetes') {
       for (const key of ['KUBERNETES_SERVICE_HOST', 'KUBERNETES_SERVICE_PORT'] as const) {
         if (environment[key] === undefined) {
@@ -271,9 +321,23 @@ export function loadApiConfig(
               parsed.KUBERNETES_SERVICE_HOST,
               parsed.KUBERNETES_SERVICE_PORT,
             ),
+            ...(parsed.ARGOCD_ENABLED && {
+              argocd: {
+                serverUrl: requiredArgoSetting(parsed.ARGOCD_SERVER_URL),
+                application: requiredArgoSetting(parsed.ARGOCD_APPLICATION),
+                project: requiredArgoSetting(parsed.ARGOCD_PROJECT),
+                tokenFile: requiredArgoSetting(parsed.ARGOCD_TOKEN_FILE),
+                caFile: requiredArgoSetting(parsed.ARGOCD_CA_FILE),
+              },
+            }),
           }
         : { enabled: false },
   };
+}
+
+function requiredArgoSetting(value: string | undefined): string {
+  if (value === undefined) throw new Error('Argo CD settings are required when enabled');
+  return value;
 }
 
 /**

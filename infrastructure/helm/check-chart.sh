@@ -78,6 +78,12 @@ expect_failure 'api.infrastructure.apiServerEgress.cidr and .port are required' 
   -f "$chart/ci/infrastructure-values.yaml" --set api.infrastructure.apiServerEgress.cidr=
 expect_failure 'postgres.auth.existingSecret is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.auth.existingSecret=
+expect_failure 'argocd.enabled requires api.infrastructure.enabled' \
+  -f "$chart/ci/argocd-values.yaml" --set api.infrastructure.enabled=false
+expect_failure 'argocd requires serverUrl, application, project, existingSecret' \
+  -f "$chart/ci/argocd-values.yaml" --set api.infrastructure.argocd.existingSecret=
+expect_failure 'argocd requires namespace, podLabels, and port' \
+  -f "$chart/ci/argocd-values.yaml" --set api.infrastructure.argocd.port=0
 
 # The reader Role must grant exactly get/list on the three kinds the serializer reads, bound to
 # the API's account alone: an exact match, so any added verb, resource, or subject fails.

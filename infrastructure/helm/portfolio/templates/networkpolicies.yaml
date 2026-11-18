@@ -78,6 +78,19 @@ spec:
         - protocol: TCP
           port: 6379
     {{- with .Values.api.infrastructure }}
+    {{- if .argocd.enabled }}
+    # One Argo CD server in its namespace, on the pod port after Service translation.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .argocd.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .argocd.podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .argocd.port }}
+    {{- end }}
     {{- if .enabled }}
     # The Kubernetes API server, for the Infrastructure Explorer's read-only snapshot.
     - to:

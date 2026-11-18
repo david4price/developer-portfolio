@@ -17,6 +17,11 @@ pending. See the
 **Progress and next steps:** [docs/implementation-roadmap.md](docs/implementation-roadmap.md)
 (start at "Resume Here").
 
+The Infrastructure Explorer prototype uses sample data. Its optional API source reads only
+allowlisted workload facts and, with an Application-scoped Argo CD token, the deployed GitOps
+revision and sync status. Normal local development needs neither Kubernetes nor Argo CD;
+see [Explorer configuration](docs/deployment/local.md).
+
 ## Stack
 
 | Area      | Choice                                         |

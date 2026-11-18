@@ -130,7 +130,7 @@ function facts(id: CardId, power: MapPower, now: number): CardDetails['facts'] {
     if (id !== 'pin' || snapshot.release === null) return [];
     return [
       ['Release', snapshot.release.commit],
-      ['Pinned', formatAge(snapshot.release.pinnedAt, now)],
+      ['Deployed', formatAge(snapshot.release.pinnedAt, now)],
       updated,
     ];
   }

@@ -14,6 +14,11 @@ spec:
     - server: https://kubernetes.default.svc
       namespace: portfolio
   clusterResourceWhitelist: []
+  roles:
+    - name: explorer
+      description: Infrastructure Explorer, read one Application only
+      policies:
+        - p, proj:portfolio:explorer, applications, get, portfolio/portfolio, allow
   namespaceResourceWhitelist:
     - group: apps
       kind: Deployment
