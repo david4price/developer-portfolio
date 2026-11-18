@@ -17,7 +17,7 @@
     "@nestjs/common": "^12.4.2",
     "@nestjs/core": "^12.4.2",
     "@portfolio/config": "workspace:*",
-    "bullmq": "^6.7.2",
+    "bullmq": "^6.7.6",
     "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
