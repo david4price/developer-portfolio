@@ -100,11 +100,13 @@ verification. Browser and live acceptance checks are still pending; see the
 fields only (component health, image tag or short digest, replica counts, a coarse failure
 category, and when it was built), cached for 12 s, with `Cache-Control: no-store`. It is off by
 default (`INFRASTRUCTURE_SOURCE=disabled` → `503 infrastructure_disabled`). `kubernetes` reads
-Deployments, StatefulSets, and Pods in `INFRASTRUCTURE_NAMESPACE` (default `portfolio`) through
+the portfolio's Deployments, StatefulSets, and Pods (by component label) in
+`INFRASTRUCTURE_NAMESPACE` (default `portfolio`) through
 the in-cluster API server, so it only works inside a pod with the read-only Role from P6-01 and
 `NODE_EXTRA_CA_CERTS` pointing at the cluster CA; outside a pod it fails startup. If the cluster
 can't be read the last snapshot is served as it was, or `503 infrastructure_unavailable` before
-the first one. Locally, leave it disabled.
+the first one; each failed read is logged as a warning with its reason and status only. Locally,
+leave it disabled.
 
 Messages are screened before they reach the model: an injection attempt gets
 `422 message_rejected` and is not stored

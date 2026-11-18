@@ -11,8 +11,10 @@ import {
 } from '../src/modules/infrastructure/cluster-reader.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
 import {
+  DisabledSnapshotSource,
   INFRASTRUCTURE_SNAPSHOTS,
   InfrastructureSnapshotService,
+  type SnapshotSource,
 } from '../src/modules/infrastructure/infrastructure-snapshot.service.js';
 import { KubernetesClusterReader } from '../src/modules/infrastructure/kubernetes-cluster.reader.js';
 import {
@@ -278,6 +280,23 @@ describe('health and failure rules', () => {
     );
   });
 
+  it('ignores finished pods, reads init containers, and reports no failure when scaled to zero', () => {
+    const down = { ...counts, readyReplicas: 0 };
+    const evicted = pod('api', {
+      phase: 'Failed',
+      containerStatuses: [{ ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } }],
+    });
+    const initCrash = pod('api', {
+      phase: 'Pending',
+      initContainerStatuses: [{ ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } }],
+      containerStatuses: [{ ready: false, state: { waiting: { reason: 'PodInitializing' } } }],
+    });
+    assert.equal(health(down, 2, [evicted]).failure, null, 'an evicted pod is history');
+    assert.equal(health(down, 2, [initCrash]).failure, 'crash-loop');
+    const off = health({ ...counts, readyReplicas: 0 }, 0, [initCrash]);
+    assert.deepEqual([off.health, off.failure], ['down', null], 'scaled to zero on purpose');
+  });
+
   it('keeps only the tag, or a short digest, of an image', () => {
     assert.equal(imageVersion('docker.io/library/postgres:17-alpine'), '17-alpine');
     assert.equal(
@@ -369,14 +388,14 @@ describe('InfrastructureSnapshotService', () => {
 });
 
 describe('GET /api/v1/infrastructure', () => {
-  const start = (snapshots: InfrastructureSnapshotService | null) =>
+  const start = (snapshots: SnapshotSource) =>
     createTestApp({
       controllers: [InfrastructureController],
       providers: [{ provide: INFRASTRUCTURE_SNAPSHOTS, useValue: snapshots }],
     });
 
   it('says the view is not enabled by default', async () => {
-    const app = await start(null);
+    const app = await start(new DisabledSnapshotSource());
     const response = await app.inject({ method: 'GET', url: '/api/v1/infrastructure' });
     assert.equal(response.statusCode, 503);
     assert.equal(response.json<ApiErrorResponse>().error.code, 'infrastructure_disabled');
@@ -436,6 +455,7 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
       apiServerUrl: baseUrl,
       namespace: NAMESPACE,
       readToken: async () => 'service-account-token',
+      allowInsecureHttpForTests: true,
       ...(maxResponseBytes === undefined ? {} : { maxResponseBytes }),
     });
   const read = (instance = reader()) => instance.read(AbortSignal.timeout(2_000));
@@ -449,16 +469,29 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
       }),
     });
     const objects = await read();
-    assert.deepEqual(requests.map(({ url }) => url).sort(), [
+    assert.deepEqual(requests.map(({ url }) => url.split('?')[0]).sort(), [
       '/api/v1/namespaces/portfolio/pods',
       '/apis/apps/v1/namespaces/portfolio/deployments',
       '/apis/apps/v1/namespaces/portfolio/statefulsets',
     ]);
+    const selector = new URL(`http://x${requests[0]?.url ?? ''}`).searchParams.get('labelSelector');
+    assert.equal(
+      selector,
+      'app.kubernetes.io/component in (api,worker,postgres,redis,cloudflared)',
+      'only the shown components, so leftover pods stay out of the reply',
+    );
     assert.ok(
       requests.every(({ authorization }) => authorization === 'Bearer service-account-token'),
     );
     assert.deepEqual(objects.pods, [{ kind: 'Pod' }]);
     assert.equal(objects.deployments.length, 1);
+  });
+
+  it('refuses plain http unless a test opts in, since it always sends the token', () => {
+    assert.throws(
+      () => new KubernetesClusterReader({ apiServerUrl: baseUrl, namespace: NAMESPACE }),
+      /https/,
+    );
   });
 
   it('turns error statuses, bad bodies, oversized bodies, and redirects into typed failures', async () => {

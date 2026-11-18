@@ -262,9 +262,7 @@ export function loadApiConfig(
           }
         : { enabled: false },
     infrastructure:
-      parsed.INFRASTRUCTURE_SOURCE === 'kubernetes' &&
-      parsed.KUBERNETES_SERVICE_HOST !== undefined &&
-      parsed.KUBERNETES_SERVICE_PORT !== undefined
+      parsed.INFRASTRUCTURE_SOURCE === 'kubernetes'
         ? {
             enabled: true,
             source: 'kubernetes',
@@ -278,7 +276,13 @@ export function loadApiConfig(
   };
 }
 
-/** The in-cluster API server's URL; IPv6 hosts need brackets. */
-function apiServerUrl(host: string, port: number): string {
+/**
+ * The in-cluster API server's URL; IPv6 hosts need brackets. The schema already requires both
+ * values for the kubernetes source; failing here too keeps that from ever turning into "off".
+ */
+function apiServerUrl(host: string | undefined, port: number | undefined): string {
+  if (host === undefined || port === undefined) {
+    throw new Error('KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT are required');
+  }
   return `https://${host.includes(':') ? `[${host}]` : host}:${port}`;
 }

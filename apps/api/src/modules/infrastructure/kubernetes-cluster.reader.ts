@@ -18,7 +18,17 @@ export interface KubernetesReaderOptions {
   readonly readToken?: () => Promise<string>;
   /** Upper bound on each list response; larger replies are treated as malformed. */
   readonly maxResponseBytes?: number;
+  /**
+   * Allow a plain-http URL. Only for tests against a local fake server: the reader always sends
+   * the service account token, which must never travel unencrypted.
+   */
+  readonly allowInsecureHttpForTests?: boolean;
 }
+
+/** Only the components the snapshot shows; leftover Job and evicted pods stay out of the reply. */
+const COMPONENT_SELECTOR = encodeURIComponent(
+  'app.kubernetes.io/component in (api,worker,postgres,redis,cloudflared)',
+);
 
 /**
  * Reads Deployments, StatefulSets, and Pods in one namespace from the Kubernetes API, as the
@@ -33,8 +43,9 @@ export class KubernetesClusterReader implements ClusterReader {
 
   constructor(options: KubernetesReaderOptions) {
     const base = new URL(options.apiServerUrl);
-    if (base.protocol !== 'https:' && base.protocol !== 'http:') {
-      throw new Error('The Kubernetes API server URL must use http(s)');
+    const insecureAllowed = options.allowInsecureHttpForTests === true && base.protocol === 'http:';
+    if (base.protocol !== 'https:' && !insecureAllowed) {
+      throw new Error('The Kubernetes API server URL must use https');
     }
     this.baseUrl = base.href.replace(/\/+$/, '');
     this.namespacePath = `namespaces/${encodeURIComponent(options.namespace)}`;
@@ -48,15 +59,31 @@ export class KubernetesClusterReader implements ClusterReader {
     const token = await this.readToken().catch(() => {
       throw new ClusterReadError('network');
     });
+    // One failed list cancels the others: their replies would be thrown away anyway.
+    const siblings = new AbortController();
+    const combined = AbortSignal.any([signal, siblings.signal]);
+    const list = (path: string) =>
+      this.list(`${path}?labelSelector=${COMPONENT_SELECTOR}`, token, combined, signal).catch(
+        (error: unknown) => {
+          siblings.abort();
+          throw error;
+        },
+      );
     const [deployments, statefulSets, pods] = await Promise.all([
-      this.list(`/apis/apps/v1/${this.namespacePath}/deployments`, token, signal),
-      this.list(`/apis/apps/v1/${this.namespacePath}/statefulsets`, token, signal),
-      this.list(`/api/v1/${this.namespacePath}/pods`, token, signal),
+      list(`/apis/apps/v1/${this.namespacePath}/deployments`),
+      list(`/apis/apps/v1/${this.namespacePath}/statefulsets`),
+      list(`/api/v1/${this.namespacePath}/pods`),
     ]);
     return { deployments, statefulSets, pods };
   }
 
-  private async list(path: string, token: string, signal: AbortSignal): Promise<unknown[]> {
+  /** `signal` aborts the request; `deadline` tells a timeout from a cancelled sibling. */
+  private async list(
+    path: string,
+    token: string,
+    signal: AbortSignal,
+    deadline: AbortSignal,
+  ): Promise<unknown[]> {
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
@@ -66,7 +93,7 @@ export class KubernetesClusterReader implements ClusterReader {
         signal,
       });
     } catch {
-      throw new ClusterReadError(signal.aborted ? 'timeout' : 'network');
+      throw new ClusterReadError(deadline.aborted ? 'timeout' : 'network');
     }
     if (!response.ok) {
       await response.body?.cancel();
@@ -76,7 +103,7 @@ export class KubernetesClusterReader implements ClusterReader {
     try {
       body = await readJsonBody(response, this.maxResponseBytes);
     } catch {
-      throw new ClusterReadError(signal.aborted ? 'timeout' : 'network');
+      throw new ClusterReadError(deadline.aborted ? 'timeout' : 'network');
     }
     const parsed = listSchema.safeParse(body);
     if (!parsed.success) throw new ClusterReadError('invalid_response');

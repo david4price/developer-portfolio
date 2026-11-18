@@ -66,21 +66,19 @@ const workloadSchema = z.object({
     .optional(),
 });
 
+const containerStatusSchema = z.object({
+  ready: z.boolean().optional(),
+  state: z.object({ waiting: z.object({ reason: z.string().optional() }).optional() }).optional(),
+});
+
 const podSchema = z.object({
   metadata: metadataSchema,
   status: z
     .object({
+      phase: z.string().optional(),
       conditions: z.array(z.object({ type: z.string(), status: z.string() })).optional(),
-      containerStatuses: z
-        .array(
-          z.object({
-            ready: z.boolean().optional(),
-            state: z
-              .object({ waiting: z.object({ reason: z.string().optional() }).optional() })
-              .optional(),
-          }),
-        )
-        .optional(),
+      initContainerStatuses: z.array(containerStatusSchema).optional(),
+      containerStatuses: z.array(containerStatusSchema).optional(),
     })
     .optional(),
 });
@@ -129,11 +127,16 @@ const FAILURE_ORDER: readonly InfrastructureFailure[] = [
   'not-ready',
 ];
 
-/** The most telling coarse failure among a component's pods; never their messages or events. */
+/**
+ * The most telling coarse failure among a component's live pods; never their messages or events.
+ * Finished pods (evicted, completed) are left out, and init containers count: a pod stuck in
+ * `Init:CrashLoopBackOff` is crash-looping, not merely not ready.
+ */
 function podFailure(pods: readonly Pod[]): InfrastructureFailure | null {
   const found = new Set<InfrastructureFailure>();
   for (const pod of pods) {
     const status = pod.status;
+    if (status?.phase === 'Failed' || status?.phase === 'Succeeded') continue;
     if (
       status?.conditions?.some(
         ({ type, status: value }) => type === 'PodScheduled' && value === 'False',
@@ -141,7 +144,10 @@ function podFailure(pods: readonly Pod[]): InfrastructureFailure | null {
     ) {
       found.add('unschedulable');
     }
-    for (const container of status?.containerStatuses ?? []) {
+    for (const container of [
+      ...(status?.initContainerStatuses ?? []),
+      ...(status?.containerStatuses ?? []),
+    ]) {
       const reason = container.state?.waiting?.reason;
       if (reason === 'CrashLoopBackOff') found.add('crash-loop');
       else if (
@@ -235,7 +241,9 @@ export function serializeSnapshot(
       version: imageVersion(image),
       replicas,
       traffic: null,
-      failure: health === 'healthy' ? null : podFailure(pods.get(id) ?? []),
+      // Healthy, or scaled to zero on purpose: there is no failure to report.
+      failure:
+        health === 'healthy' || replicas.desired === 0 ? null : podFailure(pods.get(id) ?? []),
     };
   });
 

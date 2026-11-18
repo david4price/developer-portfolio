@@ -1,20 +1,22 @@
 import { Module } from '@nestjs/common';
 import { API_CONFIG, type ApiConfig, type InfrastructureConfig } from '../../config/api-config.js';
-import { CLUSTER_READER, type ClusterReader } from './cluster-reader.js';
 import { InfrastructureController } from './infrastructure.controller.js';
 import {
+  DisabledSnapshotSource,
   INFRASTRUCTURE_SNAPSHOTS,
   InfrastructureSnapshotService,
+  type SnapshotSource,
 } from './infrastructure-snapshot.service.js';
 import { KubernetesClusterReader } from './kubernetes-cluster.reader.js';
 
-/** The configured cluster reader, or `null` when the infrastructure view is off. */
-export function createClusterReader(config: InfrastructureConfig): ClusterReader | null {
-  if (!config.enabled) return null;
-  return new KubernetesClusterReader({
+/** The configured snapshot source; with the view off, one that reads nothing. */
+export function createSnapshotSource(config: InfrastructureConfig): SnapshotSource {
+  if (!config.enabled) return new DisabledSnapshotSource();
+  const reader = new KubernetesClusterReader({
     apiServerUrl: config.apiServerUrl,
     namespace: config.namespace,
   });
+  return new InfrastructureSnapshotService(reader, { namespace: config.namespace });
 }
 
 /**
@@ -25,19 +27,9 @@ export function createClusterReader(config: InfrastructureConfig): ClusterReader
   controllers: [InfrastructureController],
   providers: [
     {
-      provide: CLUSTER_READER,
-      inject: [API_CONFIG],
-      useFactory: (config: ApiConfig) => createClusterReader(config.infrastructure),
-    },
-    {
       provide: INFRASTRUCTURE_SNAPSHOTS,
-      inject: [API_CONFIG, CLUSTER_READER],
-      useFactory: (config: ApiConfig, reader: ClusterReader | null) =>
-        reader === null || !config.infrastructure.enabled
-          ? null
-          : new InfrastructureSnapshotService(reader, {
-              namespace: config.infrastructure.namespace,
-            }),
+      inject: [API_CONFIG],
+      useFactory: (config: ApiConfig) => createSnapshotSource(config.infrastructure),
     },
   ],
 })

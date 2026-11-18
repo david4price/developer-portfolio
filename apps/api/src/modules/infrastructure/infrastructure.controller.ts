@@ -3,8 +3,9 @@ import type { InfrastructureSnapshot } from '@portfolio/shared-types';
 import { ApiException } from '../../common/api-exception.js';
 import {
   INFRASTRUCTURE_SNAPSHOTS,
-  type InfrastructureSnapshotService,
+  InfrastructureDisabledError,
   InfrastructureUnavailableError,
+  type SnapshotSource,
 } from './infrastructure-snapshot.service.js';
 
 /**
@@ -16,23 +17,23 @@ import {
 export class InfrastructureController {
   constructor(
     @Inject(INFRASTRUCTURE_SNAPSHOTS)
-    private readonly snapshots: InfrastructureSnapshotService | null,
+    private readonly snapshots: SnapshotSource,
   ) {}
 
   @Get()
   // The page judges freshness itself; a cached copy anywhere else would only hide staleness.
   @Header('Cache-Control', 'no-store')
   async get(): Promise<InfrastructureSnapshot> {
-    if (this.snapshots === null) {
-      throw new ApiException(
-        HttpStatus.SERVICE_UNAVAILABLE,
-        'infrastructure_disabled',
-        'The infrastructure view is not enabled on this deployment.',
-      );
-    }
     try {
       return await this.snapshots.snapshot();
     } catch (error) {
+      if (error instanceof InfrastructureDisabledError) {
+        throw new ApiException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          'infrastructure_disabled',
+          'The infrastructure view is not enabled on this deployment.',
+        );
+      }
       if (error instanceof InfrastructureUnavailableError) {
         throw new ApiException(
           HttpStatus.SERVICE_UNAVAILABLE,

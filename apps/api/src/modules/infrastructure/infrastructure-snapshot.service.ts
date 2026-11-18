@@ -1,8 +1,29 @@
+import { Logger } from '@nestjs/common';
 import type { InfrastructureSnapshot } from '@portfolio/shared-types';
-import type { ClusterReader } from './cluster-reader.js';
+import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
 
 export const INFRASTRUCTURE_SNAPSHOTS = Symbol('INFRASTRUCTURE_SNAPSHOTS');
+
+/** Port for the controller: where the public snapshot comes from. */
+export interface SnapshotSource {
+  snapshot(): Promise<InfrastructureSnapshot>;
+}
+
+/** The view is off on this deployment. Maps to `infrastructure_disabled`. */
+export class InfrastructureDisabledError extends Error {
+  constructor() {
+    super('The infrastructure view is not enabled');
+    this.name = 'InfrastructureDisabledError';
+  }
+}
+
+/** The source when `INFRASTRUCTURE_SOURCE=disabled`: nothing reads the cluster. */
+export class DisabledSnapshotSource implements SnapshotSource {
+  snapshot(): Promise<InfrastructureSnapshot> {
+    return Promise.reject(new InfrastructureDisabledError());
+  }
+}
 
 /** How long a snapshot is served before the cluster is read again (the design's 10–15 s). */
 export const SNAPSHOT_TTL_MS = 12_000;
@@ -30,7 +51,8 @@ export interface SnapshotServiceOptions {
  * retried before `ttlMs` has passed. After a failure the last good snapshot is served as it was;
  * its `generatedAt` lets the page power the map down once it is too old.
  */
-export class InfrastructureSnapshotService {
+export class InfrastructureSnapshotService implements SnapshotSource {
+  private readonly logger = new Logger('InfrastructureSnapshotService');
   private cached: { readonly snapshot: InfrastructureSnapshot; readonly at: number } | null = null;
   private failedAt: number | null = null;
   private inflight: Promise<InfrastructureSnapshot> | null = null;
@@ -69,8 +91,18 @@ export class InfrastructureSnapshotService {
       this.cached = { snapshot, at: this.now() };
       this.failedAt = null;
       return snapshot;
-    } catch {
+    } catch (error) {
       this.failedAt = this.now();
+      // Only the typed reason and status: never a response body or anything from the cluster.
+      this.logger.warn({
+        message: 'Infrastructure snapshot refresh failed',
+        reason: error instanceof ClusterReadError ? error.reason : 'unexpected',
+        status: error instanceof ClusterReadError ? error.status : null,
+        servingPrevious: this.cached !== null,
+      });
+      if (!(error instanceof ClusterReadError)) {
+        this.logger.error(error instanceof Error ? error.stack : String(error));
+      }
       return this.fallback();
     }
   }
