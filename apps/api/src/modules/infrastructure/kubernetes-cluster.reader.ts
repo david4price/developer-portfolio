@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { readJsonBody } from '../../common/read-json-body.js';
 import { type ClusterObjects, type ClusterReader, ClusterReadError } from './cluster-reader.js';
+import { COMPONENT_SELECTOR } from './snapshot-serializer.js';
 
 /** Where Kubernetes mounts the pod's service account token; it is rotated, so read it each time. */
 export const SERVICE_ACCOUNT_TOKEN_PATH = '/var/run/secrets/kubernetes.io/serviceaccount/token';
@@ -25,10 +26,10 @@ export interface KubernetesReaderOptions {
   readonly allowInsecureHttpForTests?: boolean;
 }
 
-/** Only the components the snapshot shows; leftover Job and evicted pods stay out of the reply. */
-const COMPONENT_SELECTOR = encodeURIComponent(
-  'app.kubernetes.io/component in (api,worker,postgres,redis,cloudflared)',
-);
+/** Only the components the snapshot shows (Job and backup pods stay out of the reply). */
+const LABEL_SELECTOR = `labelSelector=${encodeURIComponent(COMPONENT_SELECTOR)}`;
+/** Finished pods (evicted, completed) are filtered on the server, not after the download. */
+const LIVE_PODS = `fieldSelector=${encodeURIComponent('status.phase!=Failed,status.phase!=Succeeded')}`;
 
 /**
  * Reads Deployments, StatefulSets, and Pods in one namespace from the Kubernetes API, as the
@@ -63,16 +64,14 @@ export class KubernetesClusterReader implements ClusterReader {
     const siblings = new AbortController();
     const combined = AbortSignal.any([signal, siblings.signal]);
     const list = (path: string) =>
-      this.list(`${path}?labelSelector=${COMPONENT_SELECTOR}`, token, combined, signal).catch(
-        (error: unknown) => {
-          siblings.abort();
-          throw error;
-        },
-      );
+      this.list(path, token, combined, signal).catch((error: unknown) => {
+        siblings.abort();
+        throw error;
+      });
     const [deployments, statefulSets, pods] = await Promise.all([
-      list(`/apis/apps/v1/${this.namespacePath}/deployments`),
-      list(`/apis/apps/v1/${this.namespacePath}/statefulsets`),
-      list(`/api/v1/${this.namespacePath}/pods`),
+      list(`/apis/apps/v1/${this.namespacePath}/deployments?${LABEL_SELECTOR}`),
+      list(`/apis/apps/v1/${this.namespacePath}/statefulsets?${LABEL_SELECTOR}`),
+      list(`/api/v1/${this.namespacePath}/pods?${LABEL_SELECTOR}&${LIVE_PODS}`),
     ]);
     return { deployments, statefulSets, pods };
   }

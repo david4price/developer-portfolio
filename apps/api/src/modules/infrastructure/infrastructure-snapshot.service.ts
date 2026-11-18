@@ -94,15 +94,16 @@ export class InfrastructureSnapshotService implements SnapshotSource {
     } catch (error) {
       this.failedAt = this.now();
       // Only the typed reason and status: never a response body or anything from the cluster.
+      // An unexpected error is a bug here (the reader only throws ClusterReadError): its stack
+      // goes in the same structured line, as the exception filter logs it.
+      const read = error instanceof ClusterReadError ? error : null;
       this.logger.warn({
         message: 'Infrastructure snapshot refresh failed',
-        reason: error instanceof ClusterReadError ? error.reason : 'unexpected',
-        status: error instanceof ClusterReadError ? error.status : null,
+        reason: read?.reason ?? 'unexpected',
+        status: read?.status ?? null,
         servingPrevious: this.cached !== null,
+        ...(read === null && { error: error instanceof Error ? error.stack : 'non-error thrown' }),
       });
-      if (!(error instanceof ClusterReadError)) {
-        this.logger.error(error instanceof Error ? error.stack : String(error));
-      }
       return this.fallback();
     }
   }

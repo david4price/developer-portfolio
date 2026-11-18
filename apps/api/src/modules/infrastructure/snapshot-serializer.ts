@@ -16,7 +16,7 @@ import type { ClusterObjects } from './cluster-reader.js';
  * from other namespaces, or without a known component label, are ignored.
  */
 
-const COMPONENT_LABEL = 'app.kubernetes.io/component';
+export const COMPONENT_LABEL = 'app.kubernetes.io/component';
 
 /** Chart component labels → map components. The chart calls the tunnel `cloudflared`. */
 const COMPONENTS: Readonly<Record<string, InfrastructureComponentId>> = {
@@ -26,6 +26,9 @@ const COMPONENTS: Readonly<Record<string, InfrastructureComponentId>> = {
   redis: 'redis',
   cloudflared: 'tunnel',
 };
+
+/** The label selector for exactly the components above, so the reader asks for nothing else. */
+export const COMPONENT_SELECTOR = `${COMPONENT_LABEL} in (${Object.keys(COMPONENTS).join(',')})`;
 
 /** Every component in the snapshot, in a fixed order; those not in the cluster stay unknown. */
 const ALL_COMPONENTS: readonly InfrastructureComponentId[] = [
@@ -43,6 +46,8 @@ const count = z.number().int().nonnegative();
 
 const metadataSchema = z.object({
   namespace: z.string(),
+  /** Set while an object is being deleted (read only to skip terminating pods). */
+  deletionTimestamp: z.string().optional(),
   generation: count.optional(),
   labels: z.record(z.string(), z.string()).optional(),
 });
@@ -136,7 +141,9 @@ function podFailure(pods: readonly Pod[]): InfrastructureFailure | null {
   const found = new Set<InfrastructureFailure>();
   for (const pod of pods) {
     const status = pod.status;
+    // Finished pods are history, and terminating ones are going away as intended (a rollout).
     if (status?.phase === 'Failed' || status?.phase === 'Succeeded') continue;
+    if (pod.metadata.deletionTimestamp !== undefined) continue;
     if (
       status?.conditions?.some(
         ({ type, status: value }) => type === 'PodScheduled' && value === 'False',

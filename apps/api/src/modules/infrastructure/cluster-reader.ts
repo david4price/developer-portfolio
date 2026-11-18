@@ -1,5 +1,3 @@
-export const CLUSTER_READER = Symbol('CLUSTER_READER');
-
 /**
  * Raw objects from the cluster, exactly as the Kubernetes API returns them. They carry far more
  * than may ever be shown (pod IPs, node names, environment variables, annotations); only the

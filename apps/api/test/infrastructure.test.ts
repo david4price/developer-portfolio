@@ -292,6 +292,14 @@ describe('health and failure rules', () => {
       containerStatuses: [{ ready: false, state: { waiting: { reason: 'PodInitializing' } } }],
     });
     assert.equal(health(down, 2, [evicted]).failure, null, 'an evicted pod is history');
+    const terminating = {
+      ...pod('api', { phase: 'Running', containerStatuses: [{ ready: false, state: {} }] }),
+    };
+    terminating.metadata = {
+      ...terminating.metadata,
+      deletionTimestamp: NOW.toISOString(),
+    } as never;
+    assert.equal(health(down, 2, [terminating]).failure, null, 'a terminating pod is going away');
     assert.equal(health(down, 2, [initCrash]).failure, 'crash-loop');
     const off = health({ ...counts, readyReplicas: 0 }, 0, [initCrash]);
     assert.deepEqual([off.health, off.failure], ['down', null], 'scaled to zero on purpose');
@@ -474,12 +482,19 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
       '/apis/apps/v1/namespaces/portfolio/deployments',
       '/apis/apps/v1/namespaces/portfolio/statefulsets',
     ]);
-    const selector = new URL(`http://x${requests[0]?.url ?? ''}`).searchParams.get('labelSelector');
-    assert.equal(
-      selector,
-      'app.kubernetes.io/component in (api,worker,postgres,redis,cloudflared)',
-      'only the shown components, so leftover pods stay out of the reply',
-    );
+    for (const { url } of requests) {
+      const query = new URL(`http://x${url}`).searchParams;
+      assert.equal(
+        query.get('labelSelector'),
+        'app.kubernetes.io/component in (api,worker,postgres,redis,cloudflared)',
+        `${url}: only the shown components`,
+      );
+      assert.equal(
+        query.get('fieldSelector'),
+        url.includes('/pods') ? 'status.phase!=Failed,status.phase!=Succeeded' : null,
+        `${url}: finished pods filtered on the server`,
+      );
+    }
     assert.ok(
       requests.every(({ authorization }) => authorization === 'Bearer service-account-token'),
     );
