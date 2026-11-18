@@ -974,50 +974,145 @@ main {
   fill: var(--tone);
 }
 
-.explorer-core__yard {
-  fill: var(--bp-paper);
-  stroke: var(--explorer-core-ink, var(--bp-ink));
+/* The cluster's flux capacitor: a grey box, a gasketed window, glass tubes in a Y. */
+.explorer-core__box {
+  fill: #c8c9c4;
+  stroke: #8d8e89;
   stroke-width: 1.5;
-  stroke-dasharray: 6 4;
 }
 
-.explorer-core__ring {
-  fill: none;
-  stroke: var(--explorer-core-ink, var(--bp-ink));
-  stroke-width: 2.5;
+.explorer-core__tape {
+  fill: #b71c1c;
 }
 
-.explorer-core__label {
-  fill: var(--bp-muted);
-  font-size: 10px;
+.explorer-map text.explorer-core__tape-text {
+  fill: #ffffff;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-anchor: middle;
 }
 
-.explorer-core--steady {
-  --explorer-core-ink: var(--bp-healthy);
+.explorer-map text.explorer-core__tape-text--small {
+  font-size: 7.5px;
 }
 
-.explorer-core--rollout {
-  --explorer-core-ink: var(--bp-progressing);
-  animation: explorer-hum 1.3s steps(2, jump-none) infinite;
+.explorer-core__window {
+  fill: #2a3037;
+  stroke: #0e0f10;
+  stroke-width: 6;
 }
 
-.explorer-core--off {
-  --explorer-core-ink: var(--bp-off);
+.explorer-core__cable {
+  fill: none;
+  stroke: #f2c200;
+  stroke-width: 3.5;
+  stroke-linecap: round;
 }
 
-@keyframes explorer-hum {
+.explorer-core__cap {
+  fill: #d32f2f;
+}
+
+.explorer-core__electrode {
+  fill: #b8923a;
+  stroke: #7d6224;
+  stroke-width: 1.5;
+}
+
+.explorer-core__tube {
+  stroke: #cfd8dc;
+  stroke-width: 9;
+  stroke-linecap: round;
+  opacity: 0.28;
+}
+
+.explorer-core__light {
+  stroke: #4a525b;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.explorer-core__junction {
+  fill: #cfd8dc;
+  opacity: 0.6;
+}
+
+/* Deployed: the tubes glow warm white, with a slow shimmer. */
+.explorer-core--deployed .explorer-core__light {
+  stroke: #fff4cf;
+  filter: url(#explorer-flux-glow);
+  animation: explorer-flux-shimmer 3.2s ease-in-out infinite;
+}
+
+.explorer-core--deployed .explorer-core__junction {
+  fill: #fff4cf;
+  opacity: 1;
+  filter: url(#explorer-flux-glow);
+}
+
+/* Rolling out: dimmer tubes with pulses running from each electrode into the junction. */
+.explorer-core--rollout .explorer-core__light {
+  stroke: #8a7a52;
+}
+
+.explorer-core__pulse {
+  stroke: #fff8e1;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 7 13;
+  filter: url(#explorer-flux-glow);
+  animation: explorer-flux-pulse 0.55s linear infinite;
+}
+
+.explorer-core--rollout .explorer-core__junction {
+  fill: #fff8e1;
+  opacity: 1;
+  filter: url(#explorer-flux-glow);
+  animation: explorer-flux-shimmer 0.55s steps(2, jump-none) infinite;
+}
+
+.explorer-core--waiting .explorer-core__light {
+  stroke: #8a7a52;
+}
+
+.explorer-core--off .explorer-core__box {
+  fill: #5d6066;
+  stroke: #3c3f44;
+}
+
+.explorer-core--off .explorer-core__window {
+  fill: #15191e;
+}
+
+.explorer-core--off .explorer-core__tape {
+  fill: #5a1a1a;
+}
+
+.explorer-core--off .explorer-core__cable,
+.explorer-core--off .explorer-core__cap,
+.explorer-core--off .explorer-core__electrode {
+  opacity: 0.45;
+}
+
+@keyframes explorer-flux-pulse {
+  from {
+    stroke-dashoffset: 20;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes explorer-flux-shimmer {
   0%,
-  60% {
+  100% {
     opacity: 1;
   }
 
-  70% {
-    opacity: 0.35;
-  }
-
-  85% {
-    opacity: 0.85;
+  50% {
+    opacity: 0.78;
   }
 }
 
@@ -1076,7 +1171,12 @@ main {
     display: none;
   }
 
-  .explorer-core--rollout,
+  .explorer-core__pulse {
+    display: none;
+  }
+
+  .explorer-core__light,
+  .explorer-core__junction,
   .explorer-window--flicker,
   .explorer-window--waking,
   .explorer-node__beacon {

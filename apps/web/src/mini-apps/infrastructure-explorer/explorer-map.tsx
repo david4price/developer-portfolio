@@ -11,12 +11,14 @@ import {
   componentHealthText,
   conduitTraffic,
   CORE,
+  CORE_STATE_LABELS,
+  type CoreState,
+  coreState,
   DELIVERY_STAGES,
   FAILURE_LABELS,
   MAP_NODES,
   type MapPower,
   recentRelease,
-  rolloutInProgress,
   RUNTIME_CONDUITS,
   WINDOW_COLUMNS,
   WINDOW_ROWS,
@@ -195,21 +197,74 @@ function Building({ x, y, label, detail, status, note, tone, windows, beacon }: 
   );
 }
 
-/** The substation where build, deploy, and runtime meet: a transformer that hums in a rollout. */
-function Core({ state }: { readonly state: 'off' | 'steady' | 'rollout' }) {
+/**
+ * The cluster as a flux capacitor in its box: three glass tubes in a Y, each from a gold electrode
+ * to the junction, behind a gasketed window. Its look comes from `coreState`: tubes glow when the
+ * cluster is deployed, pulses run into the junction during a rollout, dim when waiting to sync,
+ * dark without data. The label tape names the cluster and its state.
+ */
+function Core({ state }: { readonly state: CoreState }) {
+  const { x, y } = CORE;
+  const junction = { x, y: y + 2 };
+  const electrodes = [
+    { x: x - 34, y: y - 28 },
+    { x: x + 34, y: y - 28 },
+    { x, y: y + 44 },
+  ] as const;
   return (
     <g className={`explorer-core explorer-core--${state}`}>
+      <rect className="explorer-core__box" x={x - 70} y={y - 78} width={140} height={156} rx={8} />
+      <rect className="explorer-core__tape" x={x - 52} y={y - 70} width={104} height={14} />
+      <text className="explorer-core__tape-text" x={x} y={y - 59.5}>
+        K3s cluster
+      </text>
       <rect
-        className="explorer-core__yard"
-        x={CORE.x - 46}
-        y={CORE.y - 36}
-        width={92}
-        height={72}
+        className="explorer-core__window"
+        x={x - 58}
+        y={y - 50}
+        width={116}
+        height={116}
+        rx={20}
       />
-      <circle cx={CORE.x - 11} cy={CORE.y} r={20} className="explorer-core__ring" />
-      <circle cx={CORE.x + 11} cy={CORE.y} r={20} className="explorer-core__ring" />
-      <text x={CORE.x} y={CORE.y + 52} className="explorer-core__label">
-        Substation
+      {/* Yellow cables from the red caps on each electrode to the window's edge. */}
+      <path
+        className="explorer-core__cable"
+        d={`M ${x - 42} ${y - 34} C ${x - 58} ${y - 28}, ${x - 54} ${y - 10}, ${x - 50} ${y + 2}`}
+      />
+      <path
+        className="explorer-core__cable"
+        d={`M ${x + 42} ${y - 34} C ${x + 58} ${y - 28}, ${x + 54} ${y - 10}, ${x + 50} ${y + 2}`}
+      />
+      <path
+        className="explorer-core__cable"
+        d={`M ${x + 9} ${y + 52} C ${x + 26} ${y + 54}, ${x + 36} ${y + 50}, ${x + 38} ${y + 40}`}
+      />
+      {electrodes.map((electrode) => (
+        <g key={`${electrode.x}-${electrode.y}`}>
+          <path
+            className="explorer-core__tube"
+            d={`M ${electrode.x} ${electrode.y} L ${junction.x} ${junction.y}`}
+          />
+          <path
+            className="explorer-core__light"
+            d={`M ${electrode.x} ${electrode.y} L ${junction.x} ${junction.y}`}
+          />
+          {state === 'rollout' && (
+            <path
+              className="explorer-core__pulse"
+              d={`M ${electrode.x} ${electrode.y} L ${junction.x} ${junction.y}`}
+            />
+          )}
+          <circle className="explorer-core__electrode" cx={electrode.x} cy={electrode.y} r={8} />
+        </g>
+      ))}
+      <circle className="explorer-core__cap" cx={x - 42} cy={y - 34} r={4.5} />
+      <circle className="explorer-core__cap" cx={x + 42} cy={y - 34} r={4.5} />
+      <circle className="explorer-core__cap" cx={x + 9} cy={y + 52} r={4.5} />
+      <circle className="explorer-core__junction" cx={junction.x} cy={junction.y} r={4} />
+      <rect className="explorer-core__tape" x={x - 44} y={y + 66} width={88} height={11} />
+      <text className="explorer-core__tape-text explorer-core__tape-text--small" x={x} y={y + 74.5}>
+        {CORE_STATE_LABELS[state]}
       </text>
     </g>
   );
@@ -316,6 +371,24 @@ export function ExplorerMap({ power, now }: ExplorerMapProps) {
           <rect width={100} height={100} fill="url(#explorer-grid-minor)" />
           <path className="explorer-map__grid-major" d="M 100 0 L 0 0 0 100" />
         </pattern>
+        {/* A fixed region: a vertical tube has a zero-width box, which would clip its glow. */}
+        <filter
+          id="explorer-flux-glow"
+          filterUnits="userSpaceOnUse"
+          x={CORE.x - 80}
+          y={CORE.y - 90}
+          width={160}
+          height={180}
+        >
+          <feGaussianBlur stdDeviation="4" result="wide" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="near" />
+          <feMerge>
+            <feMergeNode in="wide" />
+            <feMergeNode in="wide" />
+            <feMergeNode in="near" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <filter id="explorer-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.5" result="blur" />
           <feMerge>
@@ -365,9 +438,7 @@ export function ExplorerMap({ power, now }: ExplorerMapProps) {
         })}
       </g>
 
-      <Core
-        state={snapshot === null ? 'off' : rolloutInProgress(snapshot) ? 'rollout' : 'steady'}
-      />
+      <Core state={coreState(snapshot)} />
 
       {DELIVERY_STAGES.map((stage) => (
         <Building

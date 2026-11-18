@@ -56,8 +56,8 @@ export const DELIVERY_STAGES = [
   { id: 'pin', label: 'images.yaml pin', x: 570, y: 100 },
 ] as const;
 
-/** Where the build, deploy, and runtime arms of the Y-shaped core meet. */
-export const CORE = { x: 570, y: 250 } as const;
+/** The cluster's flux capacitor, where the build, deploy, and runtime lines meet. */
+export const CORE = { x: 570, y: 260 } as const;
 /** Where the core's runtime arm reaches the cluster workloads. */
 export const CLUSTER_HUB = { x: 570, y: 400 } as const;
 
@@ -118,6 +118,26 @@ export function componentById(
 export function rolloutInProgress(snapshot: InfrastructureSnapshot): boolean {
   return snapshot.components.some(({ health }) => health === 'progressing');
 }
+
+/**
+ * The cluster core's state: `rollout` while a component is progressing (pulses run into the
+ * junction), `deployed` when Argo CD reports the cluster synced (the tubes glow), `waiting` when it
+ * is out of sync or unknown without a rollout (dim), and `off` without data.
+ */
+export type CoreState = 'off' | 'rollout' | 'deployed' | 'waiting';
+
+export function coreState(snapshot: InfrastructureSnapshot | null): CoreState {
+  if (snapshot === null) return 'off';
+  if (rolloutInProgress(snapshot)) return 'rollout';
+  return snapshot.sync === 'synced' ? 'deployed' : 'waiting';
+}
+
+export const CORE_STATE_LABELS: Readonly<Record<CoreState, string>> = {
+  off: 'Offline',
+  rollout: 'Rolling out',
+  deployed: 'Deployed',
+  waiting: 'Waiting to sync',
+};
 
 /** A release pinned recently enough to animate the delivery path. */
 export function recentRelease(snapshot: InfrastructureSnapshot, now: number): boolean {

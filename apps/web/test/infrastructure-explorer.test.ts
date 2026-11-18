@@ -9,6 +9,7 @@ import {
   componentById,
   componentStatus,
   conduitTraffic,
+  coreState,
   MAP_NODES,
   mapPower,
   recentRelease,
@@ -94,6 +95,14 @@ describe('map model', () => {
       failure: 'crash-loop',
     });
     assert.equal(rolloutInProgress(snapshotWith([failing])), false);
+  });
+
+  it('glows the cluster core when deployed, pulses it in a rollout, dims it while unsynced', () => {
+    assert.equal(coreState(null), 'off');
+    assert.equal(coreState(steady()), 'deployed');
+    assert.equal(coreState(sampleSnapshot('rollout', NOW)), 'rollout');
+    assert.equal(coreState(snapshotWith([component({})], { sync: 'out-of-sync' })), 'waiting');
+    assert.equal(coreState(snapshotWith([component({})], { sync: 'unknown' })), 'waiting');
   });
 
   it('bursts the delivery path only for a release pinned in the last few minutes', () => {
@@ -209,6 +218,13 @@ describe('ExplorerMap', () => {
       createElement(ExplorerMap, { power: mapPower(rollout, NOW), now: NOW }),
     );
     assert.match(html, /explorer-core--rollout/);
+    assert.match(html, /explorer-core__pulse/);
+    assert.match(html, /Rolling out/);
+    const deployed = renderToStaticMarkup(
+      createElement(ExplorerMap, { power: mapPower(steady(), NOW), now: NOW }),
+    );
+    assert.match(deployed, /explorer-core--deployed/);
+    assert.ok(!deployed.includes('explorer-core__pulse'), 'no pulses once deployed');
     assert.match(html, /explorer-conduit__burst/);
     assert.match(html, /explorer-conduit__pulse--busy/);
   });

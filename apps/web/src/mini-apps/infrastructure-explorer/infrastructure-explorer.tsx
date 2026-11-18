@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ExplorerMap } from './explorer-map.tsx';
 import { componentById, componentStatus, MAP_NODES, type MapPower, mapPower } from './map-model.ts';
 import {
@@ -12,6 +12,9 @@ import {
 
 /** How often the live map will refresh, matching the server's 10–15 s cache. */
 export const REFRESH_MS = 12_000;
+
+/** How often ages ("updated 7 s ago") and staleness are re-checked between refreshes. */
+const CLOCK_MS = 1_000;
 
 const SYNC_LABELS = { synced: 'Synced', 'out-of-sync': 'Out of sync', unknown: 'Unknown' } as const;
 
@@ -74,9 +77,17 @@ export function InfrastructureExplorer() {
   const [now, setNow] = useState(() => Date.now());
   const [paused, setPaused] = useState(false);
 
+  const [fetchedAt, setFetchedAt] = useState(() => Date.now());
+
+  // The snapshot refreshes every REFRESH_MS (here: a new sample); the clock ticks every second,
+  // so ages count up and a snapshot that stops refreshing goes stale on time.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), REFRESH_MS);
-    return () => clearInterval(timer);
+    const refresh = setInterval(() => setFetchedAt(Date.now()), REFRESH_MS);
+    const clock = setInterval(() => setNow(Date.now()), CLOCK_MS);
+    return () => {
+      clearInterval(refresh);
+      clearInterval(clock);
+    };
   }, []);
 
   // Animations stop while the tab is hidden.
@@ -87,7 +98,8 @@ export function InfrastructureExplorer() {
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
 
-  const power = mapPower(sampleSnapshot(scenario, now), now);
+  const snapshot = useMemo(() => sampleSnapshot(scenario, fetchedAt), [scenario, fetchedAt]);
+  const power = mapPower(snapshot, now);
 
   return (
     <section
@@ -98,6 +110,7 @@ export function InfrastructureExplorer() {
       <p className="explorer-note">
         Prototype with sample data: this map is not connected to the live cluster yet. Lit windows
         show running replicas, sparks show traffic, and a red beacon marks a component that is down.
+        The cluster&rsquo;s flux capacitor glows when deployed and pulses during a rollout.
       </p>
       <fieldset className="explorer-scenarios">
         <legend>Sample scenario</legend>
@@ -109,8 +122,10 @@ export function InfrastructureExplorer() {
               value={option}
               checked={scenario === option}
               onChange={() => {
+                const time = Date.now();
                 setScenario(option);
-                setNow(Date.now());
+                setFetchedAt(time);
+                setNow(time);
               }}
             />
             {SCENARIO_LABELS[option]}
