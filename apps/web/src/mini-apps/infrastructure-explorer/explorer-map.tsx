@@ -5,81 +5,52 @@ import type {
   InfrastructureSnapshot,
   TrafficLevel,
 } from '@portfolio/shared-types';
+import type { ReactNode } from 'react';
+import type { CardId } from './card-content.ts';
 import {
-  CLUSTER_HUB,
   componentById,
   componentHealthText,
   conduitTraffic,
-  CORE,
   CORE_STATE_LABELS,
   type CoreState,
   coreState,
   DELIVERY_STAGES,
   FAILURE_LABELS,
   formatAge,
-  type Lane,
   MAP_NODES,
+  type MapLayout,
   type MapPower,
+  type PieceId,
+  type Point,
   recentRelease,
   RUNTIME_CONDUITS,
   SYNC_LABELS,
+  WIDE_LAYOUT,
   WINDOW_COLUMNS,
   WINDOW_ROWS,
   type WindowState,
   windowStates,
   worseHealth,
 } from './map-model.ts';
-import type { CardId } from './card-content.ts';
-import type { ReactNode } from 'react';
 
-const VIEW_WIDTH = 920;
-const VIEW_HEIGHT = 710;
 const BUILDING_WIDTH = 132;
 const BUILDING_HEIGHT = 70;
 
-interface Point {
-  readonly x: number;
-  readonly y: number;
-}
-
 type Tone = InfrastructureHealth | 'delivery' | 'off';
 
-/**
- * A wire's route: straight when aligned, otherwise down, across, and down, with its bends. The
- * across part runs just above the lower building, clear of the labels under the upper one.
- */
-function route(from: Point, to: Point, lane?: Lane): { path: string; bends: Point[] } {
-  if (lane === undefined && (from.x === to.x || from.y === to.y)) {
-    return { path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`, bends: [] };
-  }
-  const startX = from.x + (lane?.fromDx ?? 0);
-  const endX = to.x + (lane?.toDx ?? 0);
-  const middle = lane?.laneY ?? to.y - BUILDING_HEIGHT / 2 - 28;
-  return {
-    path: `M ${startX} ${from.y} V ${middle} H ${endX} V ${to.y}`,
-    bends: [
-      { x: startX, y: middle },
-      { x: endX, y: middle },
-    ],
-  };
-}
-
 interface WireProps {
-  readonly from: Point;
-  readonly to: Point;
+  /** The route, from the source to the destination; sparks travel this way. */
+  readonly points: readonly Point[];
   readonly tone: Tone;
   /** Spark speed; `null` draws the wire without current. */
   readonly traffic: TrafficLevel | null;
   readonly burst?: boolean;
-  readonly straight?: boolean;
-  readonly lane?: Lane;
 }
 
 /** A power line: the wire, junction dots at its bends, and sparks travelling along it. */
-function Wire({ from, to, tone, traffic, burst = false, straight = false, lane }: WireProps) {
-  const { path, bends } = straight
-    ? { path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`, bends: [] }
-    : route(from, to, lane);
+function Wire({ points, tone, traffic, burst = false }: WireProps) {
+  const path = points.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ');
+  const bends = points.slice(1, -1);
   return (
     <g className={`explorer-conduit explorer-conduit--${tone}`}>
       <path className="explorer-conduit__tube" d={path} />
@@ -104,8 +75,7 @@ function Wire({ from, to, tone, traffic, burst = false, straight = false, lane }
 }
 
 interface BuildingProps {
-  readonly x: number;
-  readonly y: number;
+  readonly at: Point;
   readonly label: string;
   /** What the building is, under its name; omitted for the delivery stages. */
   readonly detail?: string;
@@ -116,15 +86,28 @@ interface BuildingProps {
   readonly windows: readonly WindowState[];
   /** A red beacon on the roof: the component is down. */
   readonly beacon?: boolean;
+  /** The layout's text scale: label lines and their plate grow with it. */
+  readonly scale?: number;
 }
 
 /** Approximate widths of one monospace character at the label sizes, letter spacing included. */
 const CHAR_WIDTH = { label: 7.8, detail: 6.4, status: 7.1, note: 6.4 } as const;
 
 /** A building seen from above: roof, parapet, and windows lit by what runs inside. */
-function Building({ x, y, label, detail, status, note, tone, windows, beacon }: BuildingProps) {
+function Building({
+  at: { x, y },
+  label,
+  detail,
+  status,
+  note,
+  tone,
+  windows,
+  beacon,
+  scale = 1,
+}: BuildingProps) {
   const left = x - BUILDING_WIDTH / 2;
   const top = y - BUILDING_HEIGHT / 2;
+  const below = top + BUILDING_HEIGHT;
   const pitchX = (BUILDING_WIDTH - 24) / WINDOW_COLUMNS;
   const pitchY = (BUILDING_HEIGHT - 22) / WINDOW_ROWS;
   // A plate in the paper's colour behind the label, so wires pass under it as on a schematic.
@@ -134,8 +117,11 @@ function Building({ x, y, label, detail, status, note, tone, windows, beacon }: 
       (detail ?? '').length * CHAR_WIDTH.detail,
       status.length * CHAR_WIDTH.status,
       (note ?? '').length * CHAR_WIDTH.note,
-    ) + 14;
-  const plateBottom = note !== undefined ? 61 : detail !== undefined ? 48 : 35;
+    ) *
+      scale +
+    14;
+  const plateBottom = (note !== undefined ? 61 : detail !== undefined ? 48 : 35) * scale;
+  const line = (offset: number) => below + offset * scale;
   return (
     <g className={`explorer-node explorer-node--${tone}`}>
       <rect
@@ -177,27 +163,23 @@ function Building({ x, y, label, detail, status, note, tone, windows, beacon }: 
       <rect
         className="explorer-node__plate"
         x={x - plateWidth / 2}
-        y={top + BUILDING_HEIGHT + 4}
+        y={below + 4}
         width={plateWidth}
         height={plateBottom - 4}
       />
-      <text x={x} y={top + BUILDING_HEIGHT + 16} className="explorer-node__label">
+      <text x={x} y={line(16)} className="explorer-node__label">
         {label}
       </text>
       {detail !== undefined && (
-        <text x={x} y={top + BUILDING_HEIGHT + 29} className="explorer-node__detail">
+        <text x={x} y={line(29)} className="explorer-node__detail">
           {detail}
         </text>
       )}
-      <text
-        x={x}
-        y={top + BUILDING_HEIGHT + (detail === undefined ? 30 : 43)}
-        className="explorer-node__status"
-      >
+      <text x={x} y={line(detail === undefined ? 30 : 43)} className="explorer-node__status">
         {status}
       </text>
       {note !== undefined && (
-        <text x={x} y={top + BUILDING_HEIGHT + 56} className="explorer-node__note">
+        <text x={x} y={line(56)} className="explorer-node__note">
           {note}
         </text>
       )}
@@ -211,8 +193,7 @@ function Building({ x, y, label, detail, status, note, tone, windows, beacon }: 
  * cluster is deployed, pulses run into the junction during a rollout, dim when waiting to sync,
  * dark without data. The label tape names the cluster and its state.
  */
-function Core({ state }: { readonly state: CoreState }) {
-  const { x, y } = CORE;
+function Core({ state, at: { x, y } }: { readonly state: CoreState; readonly at: Point }) {
   const junction = { x, y: y + 2 };
   const electrodes = [
     { x: x - 34, y: y - 28 },
@@ -281,19 +262,17 @@ function Core({ state }: { readonly state: CoreState }) {
 interface TitleBlockProps {
   readonly snapshot: InfrastructureSnapshot | null;
   readonly now: number;
+  readonly at: Point;
 }
 
 /** The drawing's title block: the release is its revision, the snapshot time its date. */
-function TitleBlock({ snapshot, now }: TitleBlockProps) {
-  const x = 24;
-  const y = 572;
+function TitleBlock({ snapshot, now, at: { x, y } }: TitleBlockProps) {
   const width = 196;
-  const age = snapshot === null ? '—' : formatAge(snapshot.generatedAt, now);
   const rows: readonly [string, string][] = [
     ['Drawing', 'Portfolio grid'],
     ['Revision', snapshot?.release?.commit ?? '—'],
     ['GitOps', snapshot === null ? '—' : SYNC_LABELS[snapshot.sync]],
-    ['Updated', age],
+    ['Updated', snapshot === null ? '—' : formatAge(snapshot.generatedAt, now)],
   ];
   return (
     <g className="explorer-title">
@@ -344,8 +323,6 @@ function Selectable({ label, onSelect, children }: SelectableProps) {
   );
 }
 
-type BuildingId = Exclude<CardId, 'cluster'>;
-
 /** Delivery stages have no health of their own: lit in a fixed pattern while there is data. */
 function deliveryWindows(snapshot: InfrastructureSnapshot | null): readonly WindowState[] {
   return Array.from({ length: WINDOW_COLUMNS * WINDOW_ROWS }, (_, index) =>
@@ -354,12 +331,18 @@ function deliveryWindows(snapshot: InfrastructureSnapshot | null): readonly Wind
 }
 
 /** How a component or delivery stage is drawn, from the snapshot (or `null` for no data). */
-function buildingProps(id: BuildingId, snapshot: InfrastructureSnapshot | null): BuildingProps {
+function buildingProps(
+  id: PieceId,
+  snapshot: InfrastructureSnapshot | null,
+  layout: MapLayout,
+): BuildingProps {
+  const at = layout.pieces[id];
+  const scale = layout.textScale;
   const stage = DELIVERY_STAGES.find((candidate) => candidate.id === id);
   if (stage !== undefined) {
     return {
-      x: stage.x,
-      y: stage.y,
+      at,
+      scale,
       label: stage.label,
       status:
         snapshot === null
@@ -375,8 +358,8 @@ function buildingProps(id: BuildingId, snapshot: InfrastructureSnapshot | null):
   if (node === undefined) throw new Error(`no map piece for ${id}`);
   const current = snapshot === null ? null : componentById(snapshot, node.id);
   return {
-    x: node.x,
-    y: node.y,
+    at,
+    scale,
     label: node.label,
     detail: node.detail,
     status: current === null ? 'No data' : componentHealthText(current),
@@ -387,33 +370,34 @@ function buildingProps(id: BuildingId, snapshot: InfrastructureSnapshot | null):
   };
 }
 
-const BUILDING_IDS: readonly BuildingId[] = [
+const PIECE_IDS: readonly PieceId[] = [
   ...DELIVERY_STAGES.map(({ id }) => id),
   ...MAP_NODES.map(({ id }) => id),
 ];
 
 /**
- * One piece of the map on its own, for the front of its card. It reuses the map's filters, which
- * stay in the page while a card is open.
+ * One piece of the map on its own, for the front of its card, drawn from the wide layout. It
+ * reuses the map's filters, which stay in the page while a card is open.
  */
 export function MapPiece({ id, power }: { readonly id: CardId; readonly power: MapPower }) {
   const snapshot = power.on ? power.snapshot : null;
   if (id === 'cluster') {
+    const { core } = WIDE_LAYOUT;
     return (
       <svg
         className="explorer-map explorer-piece"
-        viewBox={`${CORE.x - 80} ${CORE.y - 88} 160 176`}
+        viewBox={`${core.x - 80} ${core.y - 88} 160 176`}
         aria-hidden="true"
       >
-        <Core state={coreState(snapshot)} />
+        <Core state={coreState(snapshot)} at={core} />
       </svg>
     );
   }
-  const props = buildingProps(id, snapshot);
+  const props = buildingProps(id, snapshot, WIDE_LAYOUT);
   return (
     <svg
       className="explorer-map explorer-piece"
-      viewBox={`${props.x - 100} ${props.y - 50} 200 ${props.note === undefined ? 135 : 150}`}
+      viewBox={`${props.at.x - 100} ${props.at.y - 50} 200 ${props.note === undefined ? 135 : 150}`}
       aria-hidden="true"
     >
       <Building {...props} />
@@ -431,6 +415,8 @@ function summary(snapshot: InfrastructureSnapshot): string {
 export interface ExplorerMapProps {
   readonly power: MapPower;
   readonly now: number;
+  /** The arrangement: wide (landscape) by default, narrow (portrait) on phones. */
+  readonly layout?: MapLayout;
   /** Opens a piece's card; without it, the map is a picture with no controls. */
   readonly onSelect?: (id: CardId) => void;
 }
@@ -440,30 +426,26 @@ export interface ExplorerMapProps {
  * snapshot; without fresh data the grid powers down and says "unavailable" instead of showing the
  * last known state.
  */
-export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
+export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: ExplorerMapProps) {
   const snapshot = power.on ? power.snapshot : null;
+  const { pieces, core, hub, width, height } = layout;
   const component = (id: InfrastructureComponentId): InfrastructureComponent | null =>
     snapshot === null ? null : componentById(snapshot, id);
   const tone = (id: InfrastructureComponentId): Tone => component(id)?.health ?? 'off';
-  const node = (id: InfrastructureComponentId) => {
-    const found = MAP_NODES.find((candidate) => candidate.id === id);
-    if (found === undefined) throw new Error(`no map node for ${id}`);
-    return found;
-  };
-  const argocd = node('argocd');
-  const ghcr = DELIVERY_STAGES[1];
-  const burst = snapshot !== null && recentRelease(snapshot, now);
-  const delivery: Tone = snapshot === null ? 'off' : 'delivery';
   const between = (a: InfrastructureComponentId, b: InfrastructureComponentId): Tone => {
     const first = component(a);
     const second = component(b);
     return first === null || second === null ? 'off' : worseHealth(first.health, second.health);
   };
   const select = (id: CardId) => (onSelect === undefined ? undefined : () => onSelect(id));
+  const burst = snapshot !== null && recentRelease(snapshot, now);
+  const delivery: Tone = snapshot === null ? 'off' : 'delivery';
+  const deliveryPath: readonly PieceId[] = [...DELIVERY_STAGES.map(({ id }) => id), 'argocd'];
+
   return (
     <svg
-      className={`explorer-map${snapshot === null ? ' explorer-map--off' : ''}`}
-      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+      className={`explorer-map explorer-map--${layout.name}${snapshot === null ? ' explorer-map--off' : ''}`}
+      viewBox={`0 0 ${width} ${height}`}
       role="group"
       aria-label={
         snapshot === null
@@ -479,14 +461,15 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
           <rect width={100} height={100} fill="url(#explorer-grid-minor)" />
           <path className="explorer-map__grid-major" d="M 100 0 L 0 0 0 100" />
         </pattern>
-        {/* A fixed region: a vertical tube has a zero-width box, which would clip its glow. */}
+        {/* A fixed region: a vertical tube has a zero-width box, which would clip its glow. The
+            region covers the capacitor in either layout, and the card's close-up of it. */}
         <filter
           id="explorer-flux-glow"
           filterUnits="userSpaceOnUse"
-          x={CORE.x - 80}
-          y={CORE.y - 90}
-          width={160}
-          height={180}
+          x={0}
+          y={0}
+          width={920}
+          height={1250}
         >
           <feGaussianBlur stdDeviation="4" result="wide" />
           <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="near" />
@@ -505,43 +488,45 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
           </feMerge>
         </filter>
       </defs>
-      <rect className="explorer-map__panel" width={VIEW_WIDTH} height={VIEW_HEIGHT} rx={14} />
-      <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} rx={14} fill="url(#explorer-grid-major)" />
+      <rect className="explorer-map__panel" width={width} height={height} rx={14} />
+      <rect width={width} height={height} rx={14} fill="url(#explorer-grid-major)" />
       <rect
         className="explorer-map__border"
         x={10}
         y={10}
-        width={VIEW_WIDTH - 20}
-        height={VIEW_HEIGHT - 20}
+        width={width - 20}
+        height={height - 20}
       />
 
       <g filter="url(#explorer-glow)">
-        {DELIVERY_STAGES.map((stage, index) => (
+        {deliveryPath.slice(0, -1).map((id, index) => (
           <Wire
-            key={stage.id}
-            from={stage}
-            to={DELIVERY_STAGES[index + 1] ?? argocd}
+            key={id}
+            points={[pieces[id], pieces[deliveryPath[index + 1] ?? 'argocd']]}
             tone={delivery}
             traffic={null}
             burst={burst}
           />
         ))}
-        <Wire from={ghcr} to={CORE} tone={delivery} traffic={null} burst={burst} straight />
-        <Wire from={argocd} to={CORE} tone={tone('argocd')} traffic={null} burst={burst} straight />
-        <Wire from={CORE} to={CLUSTER_HUB} tone={between('api', 'worker')} traffic={null} />
-        <Wire from={CLUSTER_HUB} to={node('api')} tone={tone('api')} traffic={null} />
-        <Wire from={CLUSTER_HUB} to={node('worker')} tone={tone('worker')} traffic={null} />
-        {RUNTIME_CONDUITS.map(({ from, to, lane }) => {
+        <Wire
+          points={[pieces[layout.buildArmFrom], core]}
+          tone={delivery}
+          traffic={null}
+          burst={burst}
+        />
+        <Wire points={[pieces.argocd, core]} tone={tone('argocd')} traffic={null} burst={burst} />
+        <Wire points={[core, hub]} tone={between('api', 'worker')} traffic={null} />
+        <Wire points={[hub, pieces.api]} tone={tone('api')} traffic={null} />
+        <Wire points={[hub, pieces.worker]} tone={tone('worker')} traffic={null} />
+        {RUNTIME_CONDUITS.map(({ key, from, to }) => {
           const start = component(from);
           const end = component(to);
           return (
             <Wire
-              key={`${from}-${to}`}
-              from={node(from)}
-              to={node(to)}
+              key={key}
+              points={layout.routes[key]}
               tone={between(from, to)}
               traffic={start === null || end === null ? null : conduitTraffic(start, end)}
-              lane={lane}
             />
           );
         })}
@@ -551,11 +536,11 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
         label={`K3s cluster: ${CORE_STATE_LABELS[coreState(snapshot)]}. Open details.`}
         onSelect={select('cluster')}
       >
-        <Core state={coreState(snapshot)} />
+        <Core state={coreState(snapshot)} at={core} />
       </Selectable>
 
-      {BUILDING_IDS.map((id) => {
-        const props = buildingProps(id, snapshot);
+      {PIECE_IDS.map((id) => {
+        const props = buildingProps(id, snapshot, layout);
         const status = props.status === '' ? 'delivery stage' : props.status;
         return (
           <Selectable
@@ -568,15 +553,28 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
         );
       })}
 
-      <TitleBlock snapshot={snapshot} now={now} />
+      <TitleBlock snapshot={snapshot} now={now} at={layout.titleBlock} />
 
       {!power.on && (
         <g className="explorer-map__offline">
-          <rect x={205} y={200} width={315} height={70} />
-          <text x={362} y={230} className="explorer-map__offline-title">
+          <rect
+            x={layout.offline.x}
+            y={layout.offline.y}
+            width={layout.offline.width}
+            height={70}
+          />
+          <text
+            x={layout.offline.x + layout.offline.width / 2}
+            y={layout.offline.y + 30}
+            className="explorer-map__offline-title"
+          >
             Unavailable
           </text>
-          <text x={362} y={254} className="explorer-map__offline-reason">
+          <text
+            x={layout.offline.x + layout.offline.width / 2}
+            y={layout.offline.y + 54}
+            className="explorer-map__offline-reason"
+          >
             {power.reason === 'stale'
               ? 'Grid offline: status too old to trust'
               : 'Grid offline: status not loaded'}

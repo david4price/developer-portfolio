@@ -675,6 +675,9 @@ main {
   --bp-delivery: #b8a6ff;
   --bp-off: #23395a;
   display: grid;
+  /* minmax(0, …): a wide child (the map, the table) scrolls in its own frame instead of
+     stretching the column, and with it the whole page, past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space);
   margin-top: var(--space);
 }
@@ -709,7 +712,6 @@ main {
 .explorer-map {
   display: block;
   width: 100%;
-  min-width: 680px;
   height: auto;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 }
@@ -717,6 +719,26 @@ main {
 .explorer-map text {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* The landscape map keeps a readable size and scrolls inside its frame if the screen is a little
+   too narrow for it; phones get the portrait layout instead. */
+.explorer-map--wide {
+  min-width: 680px;
+}
+
+/* Portrait labels are drawn larger, matching the layout's text scale (1.2). */
+.explorer-map--narrow .explorer-node__label {
+  font-size: 14.4px;
+}
+
+.explorer-map--narrow .explorer-node text.explorer-node__detail,
+.explorer-map--narrow .explorer-node text.explorer-node__note {
+  font-size: 12px;
+}
+
+.explorer-map--narrow .explorer-node__status {
+  font-size: 13.2px;
 }
 
 .explorer-map__panel {
@@ -1221,8 +1243,9 @@ main {
   transition: transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-/* Opening: the card shows its front for a moment, then flips to the details it opened on. */
-.explorer-card[open] .explorer-card__flipper[data-flipped] {
+/* Opening: the card shows its front for a moment, then flips to the details it opened on. Only
+   the opening plays this; later flips use the transition. */
+.explorer-card__flipper[data-opening] {
   animation: explorer-card-flip-in 1.1s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
@@ -1396,7 +1419,7 @@ main {
   }
 
   .explorer-card__flipper,
-  .explorer-card[open] .explorer-card__flipper[data-flipped] {
+  .explorer-card__flipper[data-opening] {
     transition: none;
     animation: none;
   }
@@ -1407,16 +1430,19 @@ main {
   font-weight: 600;
 }
 
+.explorer-table-frame {
+  overflow-x: auto;
+}
+
 .explorer-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.95rem;
 }
 
-.explorer-table caption {
-  margin-bottom: 0.5rem;
+.explorer-table__summary {
+  margin: 0 0 0.5rem;
   color: var(--color-muted);
-  text-align: left;
 }
 
 .explorer-table th,

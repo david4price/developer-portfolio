@@ -60,25 +60,27 @@ export function ExplorerCard({ id, power, now, onClose }: ExplorerCardProps) {
   const frontButton = useRef<HTMLButtonElement>(null);
   const backButton = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  // Cards open on their details, so focus lands there once and never jumps; the flip from the
-  // front plays as the opening animation (CSS), and the buttons flip it by hand afterwards.
+  // A card opens on its details. While the opening flip from the front plays, the dialog itself
+  // holds focus (no hidden button can take a key press); when it ends, focus moves to the details.
+  // The card is keyed by piece, so each opening starts from this state.
   const [flipped, setFlipped] = useState(true);
+  const [opening, setOpening] = useState(true);
 
   useEffect(() => {
     const element = dialog.current;
     if (id === null || element === null) return;
-    setFlipped(true);
     if (!element.open) element.showModal();
+    element.focus();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setOpening(false);
     return () => {
       if (element.open) element.close();
     };
   }, [id]);
 
-  // Keep focus on the face that's showing; the hidden face is inert.
   useEffect(() => {
-    if (id === null) return;
+    if (id === null || opening) return;
     (flipped ? backButton : frontButton).current?.focus();
-  }, [flipped, id]);
+  }, [flipped, id, opening]);
 
   const details = id === null ? null : cardDetails(id, power, now);
   return (
@@ -86,6 +88,7 @@ export function ExplorerCard({ id, power, now, onClose }: ExplorerCardProps) {
       ref={dialog}
       className="explorer-card"
       aria-labelledby={titleId}
+      tabIndex={-1}
       onClose={onClose}
       onClick={(event) => {
         if (
@@ -97,7 +100,12 @@ export function ExplorerCard({ id, power, now, onClose }: ExplorerCardProps) {
       }}
     >
       {id !== null && details !== null && (
-        <div className="explorer-card__flipper" data-flipped={flipped ? 'true' : undefined}>
+        <div
+          className="explorer-card__flipper"
+          data-flipped={flipped ? 'true' : undefined}
+          data-opening={opening ? 'true' : undefined}
+          onAnimationEnd={() => setOpening(false)}
+        >
           <section className="explorer-card__face explorer-card__face--front" inert={flipped}>
             <MapPiece id={id} power={power} />
             <div className="explorer-card__actions">

@@ -19,12 +19,25 @@ export type MapPower =
   | { readonly on: true; readonly snapshot: InfrastructureSnapshot }
   | { readonly on: false; readonly reason: 'unavailable' | 'stale' };
 
-/** Whether the map can show the snapshot at all. Never shows "healthy" without fresh data. */
-export function mapPower(snapshot: InfrastructureSnapshot | null, now: number): MapPower {
+/**
+ * Whether the map can show the snapshot at all; it never shows "healthy" without fresh data.
+ * Staleness is judged on the visitor's clock alone where it can be: the snapshot goes stale once
+ * it was received too long ago (refreshes stopped). It is also stale if it was already old when it
+ * arrived (the server kept serving an old snapshot), which compares the server's timestamp with
+ * the receipt time and so only errs when the visitor's clock runs well ahead of the server's.
+ */
+export function mapPower(
+  snapshot: InfrastructureSnapshot | null,
+  now: number,
+  receivedAt: number = now,
+): MapPower {
   if (snapshot === null) return { on: false, reason: 'unavailable' };
   const generatedAt = Date.parse(snapshot.generatedAt);
-  // A snapshot from too far in the future (server clock ahead) is no more trustworthy.
-  if (!Number.isFinite(generatedAt) || Math.abs(now - generatedAt) > STALE_AFTER_MS) {
+  if (
+    !Number.isFinite(generatedAt) ||
+    now - receivedAt > STALE_AFTER_MS ||
+    receivedAt - generatedAt > STALE_AFTER_MS
+  ) {
     return { on: false, reason: 'stale' };
   }
   return { on: true, snapshot };
@@ -34,62 +47,215 @@ export interface MapNode {
   readonly id: InfrastructureComponentId;
   readonly label: string;
   readonly detail: string;
+}
+
+/** The deployment's components, in drawing order. Where they sit depends on the layout. */
+export const MAP_NODES: readonly MapNode[] = [
+  { id: 'web', label: 'Website', detail: 'Cloudflare Pages' },
+  { id: 'tunnel', label: 'Tunnel', detail: 'Cloudflare' },
+  { id: 'api', label: 'API', detail: 'NestJS' },
+  { id: 'worker', label: 'Worker', detail: 'BullMQ' },
+  { id: 'ai', label: 'AI model', detail: 'Home server GPU' },
+  { id: 'postgres', label: 'PostgreSQL', detail: 'Database' },
+  { id: 'redis', label: 'Redis', detail: 'Sessions and queues' },
+  { id: 'argocd', label: 'Argo CD', detail: 'GitOps' },
+];
+
+/** The delivery path's stages before Argo CD, in order; they have no health of their own. */
+export const DELIVERY_STAGES = [
+  { id: 'actions', label: 'GitHub Actions' },
+  { id: 'ghcr', label: 'Container registry' },
+  { id: 'pin', label: 'images.yaml pin' },
+] as const;
+
+export type DeliveryStageId = (typeof DELIVERY_STAGES)[number]['id'];
+
+/** Everything drawn as a building: components and delivery stages. */
+export type PieceId = InfrastructureComponentId | DeliveryStageId;
+
+export interface Point {
   readonly x: number;
   readonly y: number;
 }
 
-/** Fixed layout: the deployment's shape is known; only health and traffic come from data. */
-export const MAP_NODES: readonly MapNode[] = [
-  { id: 'web', label: 'Website', detail: 'Cloudflare Pages', x: 130, y: 250 },
-  { id: 'tunnel', label: 'Tunnel', detail: 'Cloudflare', x: 130, y: 400 },
-  { id: 'api', label: 'API', detail: 'NestJS', x: 350, y: 400 },
-  { id: 'worker', label: 'Worker', detail: 'BullMQ', x: 790, y: 400 },
-  { id: 'ai', label: 'AI model', detail: 'Home server GPU', x: 350, y: 590 },
-  { id: 'postgres', label: 'PostgreSQL', detail: 'Database', x: 570, y: 590 },
-  { id: 'redis', label: 'Redis', detail: 'Sessions and queues', x: 790, y: 590 },
-  { id: 'argocd', label: 'Argo CD', detail: 'GitOps', x: 790, y: 100 },
-];
-
-/** The delivery path's stages before Argo CD; they have no health of their own. */
-export const DELIVERY_STAGES = [
-  { id: 'actions', label: 'GitHub Actions', x: 130, y: 100 },
-  { id: 'ghcr', label: 'Container registry', x: 350, y: 100 },
-  { id: 'pin', label: 'images.yaml pin', x: 570, y: 100 },
-] as const;
-
-/** The cluster's flux capacitor, where the build, deploy, and runtime lines meet. */
-export const CORE = { x: 570, y: 260 } as const;
-/** Where the core's runtime arm reaches the cluster workloads. */
-export const CLUSTER_HUB = { x: 570, y: 400 } as const;
-
-/**
- * A wire's own route between two rows: it leaves `fromDx` and arrives `toDx` off the buildings'
- * centres and crosses at height `laneY`, so no two wires share a stretch (each shows its own
- * health and sparks; crossings are fine, overlaps are not).
- */
-export interface Lane {
-  readonly fromDx: number;
-  readonly toDx: number;
-  readonly laneY: number;
-}
+/** The runtime wires; every layout must route each of them. */
+export type ConduitKey =
+  | 'web-tunnel'
+  | 'tunnel-api'
+  | 'api-ai'
+  | 'api-postgres'
+  | 'api-redis'
+  | 'worker-redis'
+  | 'worker-postgres';
 
 export interface RuntimeConduit {
+  readonly key: ConduitKey;
   readonly from: InfrastructureComponentId;
   readonly to: InfrastructureComponentId;
-  /** Omitted for wires between aligned buildings, which run straight. */
-  readonly lane?: Lane;
 }
 
 /** Runtime connections; pulses travel from `from` to `to`. */
 export const RUNTIME_CONDUITS: readonly RuntimeConduit[] = [
-  { from: 'web', to: 'tunnel' },
-  { from: 'tunnel', to: 'api' },
-  { from: 'api', to: 'ai' },
-  { from: 'api', to: 'postgres', lane: { fromDx: 25, toDx: -25, laneY: 512 } },
-  { from: 'api', to: 'redis', lane: { fromDx: 45, toDx: 22, laneY: 527 } },
-  { from: 'worker', to: 'redis' },
-  { from: 'worker', to: 'postgres', lane: { fromDx: -30, toDx: 25, laneY: 542 } },
+  { key: 'web-tunnel', from: 'web', to: 'tunnel' },
+  { key: 'tunnel-api', from: 'tunnel', to: 'api' },
+  { key: 'api-ai', from: 'api', to: 'ai' },
+  { key: 'api-postgres', from: 'api', to: 'postgres' },
+  { key: 'api-redis', from: 'api', to: 'redis' },
+  { key: 'worker-redis', from: 'worker', to: 'redis' },
+  { key: 'worker-postgres', from: 'worker', to: 'postgres' },
 ];
+
+/**
+ * Where everything sits in one arrangement of the map. Each runtime wire has its own route, so no
+ * two wires share a stretch (each shows its own health and sparks); crossings are fine.
+ */
+export interface MapLayout {
+  readonly name: 'wide' | 'narrow';
+  readonly width: number;
+  readonly height: number;
+  /** Labels are drawn this much larger, so they stay readable when a tall layout is scaled down. */
+  readonly textScale: number;
+  readonly pieces: Readonly<Record<PieceId, Point>>;
+  /** The cluster's flux capacitor, and the hub where its runtime arm reaches API and worker. */
+  readonly core: Point;
+  readonly hub: Point;
+  /** The delivery stage the capacitor's build arm comes from (Argo CD feeds the deploy arm). */
+  readonly buildArmFrom: DeliveryStageId;
+  /** Each runtime wire's route, from its `from` building to its `to` building. */
+  readonly routes: Readonly<Record<ConduitKey, readonly Point[]>>;
+  readonly titleBlock: Point;
+  readonly offline: { readonly x: number; readonly y: number; readonly width: number };
+}
+
+/** Landscape: delivery across the top, the capacitor in the middle, runtime below. */
+export const WIDE_LAYOUT: MapLayout = {
+  name: 'wide',
+  width: 920,
+  height: 710,
+  textScale: 1,
+  pieces: {
+    actions: { x: 130, y: 100 },
+    ghcr: { x: 350, y: 100 },
+    pin: { x: 570, y: 100 },
+    argocd: { x: 790, y: 100 },
+    web: { x: 130, y: 250 },
+    tunnel: { x: 130, y: 400 },
+    api: { x: 350, y: 400 },
+    worker: { x: 790, y: 400 },
+    ai: { x: 350, y: 590 },
+    postgres: { x: 570, y: 590 },
+    redis: { x: 790, y: 590 },
+  },
+  core: { x: 570, y: 260 },
+  hub: { x: 570, y: 400 },
+  buildArmFrom: 'ghcr',
+  routes: {
+    'web-tunnel': [
+      { x: 130, y: 250 },
+      { x: 130, y: 400 },
+    ],
+    'tunnel-api': [
+      { x: 130, y: 400 },
+      { x: 350, y: 400 },
+    ],
+    'api-ai': [
+      { x: 350, y: 400 },
+      { x: 350, y: 590 },
+    ],
+    'api-postgres': [
+      { x: 375, y: 400 },
+      { x: 375, y: 512 },
+      { x: 545, y: 512 },
+      { x: 545, y: 590 },
+    ],
+    'api-redis': [
+      { x: 395, y: 400 },
+      { x: 395, y: 527 },
+      { x: 812, y: 527 },
+      { x: 812, y: 590 },
+    ],
+    'worker-redis': [
+      { x: 790, y: 400 },
+      { x: 790, y: 590 },
+    ],
+    'worker-postgres': [
+      { x: 760, y: 400 },
+      { x: 760, y: 542 },
+      { x: 595, y: 542 },
+      { x: 595, y: 590 },
+    ],
+  },
+  titleBlock: { x: 24, y: 572 },
+  offline: { x: 205, y: 200, width: 315 },
+};
+
+/**
+ * Portrait, for phones: two columns read top to bottom (delivery, the capacitor, then runtime),
+ * with wires to the far buildings running down the outer margins and the middle gutter.
+ */
+export const NARROW_LAYOUT: MapLayout = {
+  name: 'narrow',
+  width: 450,
+  height: 1250,
+  textScale: 1.2,
+  pieces: {
+    actions: { x: 115, y: 80 },
+    ghcr: { x: 325, y: 80 },
+    pin: { x: 325, y: 235 },
+    argocd: { x: 115, y: 235 },
+    api: { x: 115, y: 590 },
+    worker: { x: 325, y: 590 },
+    tunnel: { x: 115, y: 770 },
+    redis: { x: 325, y: 770 },
+    web: { x: 115, y: 950 },
+    postgres: { x: 325, y: 950 },
+    ai: { x: 115, y: 1125 },
+  },
+  core: { x: 220, y: 420 },
+  hub: { x: 220, y: 590 },
+  buildArmFrom: 'pin',
+  routes: {
+    'web-tunnel': [
+      { x: 115, y: 950 },
+      { x: 115, y: 770 },
+    ],
+    'tunnel-api': [
+      { x: 115, y: 770 },
+      { x: 115, y: 590 },
+    ],
+    'api-ai': [
+      { x: 115, y: 590 },
+      { x: 26, y: 590 },
+      { x: 26, y: 1125 },
+      { x: 115, y: 1125 },
+    ],
+    'api-postgres': [
+      { x: 175, y: 590 },
+      { x: 175, y: 705 },
+      { x: 220, y: 705 },
+      { x: 220, y: 950 },
+      { x: 325, y: 950 },
+    ],
+    'api-redis': [
+      { x: 150, y: 590 },
+      { x: 150, y: 690 },
+      { x: 290, y: 690 },
+      { x: 290, y: 770 },
+    ],
+    'worker-redis': [
+      { x: 325, y: 590 },
+      { x: 325, y: 770 },
+    ],
+    'worker-postgres': [
+      { x: 325, y: 590 },
+      { x: 434, y: 590 },
+      { x: 434, y: 950 },
+      { x: 325, y: 950 },
+    ],
+  },
+  titleBlock: { x: 240, y: 1095 },
+  offline: { x: 30, y: 505, width: 390 },
+};
 
 const SEVERITY: Readonly<Record<InfrastructureHealth, number>> = {
   healthy: 0,

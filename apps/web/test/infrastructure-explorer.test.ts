@@ -13,7 +13,11 @@ import {
   conduitTraffic,
   coreState,
   formatAge,
+  type MapLayout,
+  NARROW_LAYOUT,
+  type Point,
   RUNTIME_CONDUITS,
+  WIDE_LAYOUT,
   MAP_NODES,
   mapPower,
   recentRelease,
@@ -64,10 +68,14 @@ describe('mapPower', () => {
       generatedAt: new Date(NOW - STALE_AFTER_MS - 1).toISOString(),
     });
     assert.deepEqual(mapPower(old, NOW), { on: false, reason: 'stale' });
-    const future = snapshotWith([], {
-      generatedAt: new Date(NOW + STALE_AFTER_MS + 1).toISOString(),
-    });
-    assert.deepEqual(mapPower(future, NOW), { on: false, reason: 'stale' }, 'server clock ahead');
+    const fresh = snapshotWith([]);
+    assert.deepEqual(
+      mapPower(fresh, NOW, NOW - STALE_AFTER_MS - 1),
+      { on: false, reason: 'stale' },
+      'received too long ago: refreshes stopped',
+    );
+    const ahead = snapshotWith([], { generatedAt: new Date(NOW + 5 * 60_000).toISOString() });
+    assert.equal(mapPower(ahead, NOW).on, true, 'a visitor clock behind the server is no problem');
     assert.deepEqual(mapPower(snapshotWith([], { generatedAt: 'not a time' }), NOW), {
       on: false,
       reason: 'stale',
@@ -167,19 +175,6 @@ describe('map model', () => {
     assert.equal(formatAge(at(10 * 60_000), NOW), '10 min ago');
     assert.equal(formatAge(at(3 * 3_600_000), NOW), '3 h ago');
     assert.equal(formatAge('not a time', NOW), 'unknown');
-  });
-
-  it('gives every bending wire its own lane, so no two share a stretch', () => {
-    const lanes = RUNTIME_CONDUITS.flatMap(({ lane }) => (lane === undefined ? [] : [lane]));
-    assert.equal(new Set(lanes.map(({ laneY }) => laneY)).size, lanes.length, 'distinct heights');
-    const drops = RUNTIME_CONDUITS.flatMap(({ from, to, lane }) => {
-      const start = MAP_NODES.find(({ id }) => id === from);
-      const end = MAP_NODES.find(({ id }) => id === to);
-      if (start === undefined || end === undefined) return [];
-      if (lane === undefined) return start.x === end.x ? [start.x] : [];
-      return [start.x + lane.fromDx, end.x + lane.toDx];
-    });
-    assert.equal(new Set(drops).size, drops.length, `distinct vertical runs: ${drops.join(', ')}`);
   });
 
   it('describes status in text, not colour alone', () => {
@@ -357,4 +352,75 @@ describe('cards', () => {
     assert.match(html, /Read more: The REST API/);
     assert.ok(!/\sstyle=/.test(html), 'no inline styles (CSP)');
   });
+});
+
+describe('layouts', () => {
+  type Segment = readonly [Point, Point];
+
+  /** Every wire the map draws in a layout, as its list of straight segments. */
+  function wires(layout: MapLayout): Map<string, Segment[]> {
+    const { pieces, core, hub } = layout;
+    const segments = (points: readonly Point[]): Segment[] =>
+      points.slice(1).map((point, index) => [points[index] as Point, point] as const);
+    return new Map<string, Segment[]>([
+      ['actions-ghcr', segments([pieces.actions, pieces.ghcr])],
+      ['ghcr-pin', segments([pieces.ghcr, pieces.pin])],
+      ['pin-argocd', segments([pieces.pin, pieces.argocd])],
+      ['build-arm', segments([pieces[layout.buildArmFrom], core])],
+      ['deploy-arm', segments([pieces.argocd, core])],
+      ['core-hub', segments([core, hub])],
+      ['hub-api', segments([hub, pieces.api])],
+      ['hub-worker', segments([hub, pieces.worker])],
+      ...RUNTIME_CONDUITS.map(({ key }) => [key, segments(layout.routes[key])] as const),
+    ]);
+  }
+
+  /** Length two segments share when they lie on one line; 0 when they only cross or touch. */
+  function sharedLength([a, b]: Segment, [c, d]: Segment): number {
+    const cross = (p: Point, q: Point, r: Point) =>
+      (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    if (Math.abs(cross(a, b, c)) > 1e-6 || Math.abs(cross(a, b, d)) > 1e-6) return 0;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const along = (p: Point) => ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / length;
+    const [from, to] = [along(c), along(d)].sort((x, y) => x - y) as [number, number];
+    return Math.max(0, Math.min(length, to) - Math.max(0, from));
+  }
+
+  for (const layout of [WIDE_LAYOUT, NARROW_LAYOUT]) {
+    it(`${layout.name}: no two wires share a stretch, so each shows its own health`, () => {
+      const all = [...wires(layout)];
+      for (const [i, [name, segments]] of all.entries()) {
+        for (const [other, otherSegments] of all.slice(i + 1)) {
+          for (const segment of segments) {
+            for (const otherSegment of otherSegments) {
+              assert.ok(sharedLength(segment, otherSegment) < 0.5, `${name} overlaps ${other}`);
+            }
+          }
+        }
+      }
+    });
+
+    it(`${layout.name}: every route runs from inside its source building to inside its target`, () => {
+      const inside = (point: Point, centre: Point) =>
+        Math.abs(point.x - centre.x) <= 66 && Math.abs(point.y - centre.y) <= 35;
+      for (const { key, from, to } of RUNTIME_CONDUITS) {
+        const route = layout.routes[key];
+        assert.ok(route.length >= 2, key);
+        assert.ok(inside(route[0] as Point, layout.pieces[from]), `${key} starts in ${from}`);
+        assert.ok(inside(route.at(-1) as Point, layout.pieces[to]), `${key} ends in ${to}`);
+      }
+    });
+
+    it(`${layout.name}: draws every piece and fits its drawing`, () => {
+      const html = renderToStaticMarkup(
+        createElement(ExplorerMap, { power: mapPower(steady(), NOW), now: NOW, layout }),
+      );
+      assert.match(html, new RegExp(`explorer-map--${layout.name}`));
+      assert.match(html, new RegExp(`viewBox="0 0 ${layout.width} ${layout.height}"`));
+      for (const { label } of MAP_NODES) assert.ok(html.includes(label), label);
+      for (const { x, y } of Object.values(layout.pieces)) {
+        assert.ok(x - 66 >= 0 && x + 66 <= layout.width && y - 35 >= 0 && y + 35 <= layout.height);
+      }
+    });
+  }
 });

@@ -87,6 +87,15 @@ It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
 - Styling uses classes only (the site CSP blocks inline styles), on a blueprint sheet that looks
   the same in both themes. Reduced motion removes sparks, bursts, and all flicker; animations
   pause in hidden tabs; a table lists the same data as text.
+- **Layouts:** a landscape drawing (920 × 710) for wider screens and a portrait one (450 × 1250,
+  labels 1.2× larger) for phones (≤ 640 px), chosen by a media query and switched on resize. Each
+  layout (`WIDE_LAYOUT`, `NARROW_LAYOUT` in `map-model.ts`) places every building and routes every
+  wire explicitly; tests check, for both, that no two wires share a stretch and that each route
+  runs from inside its source building to inside its target. The landscape map scrolls inside its
+  frame if the screen is a little too narrow; the page itself never scrolls sideways.
+- Staleness is judged from when the snapshot arrived (it goes stale once refreshes stop for
+  60 s), and from how old it already was on arrival, so a visitor's slow clock doesn't power the
+  map down.
 - **Cards:** every building, delivery stage, and the flux capacitor is a button (Tab, Enter, or
   a click; rows in the text table have a "Details" button too). It opens a card in a modal
   `<dialog>` that shows the piece close up, then flips to its details: what it is (short copy in

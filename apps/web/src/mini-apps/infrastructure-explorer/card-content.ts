@@ -6,13 +6,12 @@ import {
   CORE_STATE_LABELS,
   coreState,
   DELIVERY_STAGES,
+  type DeliveryStageId,
   formatAge,
   MAP_NODES,
   type MapPower,
   SYNC_LABELS,
 } from './map-model.ts';
-
-export type DeliveryStageId = (typeof DELIVERY_STAGES)[number]['id'];
 
 /** Everything on the map that opens a card: components, delivery stages, and the cluster. */
 export type CardId = InfrastructureComponentId | DeliveryStageId | 'cluster';

@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CardId } from './card-content.ts';
 import { ExplorerCard } from './explorer-card.tsx';
 import { ExplorerMap } from './explorer-map.tsx';
 import {
   componentById,
   componentStatus,
+  formatAge,
   MAP_NODES,
   type MapPower,
   mapPower,
-  formatAge,
+  NARROW_LAYOUT,
   SYNC_LABELS,
+  WIDE_LAYOUT,
 } from './map-model.ts';
 import {
   SAMPLE_SCENARIOS,
@@ -25,6 +27,9 @@ export const REFRESH_MS = 12_000;
 
 /** How often ages ("updated 7 s ago") and staleness are re-checked between refreshes. */
 const CLOCK_MS = 1_000;
+
+/** Screens this narrow get the portrait layout. */
+const NARROW_QUERY = '(max-width: 640px)';
 
 export interface ExplorerTableProps {
   readonly power: MapPower;
@@ -46,52 +51,58 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
     );
   }
   const { snapshot } = power;
+  // The summary sits above the table, not in a caption, so it wraps to the screen while the table
+  // scrolls inside its frame on a phone.
   return (
-    <table className="explorer-table">
-      <caption>
+    <div className="explorer-table-block">
+      <p className="explorer-table__summary">
         Updated {formatAge(snapshot.generatedAt, now)}. GitOps: {SYNC_LABELS[snapshot.sync]}.
         {snapshot.release !== null &&
           ` Latest release ${snapshot.release.commit}, pinned ${formatAge(snapshot.release.pinnedAt, now)}.`}
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">Component</th>
-          <th scope="col">Status</th>
-          <th scope="col">Version</th>
-          <th scope="col">Traffic</th>
-          {onSelect !== undefined && (
-            <th scope="col">
-              <span className="visually-hidden">Details</span>
-            </th>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {MAP_NODES.map(({ id, label }) => {
-          const component = componentById(snapshot, id);
-          return (
-            <tr key={id} data-health={component.health}>
-              <th scope="row">{label}</th>
-              <td>{componentStatus(component)}</td>
-              <td>{component.version ?? '—'}</td>
-              <td>{component.traffic ?? '—'}</td>
+      </p>
+      <div className="explorer-table-frame">
+        <table className="explorer-table" aria-label="Deployment status">
+          <thead>
+            <tr>
+              <th scope="col">Component</th>
+              <th scope="col">Status</th>
+              <th scope="col">Version</th>
+              <th scope="col">Traffic</th>
               {onSelect !== undefined && (
-                <td>
-                  <button
-                    type="button"
-                    className="explorer-table__details"
-                    aria-haspopup="dialog"
-                    onClick={() => onSelect(id)}
-                  >
-                    Details<span className="visually-hidden"> for {label}</span>
-                  </button>
-                </td>
+                <th scope="col">
+                  <span className="visually-hidden">Details</span>
+                </th>
               )}
             </tr>
-          );
-        })}
-      </tbody>
-    </table>
+          </thead>
+          <tbody>
+            {MAP_NODES.map(({ id, label }) => {
+              const component = componentById(snapshot, id);
+              return (
+                <tr key={id} data-health={component.health}>
+                  <th scope="row">{label}</th>
+                  <td>{componentStatus(component)}</td>
+                  <td>{component.version ?? '—'}</td>
+                  <td>{component.traffic ?? '—'}</td>
+                  {onSelect !== undefined && (
+                    <td>
+                      <button
+                        type="button"
+                        className="explorer-table__details"
+                        aria-haspopup="dialog"
+                        onClick={() => onSelect(id)}
+                      >
+                        Details<span className="visually-hidden"> for {label}</span>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -106,11 +117,24 @@ export function InfrastructureExplorer() {
   const [card, setCard] = useState<CardId | null>(null);
 
   const [fetchedAt, setFetchedAt] = useState(() => Date.now());
+  const fetchedAtRef = useRef(fetchedAt);
+  fetchedAtRef.current = fetchedAt;
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches,
+  );
+
+  // Phones get the portrait layout; rotating or resizing switches between them.
+  useEffect(() => {
+    const query = window.matchMedia(NARROW_QUERY);
+    const update = () => setNarrow(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   // The snapshot refreshes every REFRESH_MS (here: a new sample); the clock ticks every second,
-  // so ages count up and a snapshot that stops refreshing goes stale on time.
+  // so ages count up and a snapshot that stops refreshing goes stale on time. Hidden tabs skip
+  // both, so nothing re-renders unseen.
   useEffect(() => {
-    // Hidden tabs skip both, so no re-render runs unseen; returning refreshes at once (below).
     const refresh = setInterval(() => {
       if (!document.hidden) setFetchedAt(Date.now());
     }, REFRESH_MS);
@@ -123,24 +147,23 @@ export function InfrastructureExplorer() {
     };
   }, []);
 
-  // Animations stop while the tab is hidden; coming back refreshes before the clock can tick, so
-  // a fresh snapshot never flashes as stale.
+  // Animations pause while the tab is hidden. Coming back updates the clock, and refreshes too if
+  // a refresh fell due meanwhile, before anything renders, so a fresh snapshot never flashes stale.
   useEffect(() => {
     const update = () => {
       setPaused(document.hidden);
-      if (!document.hidden) {
-        const time = Date.now();
-        setFetchedAt(time);
-        setNow(time);
-      }
+      if (document.hidden) return;
+      const time = Date.now();
+      setNow(time);
+      if (time - fetchedAtRef.current >= REFRESH_MS) setFetchedAt(time);
     };
-    update();
+    setPaused(document.hidden);
     document.addEventListener('visibilitychange', update);
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
 
   const snapshot = useMemo(() => sampleSnapshot(scenario, fetchedAt), [scenario, fetchedAt]);
-  const power = mapPower(snapshot, now);
+  const power = mapPower(snapshot, now, fetchedAt);
 
   return (
     <section
@@ -179,10 +202,22 @@ export function InfrastructureExplorer() {
         {power.on ? '' : ': the map is powered off and the status is unavailable'}.
       </p>
       <div className="explorer-frame">
-        <ExplorerMap power={power} now={now} onSelect={setCard} />
+        <ExplorerMap
+          power={power}
+          now={now}
+          layout={narrow ? NARROW_LAYOUT : WIDE_LAYOUT}
+          onSelect={setCard}
+        />
       </div>
       <ExplorerTable power={power} now={now} onSelect={setCard} />
-      <ExplorerCard id={card} power={power} now={now} onClose={() => setCard(null)} />
+      {/* Keyed by piece, so every opening starts from a fresh card. */}
+      <ExplorerCard
+        key={card ?? 'closed'}
+        id={card}
+        power={power}
+        now={now}
+        onClose={() => setCard(null)}
+      />
     </section>
   );
 }
