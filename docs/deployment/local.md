@@ -37,14 +37,15 @@ If you change the web port, add the new origin to `CORS_ORIGINS` in `.env`.
 
 Useful endpoints:
 
-| Endpoint                     | Purpose                                                               |
-| ---------------------------- | --------------------------------------------------------------------- |
-| `GET /api/v1/health`         | Liveness, which never touches dependencies                            |
-| `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503        |
-| `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)                   |
-| `GET /api/v1/projects/:slug` | Project detail                                                        |
-| `POST /api/v1/chat/sessions` | `{ turnstileToken }` → session cookie; `503 ai_disabled` while AI off |
-| `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                        |
+| Endpoint                     | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `GET /api/v1/health`         | Liveness, which never touches dependencies                              |
+| `GET /api/v1/health/ready`   | Readiness: 200 when PostgreSQL and Redis answer, otherwise 503          |
+| `GET /api/v1/projects`       | Paged project summaries from PostgreSQL (see below)                     |
+| `GET /api/v1/projects/:slug` | Project detail                                                          |
+| `POST /api/v1/chat/sessions` | `{ turnstileToken }` → session cookie; `503 ai_disabled` while AI off   |
+| `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                          |
+| `GET /api/v1/infrastructure` | Sanitized deployment snapshot; `503 infrastructure_disabled` by default |
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
@@ -94,6 +95,18 @@ static build. The secret stays in API configuration. After successful verificati
 **Start chat**, then send a question; blocked cookies or an expired session require fresh
 verification. Browser and live acceptance checks are still pending; see the
 [Turnstile guide](turnstile.md).
+
+`GET /api/v1/infrastructure` serves the Infrastructure Explorer's snapshot (P6-02): allowlisted
+fields only (component health, image tag or short digest, replica counts, a coarse failure
+category, and when it was built), cached for 12 s, with `Cache-Control: no-store`. It is off by
+default (`INFRASTRUCTURE_SOURCE=disabled` → `503 infrastructure_disabled`). `kubernetes` reads
+the portfolio's Deployments, StatefulSets, and Pods (by component label) in
+`INFRASTRUCTURE_NAMESPACE` (default `portfolio`) through
+the in-cluster API server, so it only works inside a pod with the read-only Role from P6-01 and
+`NODE_EXTRA_CA_CERTS` pointing at the cluster CA; outside a pod it fails startup. If the cluster
+can't be read the last snapshot is served as it was, or `503 infrastructure_unavailable` before
+the first one; each failed read is logged as a warning with its reason and status only. Locally,
+leave it disabled.
 
 Messages are screened before they reach the model: an injection attempt gets
 `422 message_rejected` and is not stored

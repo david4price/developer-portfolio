@@ -71,6 +71,8 @@ export type ApiErrorCode =
   | 'message_rejected'
   | 'challenge_failed'
   | 'challenge_unavailable'
+  | 'infrastructure_disabled'
+  | 'infrastructure_unavailable'
   | 'internal_error';
 
 export interface ApiErrorResponse {

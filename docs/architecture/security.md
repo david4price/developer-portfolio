@@ -99,26 +99,34 @@ The public surface is a static site and a small REST API. The main risks:
   setup and browser integration remain **Proposed**; see the
   [Turnstile guide](../deployment/turnstile.md).
 
-## Infrastructure Explorer (Proposed, Phase 6)
+## Infrastructure Explorer (serializer Confirmed in code, P6-02; access Proposed, Phase 6)
 
-- Namespace-scoped `Role` with only `get`/`list` on `deployments`, `replicasets`, and `pods` in the
-  `portfolio` namespace. No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
+- Namespace-scoped `Role` with only `get`/`list` on `deployments`, `statefulsets`, and `pods` in
+  the `portfolio` namespace (PostgreSQL is a StatefulSet; ReplicaSets aren't needed). No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
 - Argo CD access uses a read-only project role token scoped to the portfolio Application.
-- Responses go through an explicit allowlist serializer, which emits only:
+- Responses go through an explicit allowlist serializer
+  (`apps/api/src/modules/infrastructure/snapshot-serializer.ts`): raw objects are parsed with
+  schemas that name only the needed fields, so every other key is dropped, and objects from other
+  namespaces or without a known component label are ignored. Leak tests plant IPs, node names, env
+  values, secret names, registry paths, annotations, and other namespaces in realistic objects and
+  check none reach the output. It emits only:
   - app name
   - health and sync status
-  - image version (tag, not registry path)
+  - image version (tag, not registry path; a short `sha256:` prefix for images pinned by digest)
   - desired, available, and ready counts
   - rollout progress
   - a coarse failure category
   - the last-updated time
   - **Proposed additions** (already in the `InfrastructureSnapshot` type in
-    `@portfolio/shared-types`, filled with sample data by the P6-04 prototype; P6-02 adds them to
-    the serializer and its leak tests before any live value is shown):
-    - the latest release: short commit SHA and the time it was pinned in `images.yaml`
+    `@portfolio/shared-types`, filled with sample data by the P6-04 prototype; the serializer
+    emits `null` for both until their sources exist, and adds them to its leak tests then):
+    - the latest release: short commit SHA and the time it was pinned in `images.yaml` (from
+      Argo CD, P6-03)
     - a bucketed request rate per component (`idle`, `low`, `busy`; from P7-01 metrics, never
       raw counts or anything per client)
-- Results are cached for 10–15 s. Visitors never trigger live Kubernetes API calls directly.
+- Results are cached for 12 s, concurrent requests share one read, and a failed read is not
+  retried for 12 s; visitors never trigger live Kubernetes API calls directly. The endpoint is off
+  unless `INFRASTRUCTURE_SOURCE=kubernetes`.
 - Never exposed:
   - IP addresses
   - node names and details
