@@ -478,7 +478,8 @@ Read-only inventory of the reference host. Findings:
       with fake data can come first.
       Prototype done 2026-11-18: the map runs on sample data at `/apps/infrastructure-explorer/`
       (labelled as such) with five scenarios, in the snapshot shape the API will return. The
-      owner found the first neon look generic; it is now a power-grid blueprint. Still
+      owner found the first neon look generic; it is now a power-grid blueprint, with the cluster
+      drawn as a flux capacitor that glows when deployed and pulses during a rollout. Still
       open: live data (P6-02) and the offline drill.
 
 ## Phase 7: Hardening (0/5)

@@ -19,25 +19,30 @@ first draft, a neon "temporal engine" look, read as generic and was replaced on 
   sit on plates in the paper's colour, so wires pass under them as on a schematic.
 - **Delivery path** drawn as its own line: GitHub Actions → GHCR → `images.yaml` pin → Argo CD →
   cluster.
-- **Substation** (a transformer symbol) where the three flows meet: build, deploy, runtime. It
-  hums (flickers) while a rollout is in progress.
+- **The cluster's flux capacitor** where the three flows meet (build from the registry, deploy from
+  Argo CD, runtime down to the workloads): a grey box with a gasketed window and three glass tubes
+  in a Y, an homage to the device in _Back to the Future_. It is drawn from scratch in SVG; its
+  label tapes carry our own text ("K3s cluster" and the cluster's state), not the film's labels,
+  name, or artwork.
 
 ## Data Mapping
 
 Every effect means something; nothing animates without a data source.
 
-| Visual                        | Driven by                                                    |
-| ----------------------------- | ------------------------------------------------------------ |
-| Lit windows                   | Ready replicas: all lit, a share, or dark when down          |
-| Flickering windows            | Component degraded                                           |
-| Windows blinking awake        | Replicas still coming up during a rollout                    |
-| Red roof beacon               | Component down                                               |
-| Line colour (cyan/amber/red)  | Health of the building at each end; broken line when down    |
-| Spark speed along a line      | Coarse request rate (bucketed, e.g. idle/low/busy)           |
-| Burst along the delivery path | A new release pinned in `images.yaml`, then the Argo CD sync |
-| Substation hum                | Rollout in progress (a component progressing)                |
-| Labels and title block        | Status text, ready/desired counts, release, last updated     |
-| Whole grid dark               | Snapshot unavailable or stale: label says **"unavailable"**  |
+| Visual                        | Driven by                                                         |
+| ----------------------------- | ----------------------------------------------------------------- |
+| Lit windows                   | Ready replicas: all lit, a share, or dark when down               |
+| Flickering windows            | Component degraded                                                |
+| Windows blinking awake        | Replicas still coming up during a rollout                         |
+| Red roof beacon               | Component down                                                    |
+| Line colour (cyan/amber/red)  | Health of the building at each end; broken line when down         |
+| Spark speed along a line      | Coarse request rate (bucketed, e.g. idle/low/busy)                |
+| Burst along the delivery path | A new release pinned in `images.yaml`, then the Argo CD sync      |
+| Capacitor tubes glow          | Cluster deployed (Argo CD synced, nothing rolling out)            |
+| Pulses into the capacitor's Y | Rollout in progress (a component progressing)                     |
+| Capacitor dim / dark          | Waiting to sync (out of sync or unknown) / no data                |
+| Labels and title block        | Status text, ready/desired counts, release, age (ticks every 1 s) |
+| Whole grid dark               | Snapshot unavailable or stale: label says **"unavailable"**       |
 
 The page must never show "healthy" when it cannot know: offline or stale data powers the map
 down instead of freezing the last good state.
