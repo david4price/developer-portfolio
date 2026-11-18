@@ -20,6 +20,11 @@
 {{- fail "api.turnstile.egressCidrs is required when AI and NetworkPolicies are enabled" }}
 {{- end }}
 {{- end }}
+{{- with .Values.api.infrastructure }}
+{{- if and .enabled $.Values.networkPolicy.enabled (not (and .apiServerEgress.cidr .apiServerEgress.port)) }}
+{{- fail "api.infrastructure.apiServerEgress.cidr and .port are required when the infrastructure view and NetworkPolicies are enabled (otherwise the API can't reach the Kubernetes API server)" }}
+{{- end }}
+{{- end }}
 {{- with .Values.api.ai }}
 {{- if and .enabled $.Values.networkPolicy.enabled (not (and .egress.cidr .egress.port)) }}
 {{- fail "api.ai.egress.cidr and api.ai.egress.port are required when AI and NetworkPolicies are enabled (otherwise the API can't reach the model)" }}
@@ -52,7 +57,13 @@ spec:
       labels:
         {{- include "portfolio.componentLabels" $component | nindent 8 }}
     spec:
+      {{- if .infrastructure.enabled }}
+      # Its own read-only account (api-rbac.yaml); the token is projected and rotated.
+      serviceAccountName: {{ $fullname }}-api
+      automountServiceAccountToken: true
+      {{- else }}
       automountServiceAccountToken: false
+      {{- end }}
       enableServiceLinks: false
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
@@ -92,6 +103,15 @@ spec:
               value: {{ .messageGuard.threshold | quote }}
             - name: CHAT_GUARD_TIMEOUT_MS
               value: {{ .messageGuard.timeoutMs | quote }}
+            {{- end }}
+            {{- if .infrastructure.enabled }}
+            - name: INFRASTRUCTURE_SOURCE
+              value: kubernetes
+            - name: INFRASTRUCTURE_NAMESPACE
+              value: {{ $.Release.Namespace | quote }}
+            # Trust the cluster CA for the API server (Node reads this at startup).
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             {{- end }}
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}

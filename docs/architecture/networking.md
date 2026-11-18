@@ -70,8 +70,13 @@ default-deny NetworkPolicy and explicit allow rules:
   chart through `api.turnstile.egressCidrs`, required when AI and NetworkPolicies are enabled;
   live configuration **Proposed**, P5-04). The adapter pins the HTTPS URL; standard NetworkPolicy
   itself cannot restrict hosts or paths. See the [Turnstile guide](../deployment/turnstile.md).
-- `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount (Proposed,
-  P6-01)
+- `api` → Kubernetes API, for the Infrastructure Explorer's read-only ServiceAccount (rule
+  **Confirmed** in the chart through `api.infrastructure.apiServerEgress`, required when the view
+  and NetworkPolicies are enabled; live **Proposed**, P6-01). Pods reach the API server through the
+  `kubernetes` Service, which forwards to the node's address on `6443`, and the policy sees that
+  translated destination, so production allows the node's private range on that port only (the
+  exact address stays out of Git). The host's K3s port guard already admits pods (`cni0`) to
+  `6443`.
 
 "Confirmed" here means rendered by `infrastructure/helm/portfolio/templates/networkpolicies.yaml`;
 enforcement on the reference cluster is verified after the K3s install (P3-03), including that

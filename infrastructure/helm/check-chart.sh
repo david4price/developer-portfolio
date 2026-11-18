@@ -74,8 +74,24 @@ expect_failure 'api.trustCloudflareClientIp requires cloudflared.enabled' \
   -f "$chart/ci/digests-values.yaml" --set networkPolicy.enabled=false
 expect_failure 'postgres.backup.hostPath is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.backup.hostPath=
+expect_failure 'api.infrastructure.apiServerEgress.cidr and .port are required' \
+  -f "$chart/ci/infrastructure-values.yaml" --set api.infrastructure.apiServerEgress.cidr=
 expect_failure 'postgres.auth.existingSecret is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.auth.existingSecret=
+
+# The reader Role may grant only get/list on the three kinds the serializer reads.
+echo "== infrastructure reader Role"
+if ! reader="$(render -f "$chart/ci/infrastructure-values.yaml" -s templates/api-rbac.yaml 2>&1)"; then
+  fail "infrastructure RBAC doesn't render: $reader"
+else
+  role="$(awk '/^kind: Role$/,/^---/' <<<"$reader")"
+  if grep -qE 'secrets|configmaps|pods/log|pods/exec|create|update|patch|delete|watch|\*' <<<"$role"; then
+    fail "the infrastructure reader Role grants more than get/list on deployments, statefulsets, pods"
+  fi
+fi
+if render -f "$chart/ci/digests-values.yaml" | grep -qE '^kind: (ServiceAccount|Role|RoleBinding)$'; then
+  fail "the chart renders RBAC with the infrastructure view off"
+fi
 
 # The model and address may come only from the environment Secret: the chart then sets neither,
 # so the Secret's values aren't overridden (container env wins over envFrom).

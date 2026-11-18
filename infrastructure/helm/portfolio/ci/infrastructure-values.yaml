@@ -1,0 +1,14 @@
+# CI rendering only: the infrastructure view on, with NetworkPolicies, so the reader account,
+# Role, RoleBinding, and API server egress render.
+api:
+  image:
+    tag: ci
+  infrastructure:
+    enabled: true
+    apiServerEgress:
+      # Documentation-only range for schema and guardrail tests.
+      cidr: 192.0.2.0/24
+      port: 6443
+worker:
+  image:
+    tag: ci

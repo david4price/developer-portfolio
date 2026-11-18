@@ -77,6 +77,17 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    {{- with .Values.api.infrastructure }}
+    {{- if .enabled }}
+    # The Kubernetes API server, for the Infrastructure Explorer's read-only snapshot.
+    - to:
+        - ipBlock:
+            cidr: {{ .apiServerEgress.cidr | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ .apiServerEgress.port }}
+    {{- end }}
+    {{- end }}
     {{- with .Values.api.ai }}
     {{- if .enabled }}
     - to:

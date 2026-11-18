@@ -76,6 +76,18 @@ api:
         memory: 896Mi
       limits:
         memory: 1280Mi
+  # Infrastructure Explorer snapshot (P6-01, P6-02). When enabled, the API runs as its own
+  # service account bound to a namespaced, read-only Role (get/list on deployments, statefulsets,
+  # and pods; nothing else), its token is mounted, and INFRASTRUCTURE_SOURCE=kubernetes. Off by
+  # default: the endpoint then answers `infrastructure_disabled` and no token is mounted.
+  infrastructure:
+    enabled: false
+    # Egress to the Kubernetes API server, required with NetworkPolicies on. Pods reach it through
+    # the `kubernetes` Service, which forwards to the node's address on the API server port, and
+    # policies see that translated destination.
+    apiServerEgress:
+      cidr: ''
+      port: 6443
   resources:
     requests:
       cpu: 50m
