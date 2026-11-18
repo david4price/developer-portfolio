@@ -20,6 +20,7 @@ import {
   layoutWires,
   MAP_NODES,
   type MapLayout,
+  OFF_REASONS,
   type MapPower,
   type PieceId,
   type Point,
@@ -575,16 +576,14 @@ export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: Expl
             y={layout.offline.y + 30}
             className="explorer-map__offline-title"
           >
-            Unavailable
+            {OFF_REASONS[power.reason].title}
           </text>
           <text
             x={layout.offline.x + layout.offline.width / 2}
             y={layout.offline.y + 54}
             className="explorer-map__offline-reason"
           >
-            {power.reason === 'stale'
-              ? 'Grid offline: status too old to trust'
-              : 'Grid offline: status not loaded'}
+            {OFF_REASONS[power.reason].map}
           </text>
         </g>
       )}

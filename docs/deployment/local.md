@@ -98,7 +98,8 @@ verification. Browser and live acceptance checks are still pending; see the
 
 `GET /api/v1/infrastructure` serves the Infrastructure Explorer's snapshot (P6-02): allowlisted
 fields only (component health, image tag or short digest, replica counts, a coarse failure
-category, and when it was built), cached for 12 s, with `Cache-Control: no-store`. It is off by
+category, when it was built, and `ageSeconds`: its age when served, on the server's clock), cached
+for 12 s, with `Cache-Control: no-store`. It is off by
 default (`INFRASTRUCTURE_SOURCE=disabled` → `503 infrastructure_disabled`). `kubernetes` reads
 the portfolio's Deployments, StatefulSets, and Pods (by component label) in
 `INFRASTRUCTURE_NAMESPACE` (default `portfolio`) through

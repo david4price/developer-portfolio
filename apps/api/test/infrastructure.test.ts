@@ -424,7 +424,22 @@ describe('GET /api/v1/infrastructure', () => {
     assert.equal(response.headers['cache-control'], 'no-store');
     const body = response.json<InfrastructureSnapshot>();
     assert.equal(body.components.length, 8);
+    assert.ok(body.ageSeconds !== undefined && body.ageSeconds >= 0 && body.ageSeconds < 5);
     assert.ok(!response.body.includes(SECRETS.nodeName));
+    await app.close();
+  });
+
+  it('reports the age of a fallback snapshot on the server clock', async () => {
+    const old: SnapshotSource = {
+      snapshot: async () => ({
+        ...serializeSnapshot(steadyCluster(), { namespace: NAMESPACE, now: NOW }),
+        generatedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      }),
+    };
+    const app = await start(old);
+    const response = await app.inject({ method: 'GET', url: '/api/v1/infrastructure' });
+    const age = response.json<InfrastructureSnapshot>().ageSeconds ?? 0;
+    assert.ok(age >= 7_199 && age <= 7_201, String(age));
     await app.close();
   });
 

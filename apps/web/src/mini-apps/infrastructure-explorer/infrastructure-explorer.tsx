@@ -1,17 +1,22 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { apiUrl } from '../../lib/api.ts';
+import type { InfrastructureSnapshot } from '@portfolio/shared-types';
 import type { CardId } from './card-content.ts';
 import { ExplorerCard } from './explorer-card.tsx';
 import { ExplorerMap } from './explorer-map.tsx';
+import { fetchLiveSnapshot, type LiveResult, withVisitorWebsite } from './live-snapshot.ts';
 import {
   componentById,
   componentStatus,
   formatAge,
   MAP_NODES,
-  type MapPower,
   mapPower,
+  type MapPower,
   NARROW_LAYOUT,
+  OFF_REASONS,
+  STALE_AFTER_MS,
   SYNC_LABELS,
   WIDE_LAYOUT,
 } from './map-model.ts';
@@ -44,10 +49,8 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
   if (!power.on) {
     return (
       <p className="explorer-status" role="status">
-        Status unavailable:{' '}
-        {power.reason === 'stale'
-          ? 'the last snapshot is too old to trust.'
-          : 'the cluster status could not be loaded.'}
+        {power.reason === 'connecting' ? 'Status: ' : 'Status unavailable: '}
+        {OFF_REASONS[power.reason].text}
       </p>
     );
   }
@@ -128,17 +131,98 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
   );
 }
 
+/** Longest a live request may take before it counts as unavailable. */
+const LIVE_TIMEOUT_MS = 8_000;
+
+type Mode = 'live' | 'simulation';
+
+/** The last good live snapshot (already filled in from the visitor's side) and its arrival. */
+interface GoodSnapshot {
+  readonly snapshot: InfrastructureSnapshot;
+  readonly receivedAt: number;
+}
+
+export interface LiveState {
+  /** The latest answer; `null` before the first one, and while a due refresh is on its way. */
+  readonly latest: LiveResult | null;
+  /** Kept through failed refreshes until stale; cleared when the API says the view is off. */
+  readonly good: GoodSnapshot | null;
+}
+
+export const NOT_CONNECTED: LiveState = { latest: null, good: null };
+
+/** The live state after an answer arrives at `time`. */
+export function receiveLive(previous: LiveState, result: LiveResult, time: number): LiveState {
+  if (result.kind === 'disabled') return { latest: result, good: null };
+  if (result.kind === 'unavailable') return { latest: result, good: previous.good };
+  return {
+    latest: result,
+    good: { snapshot: withVisitorWebsite(result.snapshot), receivedAt: time },
+  };
+}
+
+/** A refresh is due when the last one is `REFRESH_MS` old, or one was skipped in a hidden tab. */
+export function refreshDue(now: number, fetchedAt: number, skippedWhileHidden: boolean): boolean {
+  return skippedWhileHidden || now - fetchedAt >= REFRESH_MS;
+}
+
 /**
- * Prototype of the Infrastructure Explorer (P6-04) on sample data. The live version will fetch
- * the sanitized snapshot from the API every `REFRESH_MS` instead of picking a scenario.
+ * Stale when either clock says so, each judged alone: the server's (`ageSeconds`, how old the
+ * snapshot was when served, e.g. a fallback after failed cluster reads) or the visitor's (how long
+ * ago it arrived, e.g. refreshes failing). The two clocks are never compared, so a visitor whose
+ * clock is off still sees the live map.
  */
-export function InfrastructureExplorer() {
+function isStale({ snapshot, receivedAt }: GoodSnapshot, now: number): boolean {
+  const servedAge = (snapshot.ageSeconds ?? 0) * 1_000;
+  return now - receivedAt + servedAge > STALE_AFTER_MS;
+}
+
+/**
+ * What the live view shows: the last good snapshot until it is stale; "connecting" before the
+ * first answer, or while a due refresh is on its way and the snapshot it would replace is stale;
+ * "disabled" as soon as the API says the view is off; "unavailable" when no snapshot has arrived.
+ */
+export function livePower({ latest, good }: LiveState, now: number): MapPower {
+  if (latest?.kind === 'disabled') return { on: false, reason: 'disabled' };
+  if (good !== null && !isStale(good, now)) return { on: true, snapshot: good.snapshot };
+  if (latest === null) return { on: false, reason: 'connecting' };
+  return { on: false, reason: good === null ? 'unavailable' : 'stale' };
+}
+
+export interface InfrastructureExplorerProps {
+  /** The live endpoint; `null` for a build without an API. Defaults to the build's API. */
+  readonly liveUrl?: string | null;
+}
+
+/**
+ * The Infrastructure Explorer (P6-04). Live by default: the sanitized snapshot from
+ * `GET /api/v1/infrastructure`, refreshed every `REFRESH_MS`. Switching "Live data" off shows the
+ * simulation instead, with sample scenarios to pick; a build without an API offers only that.
+ */
+export function InfrastructureExplorer({
+  liveUrl = apiUrl('infrastructure'),
+}: InfrastructureExplorerProps) {
+  const [chosenMode, setMode] = useState<Mode>('live');
+  // Without an endpoint (now or later) the only view is the simulation.
+  const mode: Mode = liveUrl === null ? 'simulation' : chosenMode;
+  const [live, setLive] = useState<LiveState>(NOT_CONNECTED);
   const [scenario, setScenario] = useState<SampleScenario>('steady');
   const [now, setNow] = useState(() => Date.now());
   const [paused, setPaused] = useState(false);
   const [card, setCard] = useState<CardId | null>(null);
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  /** A live request skipped because the tab was hidden; made as soon as it is shown. */
+  const skippedWhileHidden = useRef(false);
 
+  /** When the current snapshot was asked for: a new sample, or the next live request. */
   const [fetchedAt, setFetchedAt] = useState(() => Date.now());
+  const fetchedAtRef = useRef(fetchedAt);
+  useEffect(() => {
+    fetchedAtRef.current = fetchedAt;
+  }, [fetchedAt]);
   const [narrow, setNarrow] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches,
   );
@@ -151,39 +235,91 @@ export function InfrastructureExplorer() {
     return () => query.removeEventListener('change', update);
   }, []);
 
-  // The snapshot refreshes every REFRESH_MS (here: a new sample); the clock ticks every second,
-  // so ages count up and a snapshot that stops refreshing goes stale on time. Hidden tabs skip
-  // both, so nothing re-renders unseen.
+  // The clock ticks every second, so ages count up and data that stops refreshing goes stale on
+  // time; hidden tabs skip it, so nothing re-renders unseen.
   useEffect(() => {
-    const refresh = setInterval(() => {
-      if (!document.hidden) setFetchedAt(Date.now());
-    }, REFRESH_MS);
     const clock = setInterval(() => {
       if (!document.hidden) setNow(Date.now());
     }, CLOCK_MS);
-    return () => {
-      clearInterval(refresh);
-      clearInterval(clock);
-    };
+    return () => clearInterval(clock);
   }, []);
 
-  // Animations pause while the tab is hidden. Coming back updates the clock, and refreshes too if
-  // a refresh fell due meanwhile, before anything renders, so a fresh snapshot never flashes stale.
+  // The next refresh (a new sample, or a live request) comes REFRESH_MS after the last one,
+  // whatever started it, so a refresh is never cut short by a timer running on its own schedule.
+  // In a hidden tab it is skipped and made as soon as the tab is shown.
+  useEffect(() => {
+    const next = setTimeout(() => {
+      if (document.hidden) skippedWhileHidden.current = true;
+      else setFetchedAt(Date.now());
+    }, REFRESH_MS);
+    return () => clearTimeout(next);
+  }, [fetchedAt]);
+
+  // Animations pause while the tab is hidden. Coming back refreshes if one fell due; the last good
+  // live snapshot stays until the answer, unless it is already stale (then "connecting").
   useEffect(() => {
     const update = () => {
       setPaused(document.hidden);
       if (document.hidden) return;
       const time = Date.now();
       setNow(time);
-      setFetchedAt((previous) => (time - previous >= REFRESH_MS ? time : previous));
+      if (!refreshDue(time, fetchedAtRef.current, skippedWhileHidden.current)) return;
+      skippedWhileHidden.current = false;
+      if (modeRef.current === 'live') setLive((previous) => ({ ...previous, latest: null }));
+      setFetchedAt(time);
     };
     setPaused(document.hidden);
     document.addEventListener('visibilitychange', update);
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
 
-  const snapshot = useMemo(() => sampleSnapshot(scenario, fetchedAt), [scenario, fetchedAt]);
-  const power = mapPower(snapshot, now, fetchedAt);
+  // Live: one request per refresh, never from a hidden tab. A timeout counts as unavailable; a
+  // request the view moved on from (a newer refresh, simulation, or unmounting) is dropped.
+  useEffect(() => {
+    if (mode !== 'live' || liveUrl === null) return;
+    if (document.hidden) {
+      skippedWhileHidden.current = true;
+      return;
+    }
+    let current = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_TIMEOUT_MS);
+    void fetchLiveSnapshot(liveUrl, controller.signal).then((result) => {
+      clearTimeout(timeout);
+      if (!current) return;
+      const time = Date.now();
+      setLive((previous) => receiveLive(previous, result, time));
+      setNow(time);
+    });
+    return () => {
+      current = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [mode, liveUrl, fetchedAt]);
+
+  const sample = useMemo(
+    () => (mode === 'simulation' ? sampleSnapshot(scenario, fetchedAt) : null),
+    [mode, scenario, fetchedAt],
+  );
+  const power = mode === 'live' ? livePower(live, now) : mapPower(sample, now, fetchedAt);
+
+  const switchMode = (next: Mode) => {
+    const time = Date.now();
+    if (next === 'live') setLive(NOT_CONNECTED);
+    setMode(next);
+    setFetchedAt(time);
+    setNow(time);
+  };
+
+  const status =
+    mode === 'live'
+      ? power.on
+        ? 'Showing live data.'
+        : `Showing live data: ${OFF_REASONS[power.reason].text}`
+      : `Showing the simulated ${SCENARIO_LABELS[scenario].toLowerCase()} scenario${
+          power.on ? '.' : ': the map is powered off.'
+        }`;
 
   return (
     <section
@@ -192,34 +328,56 @@ export function InfrastructureExplorer() {
       aria-label="Infrastructure map"
     >
       <p className="explorer-note">
-        Prototype with sample data: this map is not connected to the live cluster yet. Lit windows
-        show running replicas, sparks show traffic, and a red beacon marks a component that is down.
-        The cluster&rsquo;s flux capacitor glows when deployed and pulses during a rollout. Select
-        any building or the capacitor for its card.
+        Lit windows show running replicas, sparks show traffic, and a red beacon marks a component
+        that is down. The cluster&rsquo;s flux capacitor glows when deployed and pulses during a
+        rollout. Select any building or the capacitor for its card.
       </p>
-      <fieldset className="explorer-scenarios">
-        <legend>Sample scenario</legend>
-        {SAMPLE_SCENARIOS.map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name="explorer-scenario"
-              value={option}
-              checked={scenario === option}
-              onChange={() => {
-                const time = Date.now();
-                setScenario(option);
-                setFetchedAt(time);
-                setNow(time);
-              }}
-            />
-            {SCENARIO_LABELS[option]}
-          </label>
-        ))}
-      </fieldset>
+      <div className="explorer-controls">
+        <button
+          type="button"
+          role="switch"
+          className="explorer-switch"
+          aria-checked={mode === 'live'}
+          disabled={liveUrl === null}
+          onClick={() => switchMode(mode === 'live' ? 'simulation' : 'live')}
+        >
+          <span className="explorer-switch__track" aria-hidden="true">
+            <span className="explorer-switch__thumb" />
+          </span>
+          Live data
+        </button>
+        <span className="explorer-controls__note">
+          {liveUrl === null
+            ? 'Not available on this build: showing the simulation.'
+            : mode === 'live'
+              ? `The real cluster, refreshed every ${REFRESH_MS / 1_000} s.`
+              : 'Simulation: pick a scenario to see how the map reacts.'}
+        </span>
+      </div>
+      {mode === 'simulation' && (
+        <fieldset className="explorer-scenarios">
+          <legend>Simulated scenario</legend>
+          {SAMPLE_SCENARIOS.map((option) => (
+            <label key={option}>
+              <input
+                type="radio"
+                name="explorer-scenario"
+                value={option}
+                checked={scenario === option}
+                onChange={() => {
+                  const time = Date.now();
+                  setScenario(option);
+                  setFetchedAt(time);
+                  setNow(time);
+                }}
+              />
+              {SCENARIO_LABELS[option]}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <p className="visually-hidden" role="status">
-        Showing the {SCENARIO_LABELS[scenario].toLowerCase()} sample
-        {power.on ? '' : ': the map is powered off and the status is unavailable'}.
+        {status}
       </p>
       <div className="explorer-frame">
         <ExplorerMap

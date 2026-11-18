@@ -17,7 +17,36 @@ export const RECENT_RELEASE_MS = 15 * 60_000;
 
 export type MapPower =
   | { readonly on: true; readonly snapshot: InfrastructureSnapshot }
-  | { readonly on: false; readonly reason: 'unavailable' | 'stale' };
+  | { readonly on: false; readonly reason: OffReason };
+
+/** Why the map is powered down. */
+export type OffReason = 'connecting' | 'disabled' | 'unavailable' | 'stale';
+
+/** What the powered-down map and the text view say for each reason. */
+export const OFF_REASONS: Readonly<
+  Record<OffReason, { readonly title: string; readonly map: string; readonly text: string }>
+> = {
+  connecting: {
+    title: 'Connecting',
+    map: 'Reading the cluster…',
+    text: 'connecting to the cluster…',
+  },
+  disabled: {
+    title: 'Unavailable',
+    map: 'Live view not enabled here',
+    text: 'the live view is not enabled on this deployment.',
+  },
+  unavailable: {
+    title: 'Unavailable',
+    map: 'Grid offline: status not loaded',
+    text: 'the cluster status could not be loaded.',
+  },
+  stale: {
+    title: 'Unavailable',
+    map: 'Grid offline: status too old to trust',
+    text: 'the last snapshot is too old to trust.',
+  },
+};
 
 /**
  * Whether the map can show the snapshot at all; it never shows "healthy" without fresh data.

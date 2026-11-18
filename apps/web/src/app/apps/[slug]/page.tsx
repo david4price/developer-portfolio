@@ -19,15 +19,10 @@ export async function generateMetadata({ params }: MiniAppPageProps): Promise<Me
   return app === undefined ? {} : { title: app.title, description: app.summary };
 }
 
-function plannedLabel(slug: string): string {
-  if (slug === 'portfolio-assistant') return 'Preview — production setup pending';
-  if (slug === 'infrastructure-explorer') return 'Prototype — sample data, not live';
-  return 'Planned — not built yet';
-}
-
 /**
- * Shell for integrated mini-apps. Available apps will mount a client component loaded with
- * `next/dynamic`, so each app's code ships only on its own route.
+ * Shell for integrated mini-apps. Each available app mounts a client component loaded with
+ * `next/dynamic`, so its code ships only on its own route; planned ones show a badge. Status
+ * comes from the registry, not from this page.
  */
 export default async function MiniAppPage({ params }: MiniAppPageProps) {
   const app = findMiniApp((await params).slug);
@@ -37,7 +32,7 @@ export default async function MiniAppPage({ params }: MiniAppPageProps) {
     <article>
       <h1>{app.title}</h1>
       <p className="lead">{app.summary}</p>
-      {app.status === 'planned' && <StatusBadge tone="neutral" label={plannedLabel(app.slug)} />}
+      {app.status === 'planned' && <StatusBadge tone="neutral" label="Planned — not built yet" />}
       {app.slug === 'infrastructure-explorer' && <InfrastructureExplorerLoader />}
       {app.slug === 'portfolio-assistant' && (
         <p>

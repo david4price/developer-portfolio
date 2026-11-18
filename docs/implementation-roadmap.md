@@ -12,6 +12,8 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Recently done**
 
+- P6-04 live view (code): the Infrastructure Explorer reads the real cluster every 12 s, with a
+  "Live data" switch for the simulation; every state other than fresh data powers the map down.
 - P6-01 live and validated (2026-11-18): read-only workload access in `portfolio`; secrets,
   configmaps, logs, exec, watch, and other namespaces denied. The endpoint returns sanitized real
   workload data; Argo CD is Synced/Healthy after the image rollout (owner's validation handoff).
@@ -203,9 +205,10 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Next up, in order**
 
-1. Merge the prepared **P6-03** API integration and wait for the new digest pin to sync;
-   validate `sync`/`release` on the live endpoint. Then **P6-04**: replace the sample scenarios
-   with a 12 s endpoint fetch and explicit not-configured, unavailable, and stale states.
+1. **P6-04:** merge the live explorer, then the offline drill on production (the map must say
+   "unavailable", never "healthy"). Then the explorer's richer data: release commits instead of
+   image digests, the AI model's real state, request-rate buckets for sparks (a Redis counter,
+   ahead of P7-01), and a warning before the Argo CD token expires (due 2027-02-16).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -213,7 +216,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-03-argocd-status` (P6-03, owner approved); awaiting owner merge.
+**Branch in progress:** `feat/p6-04-live-explorer` (P6-04 live view and simulation switch).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -514,8 +517,14 @@ Read-only inventory of the reference host. Findings:
       (labelled as such) with five scenarios, in the snapshot shape the API will return. The
       owner found the first neon look generic; it is now a power-grid blueprint, with the cluster
       drawn as a flux capacitor that glows when deployed and pulses during a rollout. Each piece
-      opens a card that flips to what it is, its live facts, and its architecture note. Still
-      open: live data (P6-02) and the offline drill.
+      opens a card that flips to what it is, its live facts, and its architecture note.
+      Live view built 2026-11-18 (P6-04, `feat/p6-04-live-explorer`): the page fetches
+      `GET /api/v1/infrastructure` every 12 s, validates every field, and shows "connecting",
+      "not enabled here", "unavailable", and "too old to trust" without ever showing healthy; a
+      "Live data" switch turns it off for the simulation's scenarios (the only view on builds
+      without an API). The website building is filled in by the visitor's own page load. Both
+      mini-apps are `available` in the registry, and the page no longer hard-codes badge text.
+      Still open: the offline drill on production after the merge.
 
 ## Phase 7: Hardening (0/5)
 

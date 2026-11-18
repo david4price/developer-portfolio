@@ -64,12 +64,32 @@ rate** per Service still needs P7-01 metrics and allowlist/leak tests before it 
   same data.
 - Animations pause when the tab is hidden.
 
-## Prototype (Confirmed, sample data)
+## Live view and simulation (Confirmed in code, P6-04)
 
-`/apps/infrastructure-explorer/` shows the map on sample data, labelled as a prototype, with five
-scenarios to click through: steady, rollout in progress, Redis down, API offline, and stale data.
-It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
-`@portfolio/shared-types`), so live data replaces `sample-snapshots.ts` without layout changes.
+`/apps/infrastructure-explorer/` opens on **live data**: `GET /api/v1/infrastructure`, fetched
+every 12 s (with an 8 s timeout, no cookies, no cache, and nothing while the tab is hidden). A
+**Live data** switch turns it off for the **simulation**, which offers five scenarios to click
+through: steady, rollout in progress, Redis down, API offline, and stale data. A build without an
+API address (`NEXT_PUBLIC_API_BASE_URL` unset, as in local static builds and Pages previews) shows
+the switch disabled and opens on the simulation.
+
+- Live states: "connecting" before the first answer, and when returning to a tab whose last
+  snapshot has gone stale; the last good snapshot, kept through failed refreshes until stale (then
+  "too old to trust"); "not enabled here" as soon as the API answers `infrastructure_disabled`;
+  "unavailable" when no snapshot has arrived. All but a fresh snapshot power the map down rather
+  than show "healthy".
+- Staleness (over 60 s) is judged on each clock alone, never by comparing them: the snapshot's age
+  when served, on the server's clock (`ageSeconds`, which the endpoint adds; an old fallback after
+  failed cluster reads is caught at once, even on first load), plus how long ago the browser
+  received it. A visitor whose clock is off from the server's still sees the live map. Refreshes
+  come 12 s after the previous one, and nothing is requested from a hidden tab.
+- `live-snapshot.ts` checks every field of the response (known component ids, health, failure,
+  traffic, and sync values; bounded strings and counts; no duplicates) and treats anything else as
+  unavailable.
+- The website building is filled in on the visitor's side: the cluster can't see Cloudflare
+  Pages, so the API reports it as unknown, but the page loading proves it is served.
+- Both views use the same snapshot shape (`InfrastructureSnapshot` in `@portfolio/shared-types`),
+  so the map, table, and cards don't know which one they draw.
 
 - Code: `apps/web/src/mini-apps/infrastructure-explorer/`. `map-model.ts` holds the rules as pure,
   tested functions; `explorer-map.tsx` draws the SVG; the page loads it with `next/dynamic` and
