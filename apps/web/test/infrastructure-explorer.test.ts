@@ -276,7 +276,12 @@ describe('ExplorerTable', () => {
     assert.match(html, /<table/);
     assert.match(html, /Updated 4 s ago/);
     assert.match(html, /GitOps: Synced/);
-    for (const { label } of MAP_NODES) assert.ok(html.includes(`<th scope="row">${label}</th>`));
+    for (const { label } of MAP_NODES) {
+      assert.ok(html.includes(`<th scope="row" role="rowheader">${label}</th>`), label);
+    }
+    // Phones stack each row and label its values from data-label; roles keep it a table.
+    assert.match(html, /role="table"/);
+    assert.match(html, /<td role="cell" data-label="Status">/);
 
     const off = renderToStaticMarkup(
       createElement(ExplorerTable, { power: mapPower(null, NOW), now: NOW }),

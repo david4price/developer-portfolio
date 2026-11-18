@@ -1446,3 +1446,49 @@ main {
   border-bottom: 1px solid var(--color-border);
   text-align: left;
 }
+
+/* Phones: each row becomes a block (name and Details button on top, labelled values below), so
+   the table fits the screen instead of scrolling sideways. Explicit table roles keep it a table
+   for screen readers. */
+@media (max-width: 640px) {
+  .explorer-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .explorer-table,
+  .explorer-table tbody {
+    display: block;
+  }
+
+  .explorer-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .explorer-table th,
+  .explorer-table td {
+    display: block;
+    grid-column: 1;
+    padding: 0.05rem 0;
+    border-bottom: 0;
+  }
+
+  .explorer-table td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--color-muted);
+  }
+
+  .explorer-table td.explorer-table__action {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+}

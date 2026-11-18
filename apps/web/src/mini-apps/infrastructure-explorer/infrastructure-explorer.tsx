@@ -63,34 +63,51 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
       </p>
       <div className="explorer-table-frame">
         <table
+          role="table"
           className="explorer-table"
           aria-label="Deployment status"
           aria-describedby={summaryId}
         >
-          <thead>
-            <tr>
-              <th scope="col">Component</th>
-              <th scope="col">Status</th>
-              <th scope="col">Version</th>
-              <th scope="col">Traffic</th>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col" role="columnheader">
+                Component
+              </th>
+              <th scope="col" role="columnheader">
+                Status
+              </th>
+              <th scope="col" role="columnheader">
+                Version
+              </th>
+              <th scope="col" role="columnheader">
+                Traffic
+              </th>
               {onSelect !== undefined && (
-                <th scope="col">
+                <th scope="col" role="columnheader">
                   <span className="visually-hidden">Details</span>
                 </th>
               )}
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {MAP_NODES.map(({ id, label }) => {
               const component = componentById(snapshot, id);
               return (
-                <tr key={id} data-health={component.health}>
-                  <th scope="row">{label}</th>
-                  <td>{componentStatus(component)}</td>
-                  <td>{component.version ?? '—'}</td>
-                  <td>{component.traffic ?? '—'}</td>
+                <tr key={id} role="row" data-health={component.health}>
+                  <th scope="row" role="rowheader">
+                    {label}
+                  </th>
+                  <td role="cell" data-label="Status">
+                    {componentStatus(component)}
+                  </td>
+                  <td role="cell" data-label="Version">
+                    {component.version ?? '—'}
+                  </td>
+                  <td role="cell" data-label="Traffic">
+                    {component.traffic ?? '—'}
+                  </td>
                   {onSelect !== undefined && (
-                    <td>
+                    <td role="cell" className="explorer-table__action">
                       <button
                         type="button"
                         className="explorer-table__details"
