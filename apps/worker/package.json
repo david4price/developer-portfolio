@@ -14,8 +14,8 @@
     "test": "tsc -p tsconfig.spec.json && node --test .test-dist/test/*.test.js"
   },
   "dependencies": {
-    "@nestjs/common": "^12.4.2",
-    "@nestjs/core": "^12.4.2",
+    "@nestjs/common": "^12.5.0",
+    "@nestjs/core": "^12.5.0",
     "@portfolio/config": "workspace:*",
     "bullmq": "^6.7.2",
     "ioredis": "^6.0.0",
