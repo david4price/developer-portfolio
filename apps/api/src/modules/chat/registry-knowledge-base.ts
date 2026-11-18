@@ -24,7 +24,7 @@ const STOP_WORDS = new Set(
     'a about an and any are as at be been but by can could did do does for from had has have he ' +
     'her his how i if in into is it its me my of on or our she so some tell than that the their ' +
     'them then there these they this those to us was we were what when where which who why will ' +
-    'with would you your project app work built build use used using'
+    'with would you your project app work built build use used using happen happened happening'
   ).split(' '),
 );
 
