@@ -17,6 +17,7 @@ import {
   DELIVERY_STAGES,
   FAILURE_LABELS,
   formatAge,
+  layoutWires,
   MAP_NODES,
   type MapLayout,
   type MapPower,
@@ -193,8 +194,17 @@ function Building({
  * cluster is deployed, pulses run into the junction during a rollout, dim when waiting to sync,
  * dark without data. The label tape names the cluster and its state.
  */
-function Core({ state, at: { x, y } }: { readonly state: CoreState; readonly at: Point }) {
+interface CoreProps {
+  readonly state: CoreState;
+  readonly at: Point;
+  /** Unique per drawing: the map's capacitor and a card's close-up each get their own filter. */
+  readonly glowId: string;
+}
+
+function Core({ state, at: { x, y }, glowId }: CoreProps) {
   const junction = { x, y: y + 2 };
+  const glow = `url(#${glowId})`;
+  const lit = state === 'deployed' || state === 'rollout';
   const electrodes = [
     { x: x - 34, y: y - 28 },
     { x: x + 34, y: y - 28 },
@@ -202,6 +212,25 @@ function Core({ state, at: { x, y } }: { readonly state: CoreState; readonly at:
   ] as const;
   return (
     <g className={`explorer-core explorer-core--${state}`}>
+      {/* The glow's region hugs the capacitor: blurring more of the drawing every frame is wasted
+          work. It is in user space because a vertical tube's box has no width to size it by. */}
+      <filter
+        id={glowId}
+        filterUnits="userSpaceOnUse"
+        x={x - 80}
+        y={y - 90}
+        width={160}
+        height={180}
+      >
+        <feGaussianBlur stdDeviation="4" result="wide" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="near" />
+        <feMerge>
+          <feMergeNode in="wide" />
+          <feMergeNode in="wide" />
+          <feMergeNode in="near" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
       <rect className="explorer-core__box" x={x - 70} y={y - 78} width={140} height={156} rx={8} />
       <rect className="explorer-core__tape" x={x - 52} y={y - 70} width={104} height={14} />
       <text className="explorer-core__tape-text" x={x} y={y - 59.5}>
@@ -237,11 +266,13 @@ function Core({ state, at: { x, y } }: { readonly state: CoreState; readonly at:
           <path
             className="explorer-core__light"
             d={`M ${electrode.x} ${electrode.y} L ${junction.x} ${junction.y}`}
+            filter={state === 'deployed' ? glow : undefined}
           />
           {state === 'rollout' && (
             <path
               className="explorer-core__pulse"
               d={`M ${electrode.x} ${electrode.y} L ${junction.x} ${junction.y}`}
+              filter={glow}
             />
           )}
           <circle className="explorer-core__electrode" cx={electrode.x} cy={electrode.y} r={8} />
@@ -250,7 +281,13 @@ function Core({ state, at: { x, y } }: { readonly state: CoreState; readonly at:
       <circle className="explorer-core__cap" cx={x - 42} cy={y - 34} r={4.5} />
       <circle className="explorer-core__cap" cx={x + 42} cy={y - 34} r={4.5} />
       <circle className="explorer-core__cap" cx={x + 9} cy={y + 52} r={4.5} />
-      <circle className="explorer-core__junction" cx={junction.x} cy={junction.y} r={4} />
+      <circle
+        className="explorer-core__junction"
+        cx={junction.x}
+        cy={junction.y}
+        r={4}
+        filter={lit ? glow : undefined}
+      />
       <rect className="explorer-core__tape" x={x - 44} y={y + 66} width={88} height={11} />
       <text className="explorer-core__tape-text explorer-core__tape-text--small" x={x} y={y + 74.5}>
         {CORE_STATE_LABELS[state]}
@@ -389,7 +426,7 @@ export function MapPiece({ id, power }: { readonly id: CardId; readonly power: M
         viewBox={`${core.x - 80} ${core.y - 88} 160 176`}
         aria-hidden="true"
       >
-        <Core state={coreState(snapshot)} at={core} />
+        <Core state={coreState(snapshot)} at={core} glowId="explorer-piece-flux-glow" />
       </svg>
     );
   }
@@ -428,7 +465,7 @@ export interface ExplorerMapProps {
  */
 export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: ExplorerMapProps) {
   const snapshot = power.on ? power.snapshot : null;
-  const { pieces, core, hub, width, height } = layout;
+  const { core, width, height } = layout;
   const component = (id: InfrastructureComponentId): InfrastructureComponent | null =>
     snapshot === null ? null : componentById(snapshot, id);
   const tone = (id: InfrastructureComponentId): Tone => component(id)?.health ?? 'off';
@@ -440,7 +477,7 @@ export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: Expl
   const select = (id: CardId) => (onSelect === undefined ? undefined : () => onSelect(id));
   const burst = snapshot !== null && recentRelease(snapshot, now);
   const delivery: Tone = snapshot === null ? 'off' : 'delivery';
-  const deliveryPath: readonly PieceId[] = [...DELIVERY_STAGES.map(({ id }) => id), 'argocd'];
+  const wires = layoutWires(layout);
 
   return (
     <svg
@@ -461,25 +498,6 @@ export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: Expl
           <rect width={100} height={100} fill="url(#explorer-grid-minor)" />
           <path className="explorer-map__grid-major" d="M 100 0 L 0 0 0 100" />
         </pattern>
-        {/* A fixed region: a vertical tube has a zero-width box, which would clip its glow. The
-            region covers the capacitor in either layout, and the card's close-up of it. */}
-        <filter
-          id="explorer-flux-glow"
-          filterUnits="userSpaceOnUse"
-          x={0}
-          y={0}
-          width={920}
-          height={1250}
-        >
-          <feGaussianBlur stdDeviation="4" result="wide" />
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="near" />
-          <feMerge>
-            <feMergeNode in="wide" />
-            <feMergeNode in="wide" />
-            <feMergeNode in="near" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
         <filter id="explorer-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.5" result="blur" />
           <feMerge>
@@ -499,32 +517,21 @@ export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: Expl
       />
 
       <g filter="url(#explorer-glow)">
-        {deliveryPath.slice(0, -1).map((id, index) => (
-          <Wire
-            key={id}
-            points={[pieces[id], pieces[deliveryPath[index + 1] ?? 'argocd']]}
-            tone={delivery}
-            traffic={null}
-            burst={burst}
-          />
+        {wires.delivery.map((points, index) => (
+          <Wire key={index} points={points} tone={delivery} traffic={null} burst={burst} />
         ))}
-        <Wire
-          points={[pieces[layout.buildArmFrom], core]}
-          tone={delivery}
-          traffic={null}
-          burst={burst}
-        />
-        <Wire points={[pieces.argocd, core]} tone={tone('argocd')} traffic={null} burst={burst} />
-        <Wire points={[core, hub]} tone={between('api', 'worker')} traffic={null} />
-        <Wire points={[hub, pieces.api]} tone={tone('api')} traffic={null} />
-        <Wire points={[hub, pieces.worker]} tone={tone('worker')} traffic={null} />
+        <Wire points={wires.buildArm} tone={delivery} traffic={null} burst={burst} />
+        <Wire points={wires.deployArm} tone={tone('argocd')} traffic={null} burst={burst} />
+        <Wire points={wires.coreHub} tone={between('api', 'worker')} traffic={null} />
+        <Wire points={wires.hubApi} tone={tone('api')} traffic={null} />
+        <Wire points={wires.hubWorker} tone={tone('worker')} traffic={null} />
         {RUNTIME_CONDUITS.map(({ key, from, to }) => {
           const start = component(from);
           const end = component(to);
           return (
             <Wire
               key={key}
-              points={layout.routes[key]}
+              points={wires.runtime[key]}
               tone={between(from, to)}
               traffic={start === null || end === null ? null : conduitTraffic(start, end)}
             />
@@ -536,7 +543,7 @@ export function ExplorerMap({ power, now, layout = WIDE_LAYOUT, onSelect }: Expl
         label={`K3s cluster: ${CORE_STATE_LABELS[coreState(snapshot)]}. Open details.`}
         onSelect={select('cluster')}
       >
-        <Core state={coreState(snapshot)} at={core} />
+        <Core state={coreState(snapshot)} at={core} glowId="explorer-map-flux-glow" />
       </Selectable>
 
       {PIECE_IDS.map((id) => {

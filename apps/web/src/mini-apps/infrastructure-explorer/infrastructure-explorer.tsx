@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { CardId } from './card-content.ts';
 import { ExplorerCard } from './explorer-card.tsx';
 import { ExplorerMap } from './explorer-map.tsx';
@@ -40,6 +40,7 @@ export interface ExplorerTableProps {
 
 /** The same data as the map, as text: the accessible view that needs no animation or colour. */
 export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
+  const summaryId = useId();
   if (!power.on) {
     return (
       <p className="explorer-status" role="status">
@@ -55,13 +56,17 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
   // scrolls inside its frame on a phone.
   return (
     <div className="explorer-table-block">
-      <p className="explorer-table__summary">
+      <p id={summaryId} className="explorer-table__summary">
         Updated {formatAge(snapshot.generatedAt, now)}. GitOps: {SYNC_LABELS[snapshot.sync]}.
         {snapshot.release !== null &&
           ` Latest release ${snapshot.release.commit}, pinned ${formatAge(snapshot.release.pinnedAt, now)}.`}
       </p>
       <div className="explorer-table-frame">
-        <table className="explorer-table" aria-label="Deployment status">
+        <table
+          className="explorer-table"
+          aria-label="Deployment status"
+          aria-describedby={summaryId}
+        >
           <thead>
             <tr>
               <th scope="col">Component</th>
@@ -117,8 +122,6 @@ export function InfrastructureExplorer() {
   const [card, setCard] = useState<CardId | null>(null);
 
   const [fetchedAt, setFetchedAt] = useState(() => Date.now());
-  const fetchedAtRef = useRef(fetchedAt);
-  fetchedAtRef.current = fetchedAt;
   const [narrow, setNarrow] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches,
   );
@@ -155,7 +158,7 @@ export function InfrastructureExplorer() {
       if (document.hidden) return;
       const time = Date.now();
       setNow(time);
-      if (time - fetchedAtRef.current >= REFRESH_MS) setFetchedAt(time);
+      setFetchedAt((previous) => (time - previous >= REFRESH_MS ? time : previous));
     };
     setPaused(document.hidden);
     document.addEventListener('visibilitychange', update);
@@ -210,14 +213,7 @@ export function InfrastructureExplorer() {
         />
       </div>
       <ExplorerTable power={power} now={now} onSelect={setCard} />
-      {/* Keyed by piece, so every opening starts from a fresh card. */}
-      <ExplorerCard
-        key={card ?? 'closed'}
-        id={card}
-        power={power}
-        now={now}
-        onClose={() => setCard(null)}
-      />
+      <ExplorerCard id={card} power={power} now={now} onClose={() => setCard(null)} />
     </section>
   );
 }

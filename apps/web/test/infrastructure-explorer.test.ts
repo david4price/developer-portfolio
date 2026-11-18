@@ -13,6 +13,7 @@ import {
   conduitTraffic,
   coreState,
   formatAge,
+  layoutWires,
   type MapLayout,
   NARROW_LAYOUT,
   type Point,
@@ -357,21 +358,19 @@ describe('cards', () => {
 describe('layouts', () => {
   type Segment = readonly [Point, Point];
 
-  /** Every wire the map draws in a layout, as its list of straight segments. */
+  /** Every wire the map draws in a layout (the same list it draws), as straight segments. */
   function wires(layout: MapLayout): Map<string, Segment[]> {
-    const { pieces, core, hub } = layout;
     const segments = (points: readonly Point[]): Segment[] =>
       points.slice(1).map((point, index) => [points[index] as Point, point] as const);
+    const drawn = layoutWires(layout);
     return new Map<string, Segment[]>([
-      ['actions-ghcr', segments([pieces.actions, pieces.ghcr])],
-      ['ghcr-pin', segments([pieces.ghcr, pieces.pin])],
-      ['pin-argocd', segments([pieces.pin, pieces.argocd])],
-      ['build-arm', segments([pieces[layout.buildArmFrom], core])],
-      ['deploy-arm', segments([pieces.argocd, core])],
-      ['core-hub', segments([core, hub])],
-      ['hub-api', segments([hub, pieces.api])],
-      ['hub-worker', segments([hub, pieces.worker])],
-      ...RUNTIME_CONDUITS.map(({ key }) => [key, segments(layout.routes[key])] as const),
+      ...drawn.delivery.map((points, index) => [`delivery-${index}`, segments(points)] as const),
+      ['build-arm', segments(drawn.buildArm)],
+      ['deploy-arm', segments(drawn.deployArm)],
+      ['core-hub', segments(drawn.coreHub)],
+      ['hub-api', segments(drawn.hubApi)],
+      ['hub-worker', segments(drawn.hubWorker)],
+      ...RUNTIME_CONDUITS.map(({ key }) => [key, segments(drawn.runtime[key])] as const),
     ]);
   }
 
@@ -404,11 +403,19 @@ describe('layouts', () => {
       const inside = (point: Point, centre: Point) =>
         Math.abs(point.x - centre.x) <= 66 && Math.abs(point.y - centre.y) <= 35;
       for (const { key, from, to } of RUNTIME_CONDUITS) {
-        const route = layout.routes[key];
+        const route = layoutWires(layout).runtime[key];
         assert.ok(route.length >= 2, key);
         assert.ok(inside(route[0] as Point, layout.pieces[from]), `${key} starts in ${from}`);
         assert.ok(inside(route.at(-1) as Point, layout.pieces[to]), `${key} ends in ${to}`);
       }
+    });
+
+    it(`${layout.name}: feeds the capacitor from the registry (build) and Argo CD (deploy)`, () => {
+      const { buildArm, deployArm } = layoutWires(layout);
+      assert.deepEqual(buildArm[0], layout.pieces.ghcr);
+      assert.deepEqual(buildArm.at(-1), layout.core);
+      assert.deepEqual(deployArm[0], layout.pieces.argocd);
+      assert.deepEqual(deployArm.at(-1), layout.core);
     });
 
     it(`${layout.name}: draws every piece and fits its drawing`, () => {

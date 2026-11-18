@@ -119,12 +119,46 @@ export interface MapLayout {
   /** The cluster's flux capacitor, and the hub where its runtime arm reaches API and worker. */
   readonly core: Point;
   readonly hub: Point;
-  /** The delivery stage the capacitor's build arm comes from (Argo CD feeds the deploy arm). */
-  readonly buildArmFrom: DeliveryStageId;
-  /** Each runtime wire's route, from its `from` building to its `to` building. */
-  readonly routes: Readonly<Record<ConduitKey, readonly Point[]>>;
+  /** The capacitor's arms: build (from the container registry) and deploy (from Argo CD). */
+  readonly buildArm: readonly Point[];
+  readonly deployArm: readonly Point[];
+  /**
+   * Routes for runtime wires that bend, from the `from` building to the `to` building. A wire
+   * without one runs straight between the two buildings, so it follows them when they move.
+   */
+  readonly routes: Readonly<Partial<Record<ConduitKey, readonly Point[]>>>;
   readonly titleBlock: Point;
   readonly offline: { readonly x: number; readonly y: number; readonly width: number };
+}
+
+/** Every wire a layout draws, by role; the map draws these and the tests check these. */
+export interface LayoutWires {
+  /** The delivery path, stage to stage: actions → registry → pin → Argo CD. */
+  readonly delivery: readonly (readonly Point[])[];
+  readonly buildArm: readonly Point[];
+  readonly deployArm: readonly Point[];
+  readonly coreHub: readonly Point[];
+  readonly hubApi: readonly Point[];
+  readonly hubWorker: readonly Point[];
+  readonly runtime: Readonly<Record<ConduitKey, readonly Point[]>>;
+}
+
+export function layoutWires(layout: MapLayout): LayoutWires {
+  const { pieces, core, hub } = layout;
+  const chain = [...DELIVERY_STAGES.map(({ id }) => pieces[id]), pieces.argocd];
+  const runtime = {} as Record<ConduitKey, readonly Point[]>;
+  for (const { key, from, to } of RUNTIME_CONDUITS) {
+    runtime[key] = layout.routes[key] ?? [pieces[from], pieces[to]];
+  }
+  return {
+    delivery: chain.slice(1).map((point, index) => [chain[index] ?? point, point]),
+    buildArm: layout.buildArm,
+    deployArm: layout.deployArm,
+    coreHub: [core, hub],
+    hubApi: [hub, pieces.api],
+    hubWorker: [hub, pieces.worker],
+    runtime,
+  };
 }
 
 /** Landscape: delivery across the top, the capacitor in the middle, runtime below. */
@@ -148,20 +182,15 @@ export const WIDE_LAYOUT: MapLayout = {
   },
   core: { x: 570, y: 260 },
   hub: { x: 570, y: 400 },
-  buildArmFrom: 'ghcr',
+  buildArm: [
+    { x: 350, y: 100 },
+    { x: 570, y: 260 },
+  ],
+  deployArm: [
+    { x: 790, y: 100 },
+    { x: 570, y: 260 },
+  ],
   routes: {
-    'web-tunnel': [
-      { x: 130, y: 250 },
-      { x: 130, y: 400 },
-    ],
-    'tunnel-api': [
-      { x: 130, y: 400 },
-      { x: 350, y: 400 },
-    ],
-    'api-ai': [
-      { x: 350, y: 400 },
-      { x: 350, y: 590 },
-    ],
     'api-postgres': [
       { x: 375, y: 400 },
       { x: 375, y: 512 },
@@ -173,10 +202,6 @@ export const WIDE_LAYOUT: MapLayout = {
       { x: 395, y: 527 },
       { x: 812, y: 527 },
       { x: 812, y: 590 },
-    ],
-    'worker-redis': [
-      { x: 790, y: 400 },
-      { x: 790, y: 590 },
     ],
     'worker-postgres': [
       { x: 760, y: 400 },
@@ -213,16 +238,19 @@ export const NARROW_LAYOUT: MapLayout = {
   },
   core: { x: 220, y: 420 },
   hub: { x: 220, y: 590 },
-  buildArmFrom: 'pin',
+  // The build arm runs from the registry down the right margin, around the pin, into the box.
+  buildArm: [
+    { x: 325, y: 80 },
+    { x: 420, y: 80 },
+    { x: 420, y: 322 },
+    { x: 270, y: 322 },
+    { x: 220, y: 420 },
+  ],
+  deployArm: [
+    { x: 115, y: 235 },
+    { x: 220, y: 420 },
+  ],
   routes: {
-    'web-tunnel': [
-      { x: 115, y: 950 },
-      { x: 115, y: 770 },
-    ],
-    'tunnel-api': [
-      { x: 115, y: 770 },
-      { x: 115, y: 590 },
-    ],
     'api-ai': [
       { x: 115, y: 590 },
       { x: 26, y: 590 },
@@ -241,10 +269,6 @@ export const NARROW_LAYOUT: MapLayout = {
       { x: 150, y: 690 },
       { x: 290, y: 690 },
       { x: 290, y: 770 },
-    ],
-    'worker-redis': [
-      { x: 325, y: 590 },
-      { x: 325, y: 770 },
     ],
     'worker-postgres': [
       { x: 325, y: 590 },
