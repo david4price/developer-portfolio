@@ -653,3 +653,290 @@ main {
     display: none;
   }
 }
+
+/* Infrastructure Explorer (P6-04): a dark "screen" in both themes, with neon conduits. Colours
+   and animations come only from classes set by the snapshot; no inline styles (CSP). */
+.explorer {
+  --explorer-panel: #0b0f1a;
+  --explorer-node: #111827;
+  --explorer-text: #e5e7eb;
+  --explorer-muted: #9ca3af;
+  --explorer-healthy: #34d399;
+  --explorer-progressing: #fbbf24;
+  --explorer-degraded: #fb923c;
+  --explorer-down: #f87171;
+  --explorer-unknown: #94a3b8;
+  --explorer-delivery: #60a5fa;
+  --explorer-off: #374151;
+  --explorer-core: #e0f2fe;
+  display: grid;
+  gap: var(--space);
+  margin-top: var(--space);
+}
+
+.explorer-note {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.explorer-scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.explorer-scenarios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* The map keeps a readable size and scrolls inside its frame on narrow screens. */
+.explorer-frame {
+  overflow-x: auto;
+  border-radius: 18px;
+}
+
+.explorer-map {
+  display: block;
+  width: 100%;
+  min-width: 640px;
+  height: auto;
+}
+
+.explorer-map__panel {
+  fill: var(--explorer-panel);
+}
+
+.explorer-conduit--healthy,
+.explorer-node--healthy {
+  --tone: var(--explorer-healthy);
+}
+
+.explorer-conduit--progressing,
+.explorer-node--progressing {
+  --tone: var(--explorer-progressing);
+}
+
+.explorer-conduit--degraded,
+.explorer-node--degraded {
+  --tone: var(--explorer-degraded);
+}
+
+.explorer-conduit--down,
+.explorer-node--down {
+  --tone: var(--explorer-down);
+}
+
+.explorer-conduit--unknown,
+.explorer-node--unknown {
+  --tone: var(--explorer-unknown);
+}
+
+.explorer-conduit--delivery,
+.explorer-node--delivery {
+  --tone: var(--explorer-delivery);
+}
+
+.explorer-conduit--off,
+.explorer-node--off {
+  --tone: var(--explorer-off);
+}
+
+.explorer-conduit path {
+  fill: none;
+  stroke: var(--tone);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.explorer-conduit__tube {
+  stroke-width: 6;
+  opacity: 0.35;
+}
+
+.explorer-conduit__pulse {
+  stroke-width: 3;
+  stroke-dasharray: 10 30;
+  animation: explorer-flow linear infinite;
+}
+
+.explorer-conduit__pulse--idle {
+  animation-duration: 4s;
+}
+
+.explorer-conduit__pulse--low {
+  animation-duration: 2s;
+}
+
+.explorer-conduit__pulse--busy {
+  animation-duration: 0.8s;
+}
+
+.explorer-conduit__burst {
+  stroke-width: 4;
+  stroke-dasharray: 28 600;
+  animation: explorer-burst 3s ease-in infinite;
+}
+
+@keyframes explorer-flow {
+  from {
+    stroke-dashoffset: 40;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes explorer-burst {
+  from {
+    stroke-dashoffset: 628;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.explorer-node rect {
+  fill: var(--explorer-node);
+  stroke: var(--tone);
+  stroke-width: 2;
+}
+
+.explorer-node text {
+  fill: var(--explorer-text);
+  text-anchor: middle;
+}
+
+.explorer-node__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.explorer-node text.explorer-node__detail {
+  font-size: 11px;
+  fill: var(--explorer-muted);
+}
+
+.explorer-node__status {
+  font-size: 12px;
+}
+
+.explorer-node text.explorer-node__note {
+  font-size: 11px;
+  fill: var(--tone);
+}
+
+.explorer-core__ring {
+  fill: var(--explorer-panel);
+  stroke: var(--explorer-core);
+  stroke-width: 3;
+}
+
+.explorer-core__y {
+  fill: none;
+  stroke: var(--explorer-core);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.explorer-core__heart {
+  fill: var(--explorer-core);
+}
+
+.explorer-core--rollout {
+  --explorer-core: var(--explorer-progressing);
+  animation: explorer-flicker 1.4s steps(2, jump-none) infinite;
+}
+
+.explorer-core--off {
+  --explorer-core: var(--explorer-off);
+}
+
+@keyframes explorer-flicker {
+  0%,
+  60% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 0.35;
+  }
+
+  80% {
+    opacity: 0.9;
+  }
+
+  90% {
+    opacity: 0.5;
+  }
+}
+
+.explorer-map__offline rect {
+  fill: var(--explorer-panel);
+  stroke: var(--explorer-off);
+  stroke-width: 2;
+}
+
+.explorer-map__offline text {
+  fill: var(--explorer-text);
+  text-anchor: middle;
+}
+
+.explorer-map__offline-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.explorer-map__offline-reason {
+  font-size: 14px;
+}
+
+.explorer[data-paused] .explorer-map * {
+  animation-play-state: paused;
+}
+
+/* Reduced motion: the same colours and labels, no pulses, bursts, or flicker. */
+@media (prefers-reduced-motion: reduce) {
+  .explorer-conduit__pulse,
+  .explorer-conduit__burst {
+    display: none;
+  }
+
+  .explorer-core--rollout {
+    animation: none;
+  }
+}
+
+.explorer-status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.explorer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.explorer-table caption {
+  margin-bottom: 0.5rem;
+  color: var(--color-muted);
+  text-align: left;
+}
+
+.explorer-table th,
+.explorer-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}

@@ -12,6 +12,10 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P6-04 prototype: the Infrastructure Explorer map on sample data at `/apps/infrastructure-explorer/`
+  (steady, rollout, Redis down, API offline, stale), in the snapshot shape the API will return
+  (`InfrastructureSnapshot` in `@portfolio/shared-types`). Without fresh data it powers down and
+  says "unavailable"; it has a reduced-motion version and a text table.
 - Chat search: architecture notes list the word forms visitors use ("hosted", "installed",
   "tested", "pushed", "loss"), "happen" is a stop word so the offline note no longer takes every
   "what happens" question, and the P5-09 review follow-ups are closed. P5-10 itself is parked
@@ -185,15 +189,17 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. Owner content: P2-12's text and more projects.
-2. **P5-10** once that content is indexed, then **P5-11** only if P5-10 shows keyword search
-   missing paraphrased questions.
+1. **P6-02:** the allowlist serializer and snapshot endpoint (with leak tests), first against a
+   fake Kubernetes client; then 🔒 P6-01 and P6-03 for the read-only cluster and Argo CD access,
+   and the live map (P6-04).
+2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
+   shows keyword search missing paraphrased questions.
 
 **Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p5-10-search-word-forms` (search word forms and P5-09 follow-ups).
+**Branch in progress:** `feat/p6-04-explorer-prototype` (P6-04 prototype on sample data).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -468,6 +474,9 @@ Read-only inventory of the reference host. Findings:
       Design: animated infrastructure map in a flux-capacitor-inspired style
       ([visual design](architecture/infrastructure-explorer.md)). A prototype with fake data can come
       first.
+      Prototype done 2026-11-18: the map runs on sample data at `/apps/infrastructure-explorer/`
+      (labelled as such) with five scenarios, in the snapshot shape the API will return. Still
+      open: live data (P6-02) and the offline drill.
 
 ## Phase 7: Hardening (0/5)
 

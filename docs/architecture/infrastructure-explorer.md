@@ -1,6 +1,7 @@
 # Infrastructure Explorer: Visual Design
 
-**Status: Proposed (Phase 6, P6-04).** The data rules are in [Security](security.md#infrastructure-explorer-proposed-phase-6);
+**Status: prototype Confirmed on sample data (P6-04, 2026-11-18); live data Proposed (needs
+P6-02).** The data rules are in [Security](security.md#infrastructure-explorer-proposed-phase-6);
 this document covers what the page looks like and how data drives it.
 
 ## Concept
@@ -52,8 +53,24 @@ the `images.yaml` pin or the public GitHub Actions API).
   same data.
 - Animations pause when the tab is hidden.
 
-## Prototype
+## Prototype (Confirmed, sample data)
 
-A clickable prototype with fake data can be built before the backend exists, to tune the look and
-motion. It must use the same snapshot shape the API will return, so swapping in live data needs
-no layout changes.
+`/apps/infrastructure-explorer/` shows the map on sample data, labelled as a prototype, with five
+scenarios to click through: steady, rollout in progress, Redis down, API offline, and stale data.
+It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
+`@portfolio/shared-types`), so live data replaces `sample-snapshots.ts` without layout changes.
+
+- Code: `apps/web/src/mini-apps/infrastructure-explorer/`. `map-model.ts` holds the rules as pure,
+  tested functions; `explorer-map.tsx` draws the SVG; the page loads it with `next/dynamic` and
+  `ssr: false` (it shows times relative to now).
+- Rules as built: a snapshot older than 60 s, or none at all, powers the map down with
+  "unavailable"; a component the snapshot omits is "unknown", never healthy; a conduit takes the
+  worse health of its two ends; pulses run only where traffic data exists (none yet, until P7-01)
+  and never into a down component; the core flickers only while a component is progressing, so a
+  crash-looping component shows as down, not as a rollout; the delivery path bursts for 15 minutes
+  after a release is pinned.
+- Styling uses classes only (the site CSP blocks inline styles), on a dark panel in both themes.
+  Reduced motion removes pulses, bursts, and flicker; animations pause in hidden tabs; a table
+  lists the same data as text.
+- Next: P6-02 serves the real snapshot. The page then fetches it every 12 s with the "not
+  configured", "unavailable", and loaded states the web rules require.

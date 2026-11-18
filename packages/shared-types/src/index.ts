@@ -132,3 +132,54 @@ export interface ChatMessageResponse {
   /** Validated links to registry pages and doc sources, at most three, in reply order. */
   readonly links: readonly ChatLink[];
 }
+
+/**
+ * Infrastructure Explorer (Phase 6). A sanitized snapshot of the deployment: only the allowlisted
+ * fields in `docs/architecture/security.md`, never IP addresses, node names, environment
+ * variables, logs, registry paths, or other namespaces.
+ */
+export type InfrastructureComponentId =
+  'web' | 'tunnel' | 'api' | 'worker' | 'postgres' | 'redis' | 'argocd' | 'ai';
+
+/** `unknown` means the server couldn't tell; clients must never show it as healthy. */
+export type InfrastructureHealth = 'healthy' | 'progressing' | 'degraded' | 'down' | 'unknown';
+
+/** Coarse failure category; never the underlying event or log text. */
+export type InfrastructureFailure =
+  'crash-loop' | 'image-pull' | 'unschedulable' | 'not-ready' | 'unreachable';
+
+/** Bucketed request rate, never raw counts (proposed allowlist addition; needs P7-01 metrics). */
+export type TrafficLevel = 'idle' | 'low' | 'busy';
+
+export interface ReplicaCounts {
+  readonly desired: number;
+  readonly available: number;
+  readonly ready: number;
+}
+
+export interface InfrastructureComponent {
+  readonly id: InfrastructureComponentId;
+  readonly health: InfrastructureHealth;
+  /** Image tag only, never a registry path or digest; `null` for components without one. */
+  readonly version: string | null;
+  /** Workload replica counts; `null` for components outside the cluster. */
+  readonly replicas: ReplicaCounts | null;
+  /** `null` until request-rate buckets exist (P7-01). */
+  readonly traffic: TrafficLevel | null;
+  readonly failure: InfrastructureFailure | null;
+}
+
+export type InfrastructureSyncStatus = 'synced' | 'out-of-sync' | 'unknown';
+
+export interface InfrastructureSnapshot {
+  /** When the server built this snapshot (ISO 8601); clients treat old snapshots as unavailable. */
+  readonly generatedAt: string;
+  /** Argo CD sync status of the portfolio Application. */
+  readonly sync: InfrastructureSyncStatus;
+  /**
+   * The latest release pinned in `images.yaml`: short commit SHA and time (proposed allowlist
+   * addition). `null` when unknown.
+   */
+  readonly release: { readonly commit: string; readonly pinnedAt: string } | null;
+  readonly components: readonly InfrastructureComponent[];
+}
