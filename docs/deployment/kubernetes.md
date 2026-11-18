@@ -310,7 +310,11 @@ last, so a rollback moves the API off them before they go.
   `kubectl apply -f infrastructure/argocd/project.yaml` (it only adds those three kinds). Then
   merge; Argo CD creates the account, Role, and binding before the API (sync wave 2) rolls out.
 - **Impact:** one rolling restart of the API (new account, token, and environment); with
-  `maxUnavailable: 0` the old pod serves until the new one is ready. Nothing else changes.
+  `maxUnavailable: 0` the old pod serves until the new one is ready. Nothing else changes. The
+  reader that trusts the cluster CA per request ships in the API image built from the same merge,
+  which the release pins a few minutes later; until then the previous image reads with the feature
+  on and logs `Infrastructure snapshot refresh failed` (TLS can't be verified). No page reads the
+  endpoint yet, so this is harmless; validate after the pin has synced.
 - **Validate:**
   - `kubectl auth can-i list pods -n portfolio --as=system:serviceaccount:portfolio:portfolio-api`
     → yes; the same for `get secrets`, `get pods --subresource=log`,

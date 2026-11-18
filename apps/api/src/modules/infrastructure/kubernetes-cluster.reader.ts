@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
+import { type IncomingMessage, request as httpRequest } from 'node:http';
+import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { z } from 'zod';
+import { declaredTooLarge, readJsonStream } from '../../common/read-json-body.js';
 import { type ClusterObjects, type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { COMPONENT_SELECTOR } from './snapshot-serializer.js';
 
@@ -22,7 +23,7 @@ export interface KubernetesReaderOptions {
   /** The bearer token; reads the mounted service account token by default. */
   readonly readToken?: () => Promise<string>;
   /** The API server's CA (PEM); reads the mounted cluster CA by default. */
-  readonly readCa?: () => Promise<string | undefined>;
+  readonly readCa?: () => Promise<string>;
   /** Upper bound on each list response; larger replies are treated as malformed. */
   readonly maxResponseBytes?: number;
   /**
@@ -42,8 +43,9 @@ const fromServiceAccount = (file: string) => () =>
 
 interface RequestContext {
   readonly token: string;
-  readonly ca: string | undefined;
-  /** Aborts the request: the read's deadline, or a failed sibling. */
+  /** For https: a connection pool that trusts the cluster CA (and nothing else). */
+  readonly agent: HttpsAgent | undefined;
+  /** Aborts the requests: the read's deadline, or a failed sibling. */
   readonly signal: AbortSignal;
   /** The read's own deadline, to tell a timeout from a cancelled sibling. */
   readonly deadline: AbortSignal;
@@ -57,10 +59,13 @@ interface RequestContext {
  */
 export class KubernetesClusterReader implements ClusterReader {
   private readonly baseUrl: string;
+  private readonly https: boolean;
   private readonly namespacePath: string;
   private readonly readToken: () => Promise<string>;
-  private readonly readCa: () => Promise<string | undefined>;
+  private readonly readCa: () => Promise<string>;
   private readonly maxResponseBytes: number;
+  /** The pool for the current CA; rebuilt only when the mounted CA changes. */
+  private pool: { readonly ca: string; readonly agent: HttpsAgent } | null = null;
 
   constructor(options: KubernetesReaderOptions) {
     const base = new URL(options.apiServerUrl);
@@ -69,6 +74,7 @@ export class KubernetesClusterReader implements ClusterReader {
       throw new Error('The Kubernetes API server URL must use https');
     }
     this.baseUrl = base.href.replace(/\/+$/, '');
+    this.https = base.protocol === 'https:';
     this.namespacePath = `namespaces/${encodeURIComponent(options.namespace)}`;
     this.readToken = options.readToken ?? fromServiceAccount('token');
     this.readCa = options.readCa ?? fromServiceAccount('ca.crt');
@@ -77,25 +83,23 @@ export class KubernetesClusterReader implements ClusterReader {
 
   async read(signal: AbortSignal): Promise<ClusterObjects> {
     let token: string;
-    let ca: string | undefined;
+    let agent: HttpsAgent | undefined;
     try {
-      [token, ca] = await Promise.all([
-        this.readToken().then((value) => value.trim()),
-        this.baseUrl.startsWith('https:') ? this.readCa() : Promise.resolve(undefined),
-      ]);
+      token = (await this.readToken()).trim();
+      agent = this.https ? this.agentFor(await this.readCa()) : undefined;
     } catch {
-      throw new ClusterReadError('network');
+      throw new ClusterReadError('credentials');
     }
     // One failed list cancels the others: their replies would be thrown away anyway.
     const siblings = new AbortController();
-    const context = (): RequestContext => ({
+    const context: RequestContext = {
       token,
-      ca,
+      agent,
       signal: AbortSignal.any([signal, siblings.signal]),
       deadline: signal,
-    });
+    };
     const list = (path: string) =>
-      this.list(path, context()).catch((error: unknown) => {
+      this.list(path, context).catch((error: unknown) => {
         siblings.abort();
         throw error;
       });
@@ -107,63 +111,60 @@ export class KubernetesClusterReader implements ClusterReader {
     return { deployments, statefulSets, pods };
   }
 
+  private agentFor(ca: string): HttpsAgent {
+    if (this.pool?.ca !== ca) {
+      this.pool?.agent.destroy();
+      this.pool = { ca, agent: new HttpsAgent({ ca, keepAlive: true }) };
+    }
+    return this.pool.agent;
+  }
+
   private async list(path: string, context: RequestContext): Promise<unknown[]> {
-    const parsed = listSchema.safeParse(
-      await this.getJson(new URL(`${this.baseUrl}${path}`), context),
-    );
+    const response = await this.get(new URL(`${this.baseUrl}${path}`), context);
+    let body: unknown;
+    try {
+      body = declaredTooLarge(response.headers['content-length'], this.maxResponseBytes)
+        ? undefined
+        : await readJsonStream(response, this.maxResponseBytes);
+    } catch {
+      throw new ClusterReadError(context.deadline.aborted ? 'timeout' : 'network');
+    } finally {
+      // Releases the connection if the body was refused or only partly read.
+      if (!response.complete) response.destroy();
+    }
+    const parsed = listSchema.safeParse(body);
     if (!parsed.success) throw new ClusterReadError('invalid_response');
     return parsed.data.items;
   }
 
-  /** GET with the token and (for https) the cluster CA; at most `maxResponseBytes` of JSON. */
-  private getJson(url: URL, { token, ca, signal, deadline }: RequestContext): Promise<unknown> {
-    const failure = () => new ClusterReadError(deadline.aborted ? 'timeout' : 'network');
-    const tooLarge = () => new ClusterReadError('invalid_response');
+  /** Resolves with a 200 response; anything else (redirects too, never followed) rejects. */
+  private get(
+    url: URL,
+    { token, agent, signal, deadline }: RequestContext,
+  ): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
-      const send = url.protocol === 'https:' ? httpsRequest : httpRequest;
+      const send = this.https ? httpsRequest : httpRequest;
       const request = send(
         url,
         {
           method: 'GET',
           headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
           signal,
-          ...(ca === undefined ? {} : { ca }),
+          ...(agent === undefined ? {} : { agent }),
         },
         (response) => {
-          // Anything but 200 (redirects included, which are never followed) is a failure.
-          if (response.statusCode !== 200) {
-            response.resume();
-            reject(new ClusterReadError('status', response.statusCode ?? null));
+          if (response.statusCode === 200) {
+            resolve(response);
             return;
           }
-          const declared = Number(response.headers['content-length']);
-          if (Number.isFinite(declared) && declared > this.maxResponseBytes) {
-            request.destroy();
-            reject(tooLarge());
-            return;
-          }
-          const chunks: Buffer[] = [];
-          let total = 0;
-          response.on('data', (chunk: Buffer) => {
-            total += chunk.byteLength;
-            if (total > this.maxResponseBytes) {
-              request.destroy();
-              reject(tooLarge());
-              return;
-            }
-            chunks.push(chunk);
-          });
-          response.on('end', () => {
-            try {
-              resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown);
-            } catch {
-              reject(new ClusterReadError('invalid_response'));
-            }
-          });
-          response.on('error', () => reject(failure()));
+          // Close at once rather than downloading an error body nobody reads.
+          request.destroy();
+          reject(new ClusterReadError('status', response.statusCode ?? null));
         },
       );
-      request.on('error', () => reject(failure()));
+      request.on('error', () =>
+        reject(new ClusterReadError(deadline.aborted ? 'timeout' : 'network')),
+      );
       request.end();
     });
   }

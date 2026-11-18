@@ -61,7 +61,8 @@ spec:
       # Its own read-only account (api-rbac.yaml); the token is projected and rotated.
       serviceAccountName: {{ $fullname }}-api
       {{- end }}
-      automountServiceAccountToken: {{ .infrastructure.enabled }}
+      # The same truthiness as the blocks above, rendered as a literal boolean.
+      automountServiceAccountToken: {{ if .infrastructure.enabled }}true{{ else }}false{{ end }}
       enableServiceLinks: false
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:

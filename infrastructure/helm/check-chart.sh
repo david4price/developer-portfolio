@@ -89,6 +89,10 @@ expected_rules="rules:
   - apiGroups: ['']
     resources: [pods]
     verbs: [get, list]"
+expected_role_ref="roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portfolio-api-infrastructure-reader"
 expected_subjects="subjects:
   - kind: ServiceAccount
     name: portfolio-api
@@ -107,11 +111,19 @@ if ! reader="$(render -f "$chart/ci/infrastructure-values.yaml" -s templates/api
 else
   [[ "$(section Role rules)" == "$expected_rules" ]] ||
     fail "the reader Role must grant exactly get/list on deployments, statefulsets, pods"
+  [[ "$(section RoleBinding roleRef | sed '/^subjects:/,$d')" == "$expected_role_ref" ]] ||
+    fail "the reader RoleBinding must reference the reader Role (not a ClusterRole)"
   [[ "$(section RoleBinding subjects)" == "$expected_subjects" ]] ||
     fail "the reader RoleBinding must bind only the API's ServiceAccount"
   [[ "$(grep -cE '^kind: (Role|RoleBinding|ClusterRole|ClusterRoleBinding)$' <<<"$reader")" == 2 ]] ||
     fail "the reader must be exactly one Role and one RoleBinding (no cluster-wide RBAC)"
 fi
+# No template anywhere may render cluster-wide RBAC, with the view on or off.
+for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml"; do
+  if render -f "$values" | grep -qE '^kind: (ClusterRole|ClusterRoleBinding)$'; then
+    fail "$(basename "$values") renders cluster-wide RBAC"
+  fi
+done
 if render -f "$chart/ci/digests-values.yaml" | grep -qE '^kind: (ServiceAccount|Role|RoleBinding)$'; then
   fail "the chart renders RBAC with the infrastructure view off"
 fi
