@@ -12,6 +12,8 @@ import {
   componentStatus,
   conduitTraffic,
   coreState,
+  formatAge,
+  RUNTIME_CONDUITS,
   MAP_NODES,
   mapPower,
   recentRelease,
@@ -62,6 +64,10 @@ describe('mapPower', () => {
       generatedAt: new Date(NOW - STALE_AFTER_MS - 1).toISOString(),
     });
     assert.deepEqual(mapPower(old, NOW), { on: false, reason: 'stale' });
+    const future = snapshotWith([], {
+      generatedAt: new Date(NOW + STALE_AFTER_MS + 1).toISOString(),
+    });
+    assert.deepEqual(mapPower(future, NOW), { on: false, reason: 'stale' }, 'server clock ahead');
     assert.deepEqual(mapPower(snapshotWith([], { generatedAt: 'not a time' }), NOW), {
       on: false,
       reason: 'stale',
@@ -153,6 +159,27 @@ describe('map model', () => {
       assert.equal(count(dark, 'dark'), 24);
     }
     assert.deepEqual(windowStates(component({})), healthy, 'the same data draws the same building');
+  });
+
+  it('formats ages the same way everywhere: seconds, minutes, hours', () => {
+    const at = (ago: number) => new Date(NOW - ago).toISOString();
+    assert.equal(formatAge(at(4_000), NOW), '4 s ago');
+    assert.equal(formatAge(at(10 * 60_000), NOW), '10 min ago');
+    assert.equal(formatAge(at(3 * 3_600_000), NOW), '3 h ago');
+    assert.equal(formatAge('not a time', NOW), 'unknown');
+  });
+
+  it('gives every bending wire its own lane, so no two share a stretch', () => {
+    const lanes = RUNTIME_CONDUITS.flatMap(({ lane }) => (lane === undefined ? [] : [lane]));
+    assert.equal(new Set(lanes.map(({ laneY }) => laneY)).size, lanes.length, 'distinct heights');
+    const drops = RUNTIME_CONDUITS.flatMap(({ from, to, lane }) => {
+      const start = MAP_NODES.find(({ id }) => id === from);
+      const end = MAP_NODES.find(({ id }) => id === to);
+      if (start === undefined || end === undefined) return [];
+      if (lane === undefined) return start.x === end.x ? [start.x] : [];
+      return [start.x + lane.fromDx, end.x + lane.toDx];
+    });
+    assert.equal(new Set(drops).size, drops.length, `distinct vertical runs: ${drops.join(', ')}`);
   });
 
   it('describes status in text, not colour alone', () => {
@@ -313,7 +340,7 @@ describe('cards', () => {
     assert.equal(table.match(/class="explorer-table__details"/g)?.length, 8);
   });
 
-  it('open on the front, with only the visible face interactive, and link out safely', () => {
+  it('open on their details (focus never jumps), with the front inert, and link out safely', () => {
     const closed = renderToStaticMarkup(
       createElement(ExplorerCard, { id: null, power: power(), now: NOW, onClose() {} }),
     );
@@ -323,8 +350,9 @@ describe('cards', () => {
       createElement(ExplorerCard, { id: 'api', power: power(), now: NOW, onClose() {} }),
     );
     assert.match(html, /<dialog[^>]*aria-labelledby=/);
-    assert.match(html, /explorer-card__face--back"[^>]*inert/);
-    assert.ok(!/explorer-card__face--front"[^>]*inert/.test(html));
+    assert.match(html, /explorer-card__flipper" data-flipped="true"/);
+    assert.match(html, /explorer-card__face--front"[^>]*inert/);
+    assert.ok(!/explorer-card__face--back"[^>]*inert/.test(html));
     assert.match(html, /target="_blank" rel="noopener noreferrer"/);
     assert.match(html, /Read more: The REST API/);
     assert.ok(!/\sstyle=/.test(html), 'no inline styles (CSP)');

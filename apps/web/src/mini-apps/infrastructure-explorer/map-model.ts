@@ -23,7 +23,8 @@ export type MapPower =
 export function mapPower(snapshot: InfrastructureSnapshot | null, now: number): MapPower {
   if (snapshot === null) return { on: false, reason: 'unavailable' };
   const generatedAt = Date.parse(snapshot.generatedAt);
-  if (!Number.isFinite(generatedAt) || now - generatedAt > STALE_AFTER_MS) {
+  // A snapshot from too far in the future (server clock ahead) is no more trustworthy.
+  if (!Number.isFinite(generatedAt) || Math.abs(now - generatedAt) > STALE_AFTER_MS) {
     return { on: false, reason: 'stale' };
   }
   return { on: true, snapshot };
@@ -61,9 +62,22 @@ export const CORE = { x: 570, y: 260 } as const;
 /** Where the core's runtime arm reaches the cluster workloads. */
 export const CLUSTER_HUB = { x: 570, y: 400 } as const;
 
+/**
+ * A wire's own route between two rows: it leaves `fromDx` and arrives `toDx` off the buildings'
+ * centres and crosses at height `laneY`, so no two wires share a stretch (each shows its own
+ * health and sparks; crossings are fine, overlaps are not).
+ */
+export interface Lane {
+  readonly fromDx: number;
+  readonly toDx: number;
+  readonly laneY: number;
+}
+
 export interface RuntimeConduit {
   readonly from: InfrastructureComponentId;
   readonly to: InfrastructureComponentId;
+  /** Omitted for wires between aligned buildings, which run straight. */
+  readonly lane?: Lane;
 }
 
 /** Runtime connections; pulses travel from `from` to `to`. */
@@ -71,10 +85,10 @@ export const RUNTIME_CONDUITS: readonly RuntimeConduit[] = [
   { from: 'web', to: 'tunnel' },
   { from: 'tunnel', to: 'api' },
   { from: 'api', to: 'ai' },
-  { from: 'api', to: 'postgres' },
-  { from: 'api', to: 'redis' },
+  { from: 'api', to: 'postgres', lane: { fromDx: 25, toDx: -25, laneY: 512 } },
+  { from: 'api', to: 'redis', lane: { fromDx: 45, toDx: 22, laneY: 527 } },
   { from: 'worker', to: 'redis' },
-  { from: 'worker', to: 'postgres' },
+  { from: 'worker', to: 'postgres', lane: { fromDx: -30, toDx: 25, laneY: 542 } },
 ];
 
 const SEVERITY: Readonly<Record<InfrastructureHealth, number>> = {
@@ -161,6 +175,21 @@ export function conduitTraffic(
   return known.reduce((busiest, level) =>
     levels.indexOf(level) > levels.indexOf(busiest) ? level : busiest,
   );
+}
+
+export const SYNC_LABELS: Readonly<Record<InfrastructureSnapshot['sync'], string>> = {
+  synced: 'Synced',
+  'out-of-sync': 'Out of sync',
+  unknown: 'Unknown',
+};
+
+/** How long ago `time` was, for every view: seconds, then minutes, then hours. */
+export function formatAge(time: string, now: number): string {
+  const seconds = Math.max(0, Math.round((now - Date.parse(time)) / 1_000));
+  if (!Number.isFinite(seconds)) return 'unknown';
+  if (seconds < 120) return `${seconds} s ago`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 120 ? `${minutes} min ago` : `${Math.round(minutes / 60)} h ago`;
 }
 
 export const HEALTH_LABELS: Readonly<Record<InfrastructureHealth, string>> = {

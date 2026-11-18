@@ -16,10 +16,13 @@ import {
   coreState,
   DELIVERY_STAGES,
   FAILURE_LABELS,
+  formatAge,
+  type Lane,
   MAP_NODES,
   type MapPower,
   recentRelease,
   RUNTIME_CONDUITS,
+  SYNC_LABELS,
   WINDOW_COLUMNS,
   WINDOW_ROWS,
   type WindowState,
@@ -45,16 +48,18 @@ type Tone = InfrastructureHealth | 'delivery' | 'off';
  * A wire's route: straight when aligned, otherwise down, across, and down, with its bends. The
  * across part runs just above the lower building, clear of the labels under the upper one.
  */
-function route(from: Point, to: Point): { path: string; bends: Point[] } {
-  if (from.x === to.x || from.y === to.y) {
+function route(from: Point, to: Point, lane?: Lane): { path: string; bends: Point[] } {
+  if (lane === undefined && (from.x === to.x || from.y === to.y)) {
     return { path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`, bends: [] };
   }
-  const middle = to.y - BUILDING_HEIGHT / 2 - 28;
+  const startX = from.x + (lane?.fromDx ?? 0);
+  const endX = to.x + (lane?.toDx ?? 0);
+  const middle = lane?.laneY ?? to.y - BUILDING_HEIGHT / 2 - 28;
   return {
-    path: `M ${from.x} ${from.y} V ${middle} H ${to.x} V ${to.y}`,
+    path: `M ${startX} ${from.y} V ${middle} H ${endX} V ${to.y}`,
     bends: [
-      { x: from.x, y: middle },
-      { x: to.x, y: middle },
+      { x: startX, y: middle },
+      { x: endX, y: middle },
     ],
   };
 }
@@ -67,13 +72,14 @@ interface WireProps {
   readonly traffic: TrafficLevel | null;
   readonly burst?: boolean;
   readonly straight?: boolean;
+  readonly lane?: Lane;
 }
 
 /** A power line: the wire, junction dots at its bends, and sparks travelling along it. */
-function Wire({ from, to, tone, traffic, burst = false, straight = false }: WireProps) {
+function Wire({ from, to, tone, traffic, burst = false, straight = false, lane }: WireProps) {
   const { path, bends } = straight
     ? { path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`, bends: [] }
-    : route(from, to);
+    : route(from, to, lane);
   return (
     <g className={`explorer-conduit explorer-conduit--${tone}`}>
       <path className="explorer-conduit__tube" d={path} />
@@ -282,14 +288,11 @@ function TitleBlock({ snapshot, now }: TitleBlockProps) {
   const x = 24;
   const y = 572;
   const width = 196;
-  const age =
-    snapshot === null
-      ? '—'
-      : `${Math.max(0, Math.round((now - Date.parse(snapshot.generatedAt)) / 1_000))} s ago`;
+  const age = snapshot === null ? '—' : formatAge(snapshot.generatedAt, now);
   const rows: readonly [string, string][] = [
     ['Drawing', 'Portfolio grid'],
     ['Revision', snapshot?.release?.commit ?? '—'],
-    ['GitOps', snapshot === null ? '—' : snapshot.sync],
+    ['GitOps', snapshot === null ? '—' : SYNC_LABELS[snapshot.sync]],
     ['Updated', age],
   ];
   return (
@@ -528,7 +531,7 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
         <Wire from={CORE} to={CLUSTER_HUB} tone={between('api', 'worker')} traffic={null} />
         <Wire from={CLUSTER_HUB} to={node('api')} tone={tone('api')} traffic={null} />
         <Wire from={CLUSTER_HUB} to={node('worker')} tone={tone('worker')} traffic={null} />
-        {RUNTIME_CONDUITS.map(({ from, to }) => {
+        {RUNTIME_CONDUITS.map(({ from, to, lane }) => {
           const start = component(from);
           const end = component(to);
           return (
@@ -538,6 +541,7 @@ export function ExplorerMap({ power, now, onSelect }: ExplorerMapProps) {
               to={node(to)}
               tone={between(from, to)}
               traffic={start === null || end === null ? null : conduitTraffic(start, end)}
+              lane={lane}
             />
           );
         })}

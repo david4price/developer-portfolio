@@ -4,7 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CardId } from './card-content.ts';
 import { ExplorerCard } from './explorer-card.tsx';
 import { ExplorerMap } from './explorer-map.tsx';
-import { componentById, componentStatus, MAP_NODES, type MapPower, mapPower } from './map-model.ts';
+import {
+  componentById,
+  componentStatus,
+  MAP_NODES,
+  type MapPower,
+  mapPower,
+  formatAge,
+  SYNC_LABELS,
+} from './map-model.ts';
 import {
   SAMPLE_SCENARIOS,
   SCENARIO_LABELS,
@@ -17,13 +25,6 @@ export const REFRESH_MS = 12_000;
 
 /** How often ages ("updated 7 s ago") and staleness are re-checked between refreshes. */
 const CLOCK_MS = 1_000;
-
-const SYNC_LABELS = { synced: 'Synced', 'out-of-sync': 'Out of sync', unknown: 'Unknown' } as const;
-
-function secondsAgo(time: string, now: number): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(time)) / 1_000));
-  return seconds < 120 ? `${seconds} s ago` : `${Math.round(seconds / 60)} min ago`;
-}
 
 export interface ExplorerTableProps {
   readonly power: MapPower;
@@ -48,9 +49,9 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
   return (
     <table className="explorer-table">
       <caption>
-        Updated {secondsAgo(snapshot.generatedAt, now)}. GitOps: {SYNC_LABELS[snapshot.sync]}.
+        Updated {formatAge(snapshot.generatedAt, now)}. GitOps: {SYNC_LABELS[snapshot.sync]}.
         {snapshot.release !== null &&
-          ` Latest release ${snapshot.release.commit}, pinned ${secondsAgo(snapshot.release.pinnedAt, now)}.`}
+          ` Latest release ${snapshot.release.commit}, pinned ${formatAge(snapshot.release.pinnedAt, now)}.`}
       </caption>
       <thead>
         <tr>
@@ -109,17 +110,30 @@ export function InfrastructureExplorer() {
   // The snapshot refreshes every REFRESH_MS (here: a new sample); the clock ticks every second,
   // so ages count up and a snapshot that stops refreshing goes stale on time.
   useEffect(() => {
-    const refresh = setInterval(() => setFetchedAt(Date.now()), REFRESH_MS);
-    const clock = setInterval(() => setNow(Date.now()), CLOCK_MS);
+    // Hidden tabs skip both, so no re-render runs unseen; returning refreshes at once (below).
+    const refresh = setInterval(() => {
+      if (!document.hidden) setFetchedAt(Date.now());
+    }, REFRESH_MS);
+    const clock = setInterval(() => {
+      if (!document.hidden) setNow(Date.now());
+    }, CLOCK_MS);
     return () => {
       clearInterval(refresh);
       clearInterval(clock);
     };
   }, []);
 
-  // Animations stop while the tab is hidden.
+  // Animations stop while the tab is hidden; coming back refreshes before the clock can tick, so
+  // a fresh snapshot never flashes as stale.
   useEffect(() => {
-    const update = () => setPaused(document.hidden);
+    const update = () => {
+      setPaused(document.hidden);
+      if (!document.hidden) {
+        const time = Date.now();
+        setFetchedAt(time);
+        setNow(time);
+      }
+    };
     update();
     document.addEventListener('visibilitychange', update);
     return () => document.removeEventListener('visibilitychange', update);

@@ -135,8 +135,9 @@ export interface ChatMessageResponse {
 
 /**
  * Infrastructure Explorer (Phase 6). A sanitized snapshot of the deployment: only the allowlisted
- * fields in `docs/architecture/security.md`, never IP addresses, node names, environment
- * variables, logs, registry paths, or other namespaces.
+ * fields in `docs/architecture/security.md` (release and traffic are its proposed additions),
+ * never IP addresses, node names, environment variables, logs, registry paths, or other
+ * namespaces.
  */
 export type InfrastructureComponentId =
   'web' | 'tunnel' | 'api' | 'worker' | 'postgres' | 'redis' | 'argocd' | 'ai';

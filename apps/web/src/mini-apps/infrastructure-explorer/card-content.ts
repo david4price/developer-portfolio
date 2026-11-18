@@ -6,8 +6,10 @@ import {
   CORE_STATE_LABELS,
   coreState,
   DELIVERY_STAGES,
+  formatAge,
   MAP_NODES,
   type MapPower,
+  SYNC_LABELS,
 } from './map-model.ts';
 
 export type DeliveryStageId = (typeof DELIVERY_STAGES)[number]['id'];
@@ -104,11 +106,6 @@ export interface CardDetails {
   readonly noFacts: string | null;
 }
 
-function ago(time: string, now: number): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(time)) / 1_000));
-  return seconds < 120 ? `${seconds} s ago` : `${Math.round(seconds / 60)} min ago`;
-}
-
 function titleOf(id: CardId): { title: string; subtitle: string } {
   if (id === 'cluster') return { title: 'K3s cluster', subtitle: 'Flux capacitor' };
   const node = MAP_NODES.find((candidate) => candidate.id === id);
@@ -121,11 +118,11 @@ function titleOf(id: CardId): { title: string; subtitle: string } {
 function facts(id: CardId, power: MapPower, now: number): CardDetails['facts'] {
   if (!power.on) return [];
   const { snapshot } = power;
-  const updated: readonly [string, string] = ['Updated', ago(snapshot.generatedAt, now)];
+  const updated: readonly [string, string] = ['Updated', formatAge(snapshot.generatedAt, now)];
   if (id === 'cluster') {
     return [
       ['State', CORE_STATE_LABELS[coreState(snapshot)]],
-      ['GitOps', snapshot.sync],
+      ['GitOps', SYNC_LABELS[snapshot.sync]],
       ['Release', snapshot.release?.commit ?? '—'],
       updated,
     ];
@@ -134,7 +131,7 @@ function facts(id: CardId, power: MapPower, now: number): CardDetails['facts'] {
     if (id !== 'pin' || snapshot.release === null) return [];
     return [
       ['Release', snapshot.release.commit],
-      ['Pinned', ago(snapshot.release.pinnedAt, now)],
+      ['Pinned', formatAge(snapshot.release.pinnedAt, now)],
       updated,
     ];
   }

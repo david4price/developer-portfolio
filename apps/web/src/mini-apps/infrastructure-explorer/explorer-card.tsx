@@ -6,9 +6,6 @@ import { type CardDetails, type CardId, cardDetails } from './card-content.ts';
 import { MapPiece } from './explorer-map.tsx';
 import type { MapPower } from './map-model.ts';
 
-/** How long the front shows before the card flips to its details on opening. */
-const FLIP_DELAY_MS = 450;
-
 /** The back of a card: what the piece is, its live facts, and where to read more. */
 export function CardBack({ details, titleId }: { details: CardDetails; titleId?: string }) {
   return (
@@ -55,7 +52,7 @@ export interface ExplorerCardProps {
 }
 
 /**
- * A pop-up card for one piece of the map. It opens on its front (the piece close up), then flips
+ * A pop-up card for one piece of the map. It opens with a flip from its front (the piece close up)
  * to its details; a button flips it back. Only the visible face is interactive.
  */
 export function ExplorerCard({ id, power, now, onClose }: ExplorerCardProps) {
@@ -63,16 +60,16 @@ export function ExplorerCard({ id, power, now, onClose }: ExplorerCardProps) {
   const frontButton = useRef<HTMLButtonElement>(null);
   const backButton = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const [flipped, setFlipped] = useState(false);
+  // Cards open on their details, so focus lands there once and never jumps; the flip from the
+  // front plays as the opening animation (CSS), and the buttons flip it by hand afterwards.
+  const [flipped, setFlipped] = useState(true);
 
   useEffect(() => {
     const element = dialog.current;
     if (id === null || element === null) return;
+    setFlipped(true);
     if (!element.open) element.showModal();
-    setFlipped(false);
-    const timer = setTimeout(() => setFlipped(true), FLIP_DELAY_MS);
     return () => {
-      clearTimeout(timer);
       if (element.open) element.close();
     };
   }, [id]);
