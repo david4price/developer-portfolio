@@ -39,27 +39,27 @@ export interface MapNode {
 
 /** Fixed layout: the deployment's shape is known; only health and traffic come from data. */
 export const MAP_NODES: readonly MapNode[] = [
-  { id: 'web', label: 'Website', detail: 'Cloudflare Pages', x: 110, y: 230 },
-  { id: 'tunnel', label: 'Tunnel', detail: 'Cloudflare', x: 110, y: 380 },
-  { id: 'api', label: 'API', detail: 'NestJS', x: 330, y: 380 },
-  { id: 'worker', label: 'Worker', detail: 'BullMQ', x: 770, y: 380 },
-  { id: 'ai', label: 'AI model', detail: 'Home server GPU', x: 330, y: 530 },
-  { id: 'postgres', label: 'PostgreSQL', detail: 'Database', x: 550, y: 530 },
-  { id: 'redis', label: 'Redis', detail: 'Sessions and queues', x: 770, y: 530 },
-  { id: 'argocd', label: 'Argo CD', detail: 'GitOps', x: 770, y: 80 },
+  { id: 'web', label: 'Website', detail: 'Cloudflare Pages', x: 130, y: 250 },
+  { id: 'tunnel', label: 'Tunnel', detail: 'Cloudflare', x: 130, y: 400 },
+  { id: 'api', label: 'API', detail: 'NestJS', x: 350, y: 400 },
+  { id: 'worker', label: 'Worker', detail: 'BullMQ', x: 790, y: 400 },
+  { id: 'ai', label: 'AI model', detail: 'Home server GPU', x: 350, y: 590 },
+  { id: 'postgres', label: 'PostgreSQL', detail: 'Database', x: 570, y: 590 },
+  { id: 'redis', label: 'Redis', detail: 'Sessions and queues', x: 790, y: 590 },
+  { id: 'argocd', label: 'Argo CD', detail: 'GitOps', x: 790, y: 100 },
 ];
 
 /** The delivery path's stages before Argo CD; they have no health of their own. */
 export const DELIVERY_STAGES = [
-  { id: 'actions', label: 'GitHub Actions', x: 110, y: 80 },
-  { id: 'ghcr', label: 'Container registry', x: 330, y: 80 },
-  { id: 'pin', label: 'images.yaml pin', x: 550, y: 80 },
+  { id: 'actions', label: 'GitHub Actions', x: 130, y: 100 },
+  { id: 'ghcr', label: 'Container registry', x: 350, y: 100 },
+  { id: 'pin', label: 'images.yaml pin', x: 570, y: 100 },
 ] as const;
 
 /** Where the build, deploy, and runtime arms of the Y-shaped core meet. */
-export const CORE = { x: 550, y: 230 } as const;
+export const CORE = { x: 570, y: 250 } as const;
 /** Where the core's runtime arm reaches the cluster workloads. */
-export const CLUSTER_HUB = { x: 550, y: 380 } as const;
+export const CLUSTER_HUB = { x: 570, y: 400 } as const;
 
 export interface RuntimeConduit {
   readonly from: InfrastructureComponentId;
@@ -173,4 +173,43 @@ export function componentHealthText(component: InfrastructureComponent): string 
 export function componentStatus(component: InfrastructureComponent): string {
   const health = componentHealthText(component);
   return component.failure === null ? health : `${health}, ${FAILURE_LABELS[component.failure]}`;
+}
+
+/** Each building, seen from above, has this many windows (columns × rows). */
+export const WINDOW_COLUMNS = 8;
+export const WINDOW_ROWS = 3;
+
+/**
+ * `lit`: running. `flicker`: lit but unsteady (degraded). `waking`: about to light while a rollout
+ * brings replicas up. `dark`: nothing running there, or no data.
+ */
+export type WindowState = 'lit' | 'flicker' | 'waking' | 'dark';
+
+/**
+ * Which windows are lit, from the component's health and ready replicas: all of them when every
+ * replica is ready, a share of them when only some are, a dimmer and flickering share when
+ * degraded, none when down, unknown, or without data. Windows light in a fixed scattered order,
+ * so the same data always draws the same building.
+ */
+export function windowStates(component: InfrastructureComponent | null): readonly WindowState[] {
+  const total = WINDOW_COLUMNS * WINDOW_ROWS;
+  const share =
+    component === null || component.replicas === null
+      ? 1
+      : component.replicas.desired > 0
+        ? component.replicas.ready / component.replicas.desired
+        : 0;
+  const health = component?.health ?? 'unknown';
+  const litCount =
+    health === 'healthy' || health === 'progressing'
+      ? Math.round(total * share)
+      : health === 'degraded'
+        ? Math.round(total * share * 0.6)
+        : 0;
+  return Array.from({ length: total }, (_, index): WindowState => {
+    // 11 and 24 share no factor, so this visits every window once, in a scattered order.
+    const rank = (index * 11) % total;
+    if (rank < litCount) return health === 'degraded' && rank % 3 === 0 ? 'flicker' : 'lit';
+    return health === 'progressing' ? 'waking' : 'dark';
+  });
 }

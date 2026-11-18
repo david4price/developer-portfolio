@@ -14,6 +14,8 @@ import {
   recentRelease,
   rolloutInProgress,
   STALE_AFTER_MS,
+  type WindowState,
+  windowStates,
   worseHealth,
 } from '../src/mini-apps/infrastructure-explorer/map-model.js';
 import {
@@ -114,6 +116,32 @@ describe('map model', () => {
       conduitTraffic(component({ traffic: 'busy' }), component({ health: 'down', traffic: null })),
       null,
     );
+  });
+
+  it('lights a building by what runs inside: all, a ready share, flickering, or none', () => {
+    const count = (states: readonly WindowState[], state: WindowState) =>
+      states.filter((value) => value === state).length;
+    const healthy = windowStates(component({}));
+    assert.equal(healthy.length, 24);
+    assert.equal(count(healthy, 'lit'), 24);
+
+    const halfReady = { desired: 2, available: 1, ready: 1 };
+    const rolling = windowStates(component({ health: 'progressing', replicas: halfReady }));
+    assert.equal(count(rolling, 'lit'), 12);
+    assert.equal(count(rolling, 'waking'), 12, 'the rest are waking up');
+
+    const degraded = windowStates(component({ health: 'degraded' }));
+    assert.ok(count(degraded, 'flicker') > 0);
+    assert.ok(count(degraded, 'lit') + count(degraded, 'flicker') < 24);
+
+    for (const dark of [
+      windowStates(component({ health: 'down' })),
+      windowStates(component({ health: 'unknown' })),
+      windowStates(null),
+    ]) {
+      assert.equal(count(dark, 'dark'), 24);
+    }
+    assert.deepEqual(windowStates(component({})), healthy, 'the same data draws the same building');
   });
 
   it('describes status in text, not colour alone', () => {

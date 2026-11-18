@@ -96,7 +96,8 @@ export function InfrastructureExplorer() {
       aria-label="Infrastructure map"
     >
       <p className="explorer-note">
-        Prototype with sample data: this map is not connected to the live cluster yet.
+        Prototype with sample data: this map is not connected to the live cluster yet. Lit windows
+        show running replicas, sparks show traffic, and a red beacon marks a component that is down.
       </p>
       <fieldset className="explorer-scenarios">
         <legend>Sample scenario</legend>

@@ -654,21 +654,26 @@ main {
   }
 }
 
-/* Infrastructure Explorer (P6-04): a dark "screen" in both themes, with neon conduits. Colours
-   and animations come only from classes set by the snapshot; no inline styles (CSP). */
+/* Infrastructure Explorer (P6-04): a blueprint schematic of a power grid, the same in both
+   themes. Buildings seen from above light their windows by what runs inside; sparks run along the
+   wires. Colours and animations come only from classes set by the snapshot; no inline styles. */
 .explorer {
-  --explorer-panel: #0b0f1a;
-  --explorer-node: #111827;
-  --explorer-text: #e5e7eb;
-  --explorer-muted: #9ca3af;
-  --explorer-healthy: #34d399;
-  --explorer-progressing: #fbbf24;
-  --explorer-degraded: #fb923c;
-  --explorer-down: #f87171;
-  --explorer-unknown: #94a3b8;
-  --explorer-delivery: #60a5fa;
-  --explorer-off: #374151;
-  --explorer-core: #e0f2fe;
+  --bp-paper: #071a33;
+  --bp-grid-minor: rgb(120 175 255 / 0.07);
+  --bp-grid-major: rgb(120 175 255 / 0.16);
+  --bp-ink: #a9cdf5;
+  --bp-text: #dcebff;
+  --bp-muted: #7f9fc4;
+  --bp-roof: #0c2546;
+  --bp-window-dark: #0a1d36;
+  --bp-window-lit: #ffd677;
+  --bp-healthy: #6fe3ff;
+  --bp-progressing: #ffd166;
+  --bp-degraded: #ff9f43;
+  --bp-down: #ff5c5c;
+  --bp-unknown: #6d819c;
+  --bp-delivery: #b8a6ff;
+  --bp-off: #23395a;
   display: grid;
   gap: var(--space);
   margin-top: var(--space);
@@ -698,94 +703,149 @@ main {
 /* The map keeps a readable size and scrolls inside its frame on narrow screens. */
 .explorer-frame {
   overflow-x: auto;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 
 .explorer-map {
   display: block;
   width: 100%;
-  min-width: 640px;
+  min-width: 680px;
   height: auto;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.explorer-map text {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .explorer-map__panel {
-  fill: var(--explorer-panel);
+  fill: var(--bp-paper);
+}
+
+.explorer-map__grid-minor,
+.explorer-map__grid-major {
+  fill: none;
+  stroke-width: 1;
+}
+
+.explorer-map__grid-minor {
+  stroke: var(--bp-grid-minor);
+}
+
+.explorer-map__grid-major {
+  stroke: var(--bp-grid-major);
+}
+
+.explorer-map__border {
+  fill: none;
+  stroke: var(--bp-ink);
+  stroke-width: 1;
+  opacity: 0.5;
 }
 
 .explorer-conduit--healthy,
 .explorer-node--healthy {
-  --tone: var(--explorer-healthy);
+  --tone: var(--bp-healthy);
 }
 
 .explorer-conduit--progressing,
 .explorer-node--progressing {
-  --tone: var(--explorer-progressing);
+  --tone: var(--bp-progressing);
 }
 
 .explorer-conduit--degraded,
 .explorer-node--degraded {
-  --tone: var(--explorer-degraded);
+  --tone: var(--bp-degraded);
 }
 
 .explorer-conduit--down,
 .explorer-node--down {
-  --tone: var(--explorer-down);
+  --tone: var(--bp-down);
 }
 
 .explorer-conduit--unknown,
 .explorer-node--unknown {
-  --tone: var(--explorer-unknown);
+  --tone: var(--bp-unknown);
 }
 
 .explorer-conduit--delivery,
 .explorer-node--delivery {
-  --tone: var(--explorer-delivery);
+  --tone: var(--bp-delivery);
 }
 
 .explorer-conduit--off,
 .explorer-node--off {
-  --tone: var(--explorer-off);
+  --tone: var(--bp-off);
 }
 
 .explorer-conduit path {
   fill: none;
-  stroke: var(--tone);
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .explorer-conduit__tube {
-  stroke-width: 6;
-  opacity: 0.35;
+  stroke: var(--tone);
+  stroke-width: 2;
+  opacity: 0.7;
 }
 
-.explorer-conduit__pulse {
-  stroke-width: 3;
-  stroke-dasharray: 10 30;
+/* No current: a broken line to anything that is down, a dotted one where nothing is known. */
+.explorer-conduit--down .explorer-conduit__tube {
+  stroke-dasharray: 8 6;
+}
+
+.explorer-conduit--unknown .explorer-conduit__tube {
+  stroke-dasharray: 2 5;
+}
+
+.explorer-conduit__joint {
+  fill: var(--tone);
+}
+
+/* Current: a soft glow of charge and a bright spark riding on it. */
+.explorer-conduit__pulse,
+.explorer-conduit__spark {
   animation: explorer-flow linear infinite;
 }
 
+.explorer-conduit__pulse {
+  stroke: var(--tone);
+  stroke-width: 5;
+  stroke-dasharray: 18 102;
+  opacity: 0.55;
+}
+
+.explorer-conduit__spark {
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-dasharray: 5 115;
+  stroke-dashoffset: -7;
+}
+
 .explorer-conduit__pulse--idle {
-  animation-duration: 4s;
+  animation-duration: 5s;
 }
 
 .explorer-conduit__pulse--low {
-  animation-duration: 2s;
+  animation-duration: 2.4s;
 }
 
 .explorer-conduit__pulse--busy {
-  animation-duration: 0.8s;
+  animation-duration: 0.9s;
 }
 
 .explorer-conduit__burst {
-  stroke-width: 4;
-  stroke-dasharray: 28 600;
-  animation: explorer-burst 3s ease-in infinite;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-dasharray: 26 600;
+  animation: explorer-burst 2.6s ease-in infinite;
 }
 
 @keyframes explorer-flow {
   from {
-    stroke-dashoffset: 40;
+    stroke-dashoffset: 120;
   }
 
   to {
@@ -795,7 +855,7 @@ main {
 
 @keyframes explorer-burst {
   from {
-    stroke-dashoffset: 628;
+    stroke-dashoffset: 626;
   }
 
   to {
@@ -803,64 +863,150 @@ main {
   }
 }
 
-.explorer-node rect {
-  fill: var(--explorer-node);
+.explorer-node__footprint {
+  fill: var(--bp-paper);
   stroke: var(--tone);
   stroke-width: 2;
 }
 
+.explorer-node__roof {
+  fill: var(--bp-roof);
+  stroke: var(--tone);
+  stroke-width: 1;
+  opacity: 0.9;
+}
+
+.explorer-node__plate {
+  fill: var(--bp-paper);
+}
+
+.explorer-node--unknown .explorer-node__footprint {
+  stroke-dasharray: 4 4;
+}
+
+.explorer-window--dark {
+  fill: var(--bp-window-dark);
+  stroke: var(--bp-off);
+  stroke-width: 0.5;
+}
+
+.explorer-window--lit,
+.explorer-window--flicker {
+  fill: var(--bp-window-lit);
+}
+
+.explorer-node--delivery .explorer-window--lit {
+  fill: var(--bp-delivery);
+  opacity: 0.75;
+}
+
+.explorer-window--flicker {
+  animation: explorer-window-flicker 2.2s steps(1, end) infinite;
+}
+
+.explorer-window--waking {
+  fill: var(--bp-window-lit);
+  animation: explorer-window-waking 1.6s ease-in-out infinite;
+}
+
+@keyframes explorer-window-flicker {
+  0%,
+  55% {
+    opacity: 1;
+  }
+
+  60% {
+    opacity: 0.15;
+  }
+
+  70% {
+    opacity: 0.8;
+  }
+
+  80% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes explorer-window-waking {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.explorer-node__beacon {
+  fill: var(--bp-down);
+  animation: explorer-beacon 1s steps(1, end) infinite;
+}
+
+@keyframes explorer-beacon {
+  50% {
+    opacity: 0.2;
+  }
+}
+
 .explorer-node text {
-  fill: var(--explorer-text);
+  fill: var(--bp-text);
   text-anchor: middle;
 }
 
 .explorer-node__label {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .explorer-node text.explorer-node__detail {
-  font-size: 11px;
-  fill: var(--explorer-muted);
+  fill: var(--bp-muted);
+  font-size: 10px;
 }
 
 .explorer-node__status {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .explorer-node text.explorer-node__note {
-  font-size: 11px;
+  font-size: 10px;
   fill: var(--tone);
 }
 
+.explorer-core__yard {
+  fill: var(--bp-paper);
+  stroke: var(--explorer-core-ink, var(--bp-ink));
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
 .explorer-core__ring {
-  fill: var(--explorer-panel);
-  stroke: var(--explorer-core);
-  stroke-width: 3;
-}
-
-.explorer-core__y {
   fill: none;
-  stroke: var(--explorer-core);
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke: var(--explorer-core-ink, var(--bp-ink));
+  stroke-width: 2.5;
 }
 
-.explorer-core__heart {
-  fill: var(--explorer-core);
+.explorer-core__label {
+  fill: var(--bp-muted);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.explorer-core--steady {
+  --explorer-core-ink: var(--bp-healthy);
 }
 
 .explorer-core--rollout {
-  --explorer-core: var(--explorer-progressing);
-  animation: explorer-flicker 1.4s steps(2, jump-none) infinite;
+  --explorer-core-ink: var(--bp-progressing);
+  animation: explorer-hum 1.3s steps(2, jump-none) infinite;
 }
 
 .explorer-core--off {
-  --explorer-core: var(--explorer-off);
+  --explorer-core-ink: var(--bp-off);
 }
 
-@keyframes explorer-flicker {
+@keyframes explorer-hum {
   0%,
   60% {
     opacity: 1;
@@ -870,50 +1016,75 @@ main {
     opacity: 0.35;
   }
 
-  80% {
-    opacity: 0.9;
+  85% {
+    opacity: 0.85;
   }
+}
 
-  90% {
-    opacity: 0.5;
-  }
+.explorer-title rect {
+  fill: var(--bp-paper);
+  stroke: var(--bp-ink);
+  stroke-width: 1;
+}
+
+.explorer-title line {
+  stroke: var(--bp-ink);
+  stroke-width: 0.5;
+  opacity: 0.6;
+}
+
+.explorer-title__name {
+  fill: var(--bp-muted);
+  font-size: 10px;
+}
+
+.explorer-title__value {
+  fill: var(--bp-text);
+  font-size: 11px;
 }
 
 .explorer-map__offline rect {
-  fill: var(--explorer-panel);
-  stroke: var(--explorer-off);
-  stroke-width: 2;
+  fill: var(--bp-paper);
+  stroke: var(--bp-down);
+  stroke-width: 1.5;
 }
 
 .explorer-map__offline text {
-  fill: var(--explorer-text);
+  fill: var(--bp-text);
   text-anchor: middle;
 }
 
 .explorer-map__offline-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 
 .explorer-map__offline-reason {
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .explorer[data-paused] .explorer-map * {
   animation-play-state: paused;
 }
 
-/* Reduced motion: the same colours and labels, no pulses, bursts, or flicker. */
+/* Reduced motion: the same lights, colours, and labels, with no sparks, bursts, or flicker. */
 @media (prefers-reduced-motion: reduce) {
   .explorer-conduit__pulse,
+  .explorer-conduit__spark,
   .explorer-conduit__burst {
     display: none;
   }
 
-  .explorer-core--rollout {
+  .explorer-core--rollout,
+  .explorer-window--flicker,
+  .explorer-window--waking,
+  .explorer-node__beacon {
     animation: none;
+  }
+
+  .explorer-window--waking {
+    opacity: 0.4;
   }
 }
 
