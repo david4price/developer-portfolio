@@ -79,15 +79,38 @@ expect_failure 'api.infrastructure.apiServerEgress.cidr and .port are required' 
 expect_failure 'postgres.auth.existingSecret is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.auth.existingSecret=
 
-# The reader Role may grant only get/list on the three kinds the serializer reads.
+# The reader Role must grant exactly get/list on the three kinds the serializer reads, bound to
+# the API's account alone: an exact match, so any added verb, resource, or subject fails.
 echo "== infrastructure reader Role"
+expected_rules="rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list]
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [get, list]"
+expected_subjects="subjects:
+  - kind: ServiceAccount
+    name: portfolio-api
+    namespace: portfolio"
+# section <kind> <key>: the lines from "<key>:" to the end of that kind's document.
+section() {
+  awk -v kind="kind: $1" -v key="$2:" '
+    /^---/ { in_doc = 0; in_key = 0 }
+    $0 == kind { in_doc = 1 }
+    in_doc && $0 == key { in_key = 1 }
+    in_key { print }
+  ' <<<"$reader"
+}
 if ! reader="$(render -f "$chart/ci/infrastructure-values.yaml" -s templates/api-rbac.yaml 2>&1)"; then
   fail "infrastructure RBAC doesn't render: $reader"
 else
-  role="$(awk '/^kind: Role$/,/^---/' <<<"$reader")"
-  if grep -qE 'secrets|configmaps|pods/log|pods/exec|create|update|patch|delete|watch|\*' <<<"$role"; then
-    fail "the infrastructure reader Role grants more than get/list on deployments, statefulsets, pods"
-  fi
+  [[ "$(section Role rules)" == "$expected_rules" ]] ||
+    fail "the reader Role must grant exactly get/list on deployments, statefulsets, pods"
+  [[ "$(section RoleBinding subjects)" == "$expected_subjects" ]] ||
+    fail "the reader RoleBinding must bind only the API's ServiceAccount"
+  [[ "$(grep -cE '^kind: (Role|RoleBinding|ClusterRole|ClusterRoleBinding)$' <<<"$reader")" == 2 ]] ||
+    fail "the reader must be exactly one Role and one RoleBinding (no cluster-wide RBAC)"
 fi
 if render -f "$chart/ci/digests-values.yaml" | grep -qE '^kind: (ServiceAccount|Role|RoleBinding)$'; then
   fail "the chart renders RBAC with the infrastructure view off"

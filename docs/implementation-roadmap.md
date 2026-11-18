@@ -195,7 +195,7 @@ Phase 2 lacks only the owner's content (P2-12).
 **Next up, in order**
 
 1. 🔒 **P6-01:** the read-only ServiceAccount and Role (get/list on deployments, statefulsets,
-   pods in `portfolio`), `NODE_EXTRA_CA_CERTS`, an egress NetworkPolicy to the API server, and
+   pods in `portfolio`), an egress NetworkPolicy to the API server, and
    `INFRASTRUCTURE_SOURCE=kubernetes`; then the live map (P6-04) and 🔒 P6-03 (Argo CD token).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.

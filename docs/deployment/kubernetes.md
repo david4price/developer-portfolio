@@ -298,9 +298,11 @@ Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server 
 ### Infrastructure Explorer reader (P6-01, approval required)
 
 `api.infrastructure.enabled` (production: on) gives the API its own ServiceAccount with a
-namespaced, read-only Role (get/list on deployments, statefulsets, pods), mounts its token, sets
-`INFRASTRUCTURE_SOURCE=kubernetes` and `NODE_EXTRA_CA_CERTS` (the cluster CA), and allows the API's
-egress to the API server (`apiServerEgress`: the node's private range on `6443`).
+namespaced, read-only Role (get/list on deployments, statefulsets, pods), mounts its token (the
+reader trusts the mounted cluster CA for its own requests only), sets
+`INFRASTRUCTURE_SOURCE=kubernetes`, and allows the API's egress to the API server
+(`apiServerEgress`: the node's private range on `6443`). The account, Role, and binding are pruned
+last, so a rollback moves the API off them before they go.
 
 - **Order matters.** The `portfolio` AppProject must allow ServiceAccount, Role, and RoleBinding
   before Argo CD syncs the chart, or the whole sync is rejected. Apply the project first:

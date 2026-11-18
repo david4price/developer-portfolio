@@ -105,8 +105,9 @@ The public surface is a static site and a small REST API. The main risks:
   the `portfolio` namespace (PostgreSQL is a StatefulSet; ReplicaSets aren't needed), bound to the
   API's own ServiceAccount (`templates/api-rbac.yaml`, rendered only with
   `api.infrastructure.enabled`). Only the API pod mounts a token; every other pod keeps
-  `automountServiceAccountToken: false`. `pnpm helm:check` fails if the Role grants anything
-  else. The Argo CD project allows ServiceAccount, Role, and RoleBinding in the namespace, and
+  `automountServiceAccountToken: false`. `pnpm helm:check` compares the rendered Role and
+  RoleBinding to the exact expected rules and subject, so any added verb, resource, or subject
+  fails CI. The reader trusts the cluster CA for its own requests only (not process-wide). The Argo CD project allows ServiceAccount, Role, and RoleBinding in the namespace, and
   still no cluster-scoped kinds. No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
 - Argo CD access uses a read-only project role token scoped to the portfolio Application.
 - Responses go through an explicit allowlist serializer

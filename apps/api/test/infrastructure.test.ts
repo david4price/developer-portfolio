@@ -520,7 +520,7 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
         'invalid_response',
         1_000,
       ],
-      [{ status: 302, body: '', location: 'http://example.invalid/' }, 'network', undefined],
+      [{ status: 302, body: '', location: 'http://example.invalid/' }, 'status', undefined],
     ];
     for (const [reply, reason, limit] of cases) {
       respond = () => reply;
