@@ -10,9 +10,12 @@ import {
   ExplorerTable,
   InfrastructureExplorer,
   livePower,
+  NOT_CONNECTED,
+  receiveLive,
 } from '../src/mini-apps/infrastructure-explorer/infrastructure-explorer.js';
 import {
   fetchLiveSnapshot,
+  type LiveResult,
   parseSnapshot,
   withVisitorWebsite,
 } from '../src/mini-apps/infrastructure-explorer/live-snapshot.js';
@@ -476,7 +479,7 @@ describe('live snapshot', () => {
         ...value,
         components: [{ ...components[0], replicas: { desired: -1, available: 0, ready: 0 } }],
       },
-      { ...value, components: [{ ...components[0], version: 'x'.repeat(65) }] },
+      { ...value, components: [{ ...components[0], version: 'x'.repeat(129) }] },
       { ...value, components: [{ ...components[0], traffic: 'heavy' }] },
     ];
     for (const candidate of bad)
@@ -543,37 +546,55 @@ describe('live snapshot', () => {
 });
 
 describe('livePower', () => {
-  const good = () => {
+  const answer = (generatedAt: number): LiveResult => {
     const snapshot = sampleSnapshot('steady', NOW);
     assert.ok(snapshot);
-    return { snapshot, receivedAt: NOW - 1_000 };
+    return {
+      kind: 'snapshot',
+      snapshot: { ...snapshot, generatedAt: new Date(generatedAt).toISOString() },
+    };
   };
 
-  it('connects first, then shows the last good snapshot until it goes stale', () => {
-    assert.deepEqual(livePower({ latest: null, good: null }, NOW), {
-      on: false,
-      reason: 'connecting',
-    });
+  it('connects first, then keeps the last good snapshot through a failed refresh', () => {
+    assert.deepEqual(livePower(NOT_CONNECTED, NOW), { on: false, reason: 'connecting' });
     assert.deepEqual(livePower({ latest: { kind: 'unavailable' }, good: null }, NOW), {
       on: false,
       reason: 'unavailable',
     });
-    const kept = livePower({ latest: { kind: 'unavailable' }, good: good() }, NOW);
-    assert.equal(kept.on, true, 'one failed refresh keeps the last good snapshot');
-    assert.deepEqual(
-      livePower({ latest: { kind: 'unavailable' }, good: good() }, NOW + STALE_AFTER_MS),
-      {
-        on: false,
-        reason: 'stale',
-      },
-    );
+    const first = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
+    const failed = receiveLive(first, { kind: 'unavailable' }, NOW + 12_000);
+    assert.equal(livePower(failed, NOW + 13_000).on, true);
+    assert.deepEqual(livePower(failed, NOW + STALE_AFTER_MS + 1), { on: false, reason: 'stale' });
+  });
+
+  it('goes stale when the server keeps serving one snapshot, judged on the visitor clock alone', () => {
+    // The visitor's clock is far ahead of the server's: generatedAt looks old, but new snapshots
+    // keep arriving, so the map stays on.
+    let state = receiveLive(NOT_CONNECTED, answer(NOW - 10 * 60_000), NOW);
+    state = receiveLive(state, answer(NOW - 10 * 60_000 + 12_000), NOW + 12_000);
+    assert.equal(livePower(state, NOW + 70_000).on, true, 'new snapshots keep it fresh');
+    // The server is stuck: the same generatedAt for over a minute powers it down.
+    let stuck = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
+    for (const t of [12_000, 24_000, 36_000, 48_000, 60_000]) {
+      stuck = receiveLive(stuck, answer(NOW), NOW + t);
+    }
+    assert.deepEqual(livePower(stuck, NOW + 61_000), { on: false, reason: 'stale' });
+  });
+
+  it('fills in the website once, on arrival', () => {
+    const state = receiveLive(NOT_CONNECTED, answer(NOW), NOW);
+    assert.ok(state.good);
+    assert.equal(componentById(state.good.snapshot, 'web').health, 'healthy');
   });
 
   it('powers down as soon as the API says the view is off', () => {
-    assert.deepEqual(livePower({ latest: { kind: 'disabled' }, good: good() }, NOW), {
-      on: false,
-      reason: 'disabled',
-    });
+    const state = receiveLive(
+      receiveLive(NOT_CONNECTED, answer(NOW), NOW),
+      { kind: 'disabled' },
+      NOW,
+    );
+    assert.deepEqual(livePower(state, NOW), { on: false, reason: 'disabled' });
+    assert.equal(state.good, null);
   });
 
   it('says why it is off, on the map and in the text view', () => {
@@ -593,7 +614,7 @@ describe('livePower', () => {
 
 describe('InfrastructureExplorer without an API', () => {
   it('opens on the simulation, with the live switch off and disabled', () => {
-    const html = renderToStaticMarkup(createElement(InfrastructureExplorer));
+    const html = renderToStaticMarkup(createElement(InfrastructureExplorer, { liveUrl: null }));
     assert.match(html, /role="switch"[^>]*aria-checked="false"[^>]*disabled=""/);
     assert.match(html, /Not available on this build/);
     assert.match(html, /Simulated scenario/);

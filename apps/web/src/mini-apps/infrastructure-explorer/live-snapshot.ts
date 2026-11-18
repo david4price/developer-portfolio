@@ -52,7 +52,8 @@ function parseComponent(value: unknown): InfrastructureComponent | undefined {
     !oneOf<InfrastructureComponent['id']>(COMPONENT_IDS, id) ||
     !oneOf<InfrastructureComponent['health']>(HEALTH, health) ||
     replicas === undefined ||
-    !(version === null || shortText(version, 64)) ||
+    // The API's own bound: a tag of at most 128 characters, or a short digest.
+    !(version === null || shortText(version, 128)) ||
     !(traffic === null || oneOf(TRAFFIC, traffic)) ||
     !(failure === null || oneOf(FAILURES, failure))
   ) {
