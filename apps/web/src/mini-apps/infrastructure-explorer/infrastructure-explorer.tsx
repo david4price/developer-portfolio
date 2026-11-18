@@ -59,7 +59,7 @@ export function ExplorerTable({ power, now, onSelect }: ExplorerTableProps) {
       <p id={summaryId} className="explorer-table__summary">
         Updated {formatAge(snapshot.generatedAt, now)}. GitOps: {SYNC_LABELS[snapshot.sync]}.
         {snapshot.release !== null &&
-          ` Latest release ${snapshot.release.commit}, pinned ${formatAge(snapshot.release.pinnedAt, now)}.`}
+          ` GitOps revision ${snapshot.release.commit}, deployed ${formatAge(snapshot.release.pinnedAt, now)}.`}
       </p>
       <div className="explorer-table-frame">
         <table

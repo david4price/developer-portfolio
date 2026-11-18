@@ -1,0 +1,15 @@
+# CI only. No live credential, server, or account is needed to render the optional source.
+api:
+  image:
+    tag: ci
+  infrastructure:
+    enabled: true
+    apiServerEgress:
+      cidr: 192.0.2.0/24
+      port: 6443
+    argocd:
+      enabled: true
+      existingSecret: portfolio-argocd-reader
+worker:
+  image:
+    tag: ci

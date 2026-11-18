@@ -109,6 +109,21 @@ can't be read the last snapshot is served as it was, or `503 infrastructure_unav
 the first one; each failed read is logged as a warning with its reason and status only. Locally,
 leave it disabled.
 
+The optional P6-03 Argo CD source runs alongside that Kubernetes reader. Set `ARGOCD_ENABLED=true`
+and all of `ARGOCD_SERVER_URL` (an HTTPS origin), `ARGOCD_APPLICATION`, `ARGOCD_PROJECT`,
+`ARGOCD_TOKEN_FILE`, and `ARGOCD_CA_FILE` (absolute paths to mounted files). It requires the
+Kubernetes infrastructure source; keep it off for normal local/Compose development. No Argo CD
+account is needed to clone, build, or test this project. The token and CA are reread on refresh,
+TLS trust is confined to this reader, redirects are refused, and reads share the snapshot's 5 s
+deadline and 12 s cache. Argo CD failure leaves current workload data available but sets sync to
+`unknown`, release to `null`, and the Argo CD component to `unknown`. A successful read marks
+that component reachable (`healthy`); this is not the Application's aggregate health.
+
+`release` describes the last successfully deployed **GitOps revision**, not the API source or
+build commit. Its `commit` is seven hex characters; the existing `pinnedAt` field carries Argo CD's
+deployment time. The comparison target is never reported as already deployed. See
+[token provisioning and rotation](kubernetes.md#argo-cd-explorer-token-p6-03).
+
 Messages are screened before they reach the model: an injection attempt gets
 `422 message_rejected` and is not stored
 ([Message Screening](../architecture/ai-integration.md#message-screening-confirmed-p5-07)).

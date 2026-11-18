@@ -110,7 +110,16 @@ The public surface is a static site and a small REST API. The main risks:
   renders a ClusterRole or ClusterRoleBinding, so any added verb, resource, subject, or wider
   binding fails CI. The reader trusts the cluster CA for its own requests only (not process-wide). The Argo CD project allows ServiceAccount, Role, and RoleBinding in the namespace, and
   still no cluster-scoped kinds. No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
-- Argo CD access uses a read-only project role token scoped to the portfolio Application.
+- **Confirmed (P6-03):** Argo CD access uses an expiring project-role token with exactly
+  `applications, get, portfolio/portfolio`. Live permission probes deny sync, update, delete,
+  override, restart, logs, exec, and other Applications/projects. Argo CD implicitly permits a
+  project-role token to read its own project metadata. The token and server CA are encrypted in
+  a SealedSecret and mounted read-only into the API alone (not environment variables). Only the
+  API gets egress to the selected Argo CD server pods in its namespace, on TCP 8080. Requests
+  verify that CA per reader, refuse redirects, cap replies at 512 KiB, check the Application name
+  and project, and retain only sync plus a short deployed GitOps revision and deployment time.
+  Argo CD failures yield unknown deployment facts without hiding fresh workload data. Live
+  credential/adapter checks passed; production API activation awaits this change's rollout.
 - Responses go through an explicit allowlist serializer
   (`apps/api/src/modules/infrastructure/snapshot-serializer.ts`): raw objects are parsed with
   schemas that name only the needed fields, so every other key is dropped, and objects from other
@@ -124,11 +133,10 @@ The public surface is a static site and a small REST API. The main risks:
   - rollout progress
   - a coarse failure category
   - the last-updated time
-  - **Proposed additions** (already in the `InfrastructureSnapshot` type in
-    `@portfolio/shared-types`, filled with sample data by the P6-04 prototype; the serializer
-    emits `null` for both until their sources exist, and adds them to its leak tests then):
-    - the latest release: short commit SHA and the time it was pinned in `images.yaml` (from
-      Argo CD, P6-03)
+  - the last deployed GitOps revision: short commit SHA and deployment time from Argo CD
+    history (P6-03); never the pending comparison target or raw Application object
+  - **Proposed addition** (already in the `InfrastructureSnapshot` type and filled with sample
+    data in the P6-04 prototype; the API emits `null` until its source exists):
     - a bucketed request rate per component (`idle`, `low`, `busy`; from P7-01 metrics, never
       raw counts or anything per client)
 - Results are cached for 12 s, concurrent requests share one read, and a failed read is not

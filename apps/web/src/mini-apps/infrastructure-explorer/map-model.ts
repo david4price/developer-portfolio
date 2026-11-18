@@ -12,7 +12,7 @@ import type {
  */
 export const STALE_AFTER_MS = 60_000;
 
-/** A release pinned this recently sends a burst along the delivery path. */
+/** A GitOps revision deployed this recently sends a burst along the delivery path. */
 export const RECENT_RELEASE_MS = 15 * 60_000;
 
 export type MapPower =
@@ -343,7 +343,7 @@ export const CORE_STATE_LABELS: Readonly<Record<CoreState, string>> = {
   waiting: 'Waiting to sync',
 };
 
-/** A release pinned recently enough to animate the delivery path. */
+/** A GitOps revision deployed recently enough to animate the delivery path. */
 export function recentRelease(snapshot: InfrastructureSnapshot, now: number): boolean {
   if (snapshot.release === null) return false;
   const pinnedAt = Date.parse(snapshot.release.pinnedAt);

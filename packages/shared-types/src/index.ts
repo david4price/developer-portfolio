@@ -180,8 +180,9 @@ export interface InfrastructureSnapshot {
   /** Argo CD sync status of the portfolio Application. */
   readonly sync: InfrastructureSyncStatus;
   /**
-   * The latest release pinned in `images.yaml`: short commit SHA and time (proposed allowlist
-   * addition). `null` when unknown.
+   * The last successfully deployed GitOps revision: short commit SHA and deployment time from
+   * Argo CD history. `pinnedAt` is retained for map compatibility; it is the deployment time,
+   * not the image build or pin time. `null` when unknown.
    */
   readonly release: { readonly commit: string; readonly pinnedAt: string } | null;
   readonly components: readonly InfrastructureComponent[];

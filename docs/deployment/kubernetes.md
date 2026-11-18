@@ -327,6 +327,58 @@ last, so a rollback moves the API off them before they go.
   and binding (the endpoint answers `infrastructure_disabled` again). The extra project kinds can
   stay; to remove them, revert `project.yaml` and apply it after the chart no longer renders them.
 
+### Argo CD Explorer token (P6-03)
+
+**Confirmed:** the token is provisioned and the adapter was checked against live Argo CD on
+2026-11-18. Production API activation awaits merging the integration and its image
+rollout. `api.infrastructure.argocd.enabled` mounts `portfolio-argocd-reader` into the API only
+and permits API egress to Argo CD server pods in the `argocd` namespace on TCP 8080 (the Service's
+443 is translated to that pod port). No public Argo CD route or extra Kubernetes RBAC is added.
+
+- **Permission:** the `explorer` role in `infrastructure/argocd/project.yaml` grants exactly
+  `p, proj:portfolio:explorer, applications, get, portfolio/portfolio, allow`. Argo CD also grants
+  its project-role tokens read access to their own project's metadata. Live `can-i` probes
+  allowed those reads and denied sync/update/delete/override/restart, logs, exec, repositories,
+  clusters, and other Applications/projects. Listing Applications returned only `portfolio`.
+- **Provisioning order:** apply the reviewed AppProject first, issue the role token, seal its
+  `token` and Argo CD server `ca.crt` into `portfolio-argocd-reader` in the `portfolio` namespace,
+  and wait for the controller to create that Secret. Only then merge the production settings.
+  Use the existing Argo CD administrator session or the matching CLI's `--core` mode with an
+  authorized Kubernetes context whose namespace is `argocd`; no password reset or broader
+  permissions for Argo CD's own ServiceAccount are needed. The installed server image includes
+  that matching CLI; it can be copied temporarily to the operator's machine for core mode.
+  `argocd --core proj role create-token portfolio explorer --expires-in 2160h --token-only`
+  issues a 90-day token: capture stdout privately, never print it or pass it in shell arguments.
+  See [Sealed Secrets](#3-secrets) for sealing; the repository holds ciphertext only.
+- **Configuration:** `api.infrastructure.argocd` supplies `serverUrl`, `application`, `project`,
+  `existingSecret`, `tokenKey`, `caKey`, plus the target namespace, pod labels, and port. The
+  deployment maps these to `ARGOCD_*` settings described in [local.md](local.md). The token and
+  certificate are mounted read-only with mode `0440` and the pod's group; files are reread on
+  each refresh, so rotation requires no restart. Trust is local to this reader; redirects are
+  rejected and no response body or credential is logged.
+- **Validate after release:** wait for Argo CD to sync the new image pin, then read
+  `GET /api/v1/infrastructure` from inside the API pod. Expect `200`, `Cache-Control: no-store`,
+  `sync: synced`, a seven-character deployed GitOps revision, and deployment time. This revision
+  is distinct from the API's build/source commit; the existing `release.pinnedAt` field carries
+  deployment time. Check API logs for `Deployment status refresh failed` warnings and repeat the
+  read-only permission probes. During the merge-to-image-pin window, the previous image ignores
+  the new settings and continues serving workload data with unknown deployment facts.
+- **Availability:** Argo CD failure clears sync/release and its reachability health to unknown;
+  fresh workload data still returns `200`. The optional source does not affect readiness. A
+  successful read marks the Argo CD component reachable, not the Application aggregate healthy.
+- **Rotate before 2027-02-16:** issue a second 90-day token, seal it (and the current server CA)
+  into the same Secret, publish/apply the SealedSecret, and validate after the 12 s cache expires.
+  Revoke the previous token only after that succeeds; retain its ID/issued-at outside Git until
+  revocation. Do not keep the same token past expiry. Argo CD supports revocation with
+  `argocd proj role delete-token portfolio explorer <token-id-or-issued-at>`.
+- **Rollback:** disable `api.infrastructure.argocd.enabled` through GitOps and wait for the API
+  rollout, then revoke the token and remove its SealedSecret. Remove the now-unused `explorer`
+  role last. The workload reader remains enabled. If access must be revoked immediately, revoke
+  first: only deployment facts become unknown until the rollback rolls out.
+
+Argo CD references: [project roles and expiring tokens](https://argo-cd.readthedocs.io/en/stable/user-guide/projects/#project-roles),
+[Application API project scope](https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/#applications-api).
+
 ## 5. Release Flow
 
 1. Merge to `main`. CI passes.

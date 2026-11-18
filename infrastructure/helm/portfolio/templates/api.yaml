@@ -21,6 +21,17 @@
 {{- end }}
 {{- end }}
 {{- with .Values.api.infrastructure }}
+{{- if .argocd.enabled }}
+{{- if not .enabled }}
+{{- fail "api.infrastructure.argocd.enabled requires api.infrastructure.enabled" }}
+{{- end }}
+{{- if not (and .argocd.serverUrl .argocd.application .argocd.project .argocd.existingSecret .argocd.tokenKey .argocd.caKey) }}
+{{- fail "api.infrastructure.argocd requires serverUrl, application, project, existingSecret, tokenKey, and caKey" }}
+{{- end }}
+{{- if and $.Values.networkPolicy.enabled (not (and .argocd.namespace .argocd.podLabels .argocd.port)) }}
+{{- fail "api.infrastructure.argocd requires namespace, podLabels, and port for NetworkPolicies" }}
+{{- end }}
+{{- end }}
 {{- if and .enabled $.Values.networkPolicy.enabled (not (and .apiServerEgress.cidr .apiServerEgress.port)) }}
 {{- fail "api.infrastructure.apiServerEgress.cidr and .port are required when the infrastructure view and NetworkPolicies are enabled (otherwise the API can't reach the Kubernetes API server)" }}
 {{- end }}
@@ -113,6 +124,20 @@ spec:
             {{- end }}
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}
+            {{- if .infrastructure.argocd.enabled }}
+            - name: ARGOCD_ENABLED
+              value: 'true'
+            - name: ARGOCD_SERVER_URL
+              value: {{ .infrastructure.argocd.serverUrl | quote }}
+            - name: ARGOCD_APPLICATION
+              value: {{ .infrastructure.argocd.application | quote }}
+            - name: ARGOCD_PROJECT
+              value: {{ .infrastructure.argocd.project | quote }}
+            - name: ARGOCD_TOKEN_FILE
+              value: /var/run/secrets/argocd/token
+            - name: ARGOCD_CA_FILE
+              value: /var/run/secrets/argocd/ca.crt
+            {{- end }}
             {{- if .ai.enabled }}
             - name: TURNSTILE_SECRET_KEY
               valueFrom:
@@ -175,10 +200,26 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .infrastructure.argocd.enabled }}
+            - name: argocd-reader
+              mountPath: /var/run/secrets/argocd
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+        {{- if .infrastructure.argocd.enabled }}
+        - name: argocd-reader
+          secret:
+            secretName: {{ .infrastructure.argocd.existingSecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: {{ .infrastructure.argocd.tokenKey | quote }}
+                path: token
+              - key: {{ .infrastructure.argocd.caKey | quote }}
+                path: ca.crt
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

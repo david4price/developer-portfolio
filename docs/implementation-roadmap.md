@@ -6,15 +6,24 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-18_
 
-**Current phase:** 5 (AI chatbot). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
+**Current phase:** 6 (Infrastructure Explorer). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
-Phase 2 lacks only the owner's content (P2-12).
+Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval work is parked on it.
 
 **Recently done**
 
+- P6-01 live and validated (2026-11-18): read-only workload access in `portfolio`; secrets,
+  configmaps, logs, exec, watch, and other namespaces denied. The endpoint returns sanitized real
+  workload data; Argo CD is Synced/Healthy after the image rollout (owner's validation handoff).
+- P6-03 credential provisioned and live-tested (2026-11-18): an expiring project-role token reads
+  only the `portfolio` Application (and its own project's metadata, implicit in Argo CD). Sync,
+  update, delete, override, restart, logs, exec, and other Applications/projects are denied.
+  The adapter's live read returned a sanitized sync status and deployed GitOps revision/time.
+  API configuration, Secret mount, and egress are implemented locally; production activation
+  awaits merging this change and its image rollout. Token rotation is due before 2027-02-16.
 - P6-02: `GET /api/v1/infrastructure` serves the Infrastructure Explorer's snapshot through an
   allowlist serializer (leak-tested: no IPs, node names, env values, secrets, registry paths, or
-  other namespaces), cached 12 s, off by default until the read-only Role (P6-01) exists.
+  other namespaces), cached 12 s, off by default; enabled in production with P6-01.
 - P6-04 prototype: the Infrastructure Explorer as a power-grid blueprint on sample data at
   `/apps/infrastructure-explorer/` (steady, rollout, Redis down, API offline, stale): buildings
   seen from above light their windows by ready replicas, sparks run along the lines, in the
@@ -194,9 +203,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. 🔒 **P6-01:** the read-only ServiceAccount and Role (get/list on deployments, statefulsets,
-   pods in `portfolio`), an egress NetworkPolicy to the API server, and
-   `INFRASTRUCTURE_SOURCE=kubernetes`; then the live map (P6-04) and 🔒 P6-03 (Argo CD token).
+1. Merge the prepared **P6-03** API integration and wait for the new digest pin to sync;
+   validate `sync`/`release` on the live endpoint. Then **P6-04**: replace the sample scenarios
+   with a 12 s endpoint fetch and explicit not-configured, unavailable, and stale states.
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -204,7 +213,7 @@ Phase 2 lacks only the owner's content (P2-12).
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-01-infrastructure-reader-rbac` (🔒 P6-01, owner approved).
+**Branch in progress:** `feat/p6-03-argocd-status` (P6-03, owner approved); awaiting owner merge.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -466,15 +475,15 @@ Read-only inventory of the reference host. Findings:
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 
-## Phase 6: Infrastructure Explorer (1/4)
+## Phase 6: Infrastructure Explorer (3/4)
 
-- [ ] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
+- [x] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
       P3-03. _Done when:_ `kubectl auth can-i` denies secrets, logs, and exec.
-      In progress 2026-11-18 (owner approved): the chart change is ready
-      (`templates/api-rbac.yaml`, `api.infrastructure`, the API server egress, and three kinds in
-      the AppProject); applying the project, merging, and the `kubectl auth can-i` checks
-      ([runbook](deployment/kubernetes.md#infrastructure-explorer-reader-p6-01-approval-required))
-      complete it.
+      Done 2026-11-18 (owner's live validation handoff): the account can list pods, deployments,
+      and statefulsets only in `portfolio`; secrets, configmaps, logs, exec, watch, and other
+      namespaces are denied. The new API image serves real sanitized data with `no-store`, no
+      refresh warnings, and Argo CD Synced/Healthy. See the
+      [runbook](deployment/kubernetes.md#infrastructure-explorer-reader-p6-01-approval-required).
 - [x] **P6-02** Allowlist serializer with a 10–15 s cache. _Needs:_ P6-01. _Done when:_ snapshot
       tests prove no IPs, node names, env, or other namespaces leak.
       Done 2026-11-18, ahead of P6-01 and off by default: `GET /api/v1/infrastructure`
@@ -487,8 +496,15 @@ Read-only inventory of the reference host. Findings:
       `fetch` with the pod's service account token (no new dependency) and is tested against a fake
       API server. `INFRASTRUCTURE_SOURCE=disabled` (default) answers `503 infrastructure_disabled`,
       so merging changes nothing live.
-- [ ] **P6-03** 🔒 Argo CD read-only token for sync status. _Needs:_ P3-04. _Done when:_ token
+- [x] **P6-03** 🔒 Argo CD read-only token for sync status. _Needs:_ P3-04. _Done when:_ token
       scoped to one Application.
+      Done 2026-11-18: `proj:portfolio:explorer` can get only `portfolio/portfolio`; live permission
+      probes deny write/actions, logs, exec, and other Applications/projects. Its own project
+      metadata is implicitly readable in Argo CD. The 90-day token and server CA are sealed in
+      `portfolio-argocd-reader`; token expires 2027-02-16. The compiled adapter was validated
+      against live Argo CD with TLS verification. Production API wiring is prepared locally and
+      still awaits merging and the image rollout; the endpoint still has empty sync/
+      release until then. [Provisioning and rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
       Design: an animated blueprint of a power grid, with buildings lit by their replicas and

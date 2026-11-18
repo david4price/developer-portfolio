@@ -1,7 +1,8 @@
 # Infrastructure Explorer: Visual Design
 
-**Status: prototype Confirmed on sample data (P6-04, 2026-11-18); live data Proposed (needs
-P6-02).** The data rules are in [Security](security.md#infrastructure-explorer-proposed-phase-6);
+**Status: prototype Confirmed on sample data (P6-04, 2026-11-18); workload API live (P6-01/02),
+Argo CD reader implemented/live-tested (P6-03, production activation pending); live page Proposed.**
+The data rules are in [Security](security.md#infrastructure-explorer-serializer-confirmed-in-code-p6-02-access-confirmed-in-the-chart-p6-01);
 this document covers what the page looks like and how data drives it.
 
 ## Concept
@@ -37,7 +38,7 @@ Every effect means something; nothing animates without a data source.
 | Red roof beacon               | Component down                                                    |
 | Line colour (cyan/amber/red)  | Health of the building at each end; broken line when down         |
 | Spark speed along a line      | Coarse request rate (bucketed, e.g. idle/low/busy)                |
-| Burst along the delivery path | A new release pinned in `images.yaml`, then the Argo CD sync      |
+| Burst along the delivery path | A GitOps revision successfully deployed by Argo CD                |
 | Capacitor tubes glow          | Cluster deployed (Argo CD synced, nothing rolling out)            |
 | Pulses into the capacitor's Y | Rollout in progress (a component progressing)                     |
 | Capacitor dim / dark          | Waiting to sync (out of sync or unknown) / no data                |
@@ -47,10 +48,9 @@ Every effect means something; nothing animates without a data source.
 The page must never show "healthy" when it cannot know: offline or stale data powers the map
 down instead of freezing the last good state.
 
-Two inputs go beyond the current serializer allowlist and must be added there (and to its
-snapshot tests) before they are shown: a **bucketed request rate** per Service (from P7-01
-metrics, never raw counts per client) and the **latest release** (short commit SHA and time from
-the `images.yaml` pin or the public GitHub Actions API).
+The release input is the short last-deployed GitOps revision and deployment time from Argo CD
+history (P6-03); it is neither the API source commit nor the image pin time. A **bucketed request
+rate** per Service still needs P7-01 metrics and allowlist/leak tests before it can be shown.
 
 ## Implementation Notes
 
@@ -79,7 +79,7 @@ It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
   worse health of its two ends; pulses run only where traffic data exists (none yet, until P7-01)
   and never into a down component; the core flickers only while a component is progressing, so a
   crash-looping component shows as down, not as a rollout; the delivery path bursts for 15 minutes
-  after a release is pinned.
+  after a GitOps revision is deployed.
 - Window rule (`windowStates`): each building has 24 windows, lit in a fixed scattered order; the
   lit share is ready ÷ desired replicas (all for components without replicas), 60 % of that with
   some flickering when degraded, and none when down, unknown, or without data. During a rollout
@@ -107,7 +107,12 @@ It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
 - The API side exists (P6-02): `GET /api/v1/infrastructure` returns this snapshot from the
   allowlist serializer, cached for 12 s, and is off until `INFRASTRUCTURE_SOURCE=kubernetes`. From
   the cluster it fills health, replicas, image version, and failure for the tunnel, API, worker,
-  PostgreSQL, and Redis; the website, AI model, and Argo CD stay "unknown", and `sync` and
-  `release` wait for Argo CD's token (P6-03), traffic for metrics (P7-01).
-- Next: the read-only Role (🔒 P6-01) turns the endpoint on; then the page fetches it every 12 s
+  PostgreSQL, and Redis; the website and AI model stay "unknown".
+- P6-03 adds an optional Argo CD reader (implemented; token and adapter live-tested, production
+  activation pending this change's rollout): `sync` comes from the Application; `release` is its
+  last successfully deployed GitOps revision and deployment time, not the API's source commit
+  or image pin time. The Argo CD component is healthy when its API is reachable, unknown when
+  unavailable. Deployment facts become unknown if its read fails; workload facts can stay fresh.
+  Traffic still waits for metrics (P7-01).
+- Next: P6-01 is live; publish/merge the P6-03 integration, then the page fetches every 12 s
   with the "not configured", "unavailable", and loaded states the web rules require.
