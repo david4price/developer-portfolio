@@ -25,6 +25,14 @@ api:
   # 1-3 replicas on one node; chat limits live in Redis, so they hold across replicas.
   autoscaling:
     enabled: true
+  # Infrastructure Explorer (P6-01): the read-only reader account and the API server egress. The
+  # node's exact address stays out of Git; the rule allows its private range, on the API server
+  # port only.
+  infrastructure:
+    enabled: true
+    apiServerEgress:
+      cidr: 192.168.0.0/16
+      port: 6443
   # Every request arrives through the tunnel (only cloudflared may reach the API).
   trustCloudflareClientIp: true
   # Rules, then the CPU injection classifier baked into the API image (P5-08). The pod switches

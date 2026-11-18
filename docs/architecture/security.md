@@ -99,10 +99,17 @@ The public surface is a static site and a small REST API. The main risks:
   setup and browser integration remain **Proposed**; see the
   [Turnstile guide](../deployment/turnstile.md).
 
-## Infrastructure Explorer (serializer Confirmed in code, P6-02; access Proposed, Phase 6)
+## Infrastructure Explorer (serializer Confirmed in code, P6-02; access Confirmed in the chart, P6-01)
 
 - Namespace-scoped `Role` with only `get`/`list` on `deployments`, `statefulsets`, and `pods` in
-  the `portfolio` namespace (PostgreSQL is a StatefulSet; ReplicaSets aren't needed). No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
+  the `portfolio` namespace (PostgreSQL is a StatefulSet; ReplicaSets aren't needed), bound to the
+  API's own ServiceAccount (`templates/api-rbac.yaml`, rendered only with
+  `api.infrastructure.enabled`). Only the API pod mounts a token; every other pod keeps
+  `automountServiceAccountToken: false`. `pnpm helm:check` compares the rendered Role and
+  RoleBinding to the exact expected rules, role reference, and subject, and fails if any template
+  renders a ClusterRole or ClusterRoleBinding, so any added verb, resource, subject, or wider
+  binding fails CI. The reader trusts the cluster CA for its own requests only (not process-wide). The Argo CD project allows ServiceAccount, Role, and RoleBinding in the namespace, and
+  still no cluster-scoped kinds. No access to `secrets`, `configmaps`, logs, `exec`, or other namespaces.
 - Argo CD access uses a read-only project role token scoped to the portfolio Application.
 - Responses go through an explicit allowlist serializer
   (`apps/api/src/modules/infrastructure/snapshot-serializer.ts`): raw objects are parsed with

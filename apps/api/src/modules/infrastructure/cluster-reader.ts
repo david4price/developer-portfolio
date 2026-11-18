@@ -15,7 +15,12 @@ export interface ClusterReader {
 }
 
 /** Why a read failed. Safe to log: never the response body or anything from the cluster. */
-export type ClusterReadFailure = 'timeout' | 'network' | 'status' | 'invalid_response';
+/**
+ * `credentials`: the mounted token or cluster CA couldn't be read (check the service account
+ * mount), as opposed to `network` (the API server couldn't be reached or verified).
+ */
+export type ClusterReadFailure =
+  'timeout' | 'network' | 'credentials' | 'status' | 'invalid_response';
 
 export class ClusterReadError extends Error {
   constructor(

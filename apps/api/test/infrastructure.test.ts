@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import type { ApiErrorResponse, InfrastructureSnapshot } from '@portfolio/shared-types';
@@ -520,7 +525,7 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
         'invalid_response',
         1_000,
       ],
-      [{ status: 302, body: '', location: 'http://example.invalid/' }, 'network', undefined],
+      [{ status: 302, body: '', location: 'http://example.invalid/' }, 'status', undefined],
     ];
     for (const [reply, reason, limit] of cases) {
       respond = () => reply;
@@ -532,6 +537,90 @@ describe('KubernetesClusterReader (contract, fake API server)', () => {
       });
     }
   });
+});
+
+describe('KubernetesClusterReader over https (contract, fake API server)', () => {
+  // A throwaway certificate per run, so no private key lives in the repository.
+  const openssl = spawnSync('openssl', ['version']).status === 0;
+  let directory: string;
+  let server: HttpsServer;
+  let url: string;
+  let ca: string;
+  let otherCa: string;
+
+  const certificate = (name: string) => {
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-days',
+        '1',
+        '-subj',
+        '/CN=127.0.0.1',
+        '-addext',
+        'subjectAltName=IP:127.0.0.1',
+        '-keyout',
+        join(directory, `${name}.key`),
+        '-out',
+        join(directory, `${name}.crt`),
+      ],
+      { stdio: 'ignore' },
+    );
+    return {
+      key: readFileSync(join(directory, `${name}.key`), 'utf8'),
+      cert: readFileSync(join(directory, `${name}.crt`), 'utf8'),
+    };
+  };
+
+  before(async () => {
+    if (!openssl) return;
+    directory = mkdtempSync(join(tmpdir(), 'reader-tls-'));
+    const pair = certificate('server');
+    ca = pair.cert;
+    otherCa = certificate('other').cert;
+    server = createHttpsServer(pair, (_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{"items":[{"kind":"Pod"}]}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    url = `https://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  after(async () => {
+    if (!openssl) return;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const reader = (readCa: () => Promise<string>) =>
+    new KubernetesClusterReader({
+      apiServerUrl: url,
+      namespace: NAMESPACE,
+      readToken: async () => 'service-account-token',
+      readCa,
+    });
+
+  it('trusts the mounted cluster CA for its own requests', { skip: !openssl }, async () => {
+    const objects = await reader(async () => ca).read(AbortSignal.timeout(5_000));
+    assert.deepEqual(objects.pods, [{ kind: 'Pod' }]);
+  });
+
+  it(
+    'refuses a server its CA did not sign, and reports unreadable credentials',
+    { skip: !openssl },
+    async () => {
+      await assert.rejects(reader(async () => otherCa).read(AbortSignal.timeout(5_000)), {
+        reason: 'network',
+      });
+      await assert.rejects(
+        reader(() => Promise.reject(new Error('ENOENT'))).read(AbortSignal.timeout(5_000)),
+        { reason: 'credentials' },
+      );
+    },
+  );
 });
 
 describe('infrastructure configuration', () => {

@@ -1,0 +1,51 @@
+{{- if .Values.api.infrastructure.enabled }}
+{{- $fullname := include "portfolio.fullname" . }}
+{{- $component := dict "root" $ "component" "api" }}
+# The API's own identity for the Infrastructure Explorer (P6-01): read-only, this namespace only.
+# No secrets, configmaps, logs, exec, or anything outside the namespace; the allowlist serializer
+# then keeps only public fields of what it reads.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $fullname }}-api
+  annotations:
+    # On rollback, prune these only after the API has rolled back off this account.
+    argocd.argoproj.io/sync-options: PruneLast=true
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+# Only the API pod opts in to mounting a token.
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-api-infrastructure-reader
+  annotations:
+    argocd.argoproj.io/sync-options: PruneLast=true
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list]
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-api-infrastructure-reader
+  annotations:
+    argocd.argoproj.io/sync-options: PruneLast=true
+  labels:
+    {{- include "portfolio.componentLabels" $component | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-api-infrastructure-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ $fullname }}-api
+    namespace: {{ .Release.Namespace }}
+{{- end }}

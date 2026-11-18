@@ -33,3 +33,11 @@ spec:
       kind: SealedSecret
     - group: autoscaling
       kind: HorizontalPodAutoscaler
+    # The API's read-only Infrastructure Explorer identity (P6-01): a ServiceAccount and a
+    # namespaced Role and RoleBinding. No ClusterRole: cluster-scoped kinds stay forbidden.
+    - group: ''
+      kind: ServiceAccount
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding

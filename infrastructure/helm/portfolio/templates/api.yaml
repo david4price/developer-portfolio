@@ -20,6 +20,11 @@
 {{- fail "api.turnstile.egressCidrs is required when AI and NetworkPolicies are enabled" }}
 {{- end }}
 {{- end }}
+{{- with .Values.api.infrastructure }}
+{{- if and .enabled $.Values.networkPolicy.enabled (not (and .apiServerEgress.cidr .apiServerEgress.port)) }}
+{{- fail "api.infrastructure.apiServerEgress.cidr and .port are required when the infrastructure view and NetworkPolicies are enabled (otherwise the API can't reach the Kubernetes API server)" }}
+{{- end }}
+{{- end }}
 {{- with .Values.api.ai }}
 {{- if and .enabled $.Values.networkPolicy.enabled (not (and .egress.cidr .egress.port)) }}
 {{- fail "api.ai.egress.cidr and api.ai.egress.port are required when AI and NetworkPolicies are enabled (otherwise the API can't reach the model)" }}
@@ -52,7 +57,12 @@ spec:
       labels:
         {{- include "portfolio.componentLabels" $component | nindent 8 }}
     spec:
-      automountServiceAccountToken: false
+      {{- if .infrastructure.enabled }}
+      # Its own read-only account (api-rbac.yaml); the token is projected and rotated.
+      serviceAccountName: {{ $fullname }}-api
+      {{- end }}
+      # The same truthiness as the blocks above, rendered as a literal boolean.
+      automountServiceAccountToken: {{ if .infrastructure.enabled }}true{{ else }}false{{ end }}
       enableServiceLinks: false
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
@@ -92,6 +102,14 @@ spec:
               value: {{ .messageGuard.threshold | quote }}
             - name: CHAT_GUARD_TIMEOUT_MS
               value: {{ .messageGuard.timeoutMs | quote }}
+            {{- end }}
+            {{- if .infrastructure.enabled }}
+            - name: INFRASTRUCTURE_SOURCE
+              value: kubernetes
+            # The reader takes the token and the cluster CA from the mounted service account and
+            # trusts that CA for its own requests only.
+            - name: INFRASTRUCTURE_NAMESPACE
+              value: {{ $.Release.Namespace | quote }}
             {{- end }}
             - name: AI_ENABLED
               value: {{ .ai.enabled | quote }}

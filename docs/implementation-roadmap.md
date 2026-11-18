@@ -195,7 +195,7 @@ Phase 2 lacks only the owner's content (P2-12).
 **Next up, in order**
 
 1. 🔒 **P6-01:** the read-only ServiceAccount and Role (get/list on deployments, statefulsets,
-   pods in `portfolio`), `NODE_EXTRA_CA_CERTS`, an egress NetworkPolicy to the API server, and
+   pods in `portfolio`), an egress NetworkPolicy to the API server, and
    `INFRASTRUCTURE_SOURCE=kubernetes`; then the live map (P6-04) and 🔒 P6-03 (Argo CD token).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
@@ -204,7 +204,7 @@ Phase 2 lacks only the owner's content (P2-12).
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-02-infrastructure-snapshot` (P6-02 snapshot endpoint).
+**Branch in progress:** `feat/p6-01-infrastructure-reader-rbac` (🔒 P6-01, owner approved).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -470,6 +470,11 @@ Read-only inventory of the reference host. Findings:
 
 - [ ] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
       P3-03. _Done when:_ `kubectl auth can-i` denies secrets, logs, and exec.
+      In progress 2026-11-18 (owner approved): the chart change is ready
+      (`templates/api-rbac.yaml`, `api.infrastructure`, the API server egress, and three kinds in
+      the AppProject); applying the project, merging, and the `kubectl auth can-i` checks
+      ([runbook](deployment/kubernetes.md#infrastructure-explorer-reader-p6-01-approval-required))
+      complete it.
 - [x] **P6-02** Allowlist serializer with a 10–15 s cache. _Needs:_ P6-01. _Done when:_ snapshot
       tests prove no IPs, node names, env, or other namespaces leak.
       Done 2026-11-18, ahead of P6-01 and off by default: `GET /api/v1/infrastructure`

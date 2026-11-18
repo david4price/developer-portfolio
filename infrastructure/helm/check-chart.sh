@@ -74,8 +74,59 @@ expect_failure 'api.trustCloudflareClientIp requires cloudflared.enabled' \
   -f "$chart/ci/digests-values.yaml" --set networkPolicy.enabled=false
 expect_failure 'postgres.backup.hostPath is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.backup.hostPath=
+expect_failure 'api.infrastructure.apiServerEgress.cidr and .port are required' \
+  -f "$chart/ci/infrastructure-values.yaml" --set api.infrastructure.apiServerEgress.cidr=
 expect_failure 'postgres.auth.existingSecret is required' \
   -f "$chart/ci/digests-values.yaml" --set postgres.auth.existingSecret=
+
+# The reader Role must grant exactly get/list on the three kinds the serializer reads, bound to
+# the API's account alone: an exact match, so any added verb, resource, or subject fails.
+echo "== infrastructure reader Role"
+expected_rules="rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list]
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [get, list]"
+expected_role_ref="roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portfolio-api-infrastructure-reader"
+expected_subjects="subjects:
+  - kind: ServiceAccount
+    name: portfolio-api
+    namespace: portfolio"
+# section <kind> <key>: the lines from "<key>:" to the end of that kind's document.
+section() {
+  awk -v kind="kind: $1" -v key="$2:" '
+    /^---/ { in_doc = 0; in_key = 0 }
+    $0 == kind { in_doc = 1 }
+    in_doc && $0 == key { in_key = 1 }
+    in_key { print }
+  ' <<<"$reader"
+}
+if ! reader="$(render -f "$chart/ci/infrastructure-values.yaml" -s templates/api-rbac.yaml 2>&1)"; then
+  fail "infrastructure RBAC doesn't render: $reader"
+else
+  [[ "$(section Role rules)" == "$expected_rules" ]] ||
+    fail "the reader Role must grant exactly get/list on deployments, statefulsets, pods"
+  [[ "$(section RoleBinding roleRef | sed '/^subjects:/,$d')" == "$expected_role_ref" ]] ||
+    fail "the reader RoleBinding must reference the reader Role (not a ClusterRole)"
+  [[ "$(section RoleBinding subjects)" == "$expected_subjects" ]] ||
+    fail "the reader RoleBinding must bind only the API's ServiceAccount"
+  [[ "$(grep -cE '^kind: (Role|RoleBinding|ClusterRole|ClusterRoleBinding)$' <<<"$reader")" == 2 ]] ||
+    fail "the reader must be exactly one Role and one RoleBinding (no cluster-wide RBAC)"
+fi
+# No template anywhere may render cluster-wide RBAC, with the view on or off.
+for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml"; do
+  if render -f "$values" | grep -qE '^kind: (ClusterRole|ClusterRoleBinding)$'; then
+    fail "$(basename "$values") renders cluster-wide RBAC"
+  fi
+done
+if render -f "$chart/ci/digests-values.yaml" | grep -qE '^kind: (ServiceAccount|Role|RoleBinding)$'; then
+  fail "the chart renders RBAC with the infrastructure view off"
+fi
 
 # The model and address may come only from the environment Secret: the chart then sets neither,
 # so the Secret's values aren't overridden (container env wins over envFrom).

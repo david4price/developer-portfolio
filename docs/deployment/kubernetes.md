@@ -295,6 +295,38 @@ calm). While it's on, the Deployment omits `replicas`, so the HPA alone sets the
 Application additionally ignores `/spec/replicas` on `portfolio-api` (`RespectIgnoreDifferences`).
 Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server ships with K3s.
 
+### Infrastructure Explorer reader (P6-01, approval required)
+
+`api.infrastructure.enabled` (production: on) gives the API its own ServiceAccount with a
+namespaced, read-only Role (get/list on deployments, statefulsets, pods), mounts its token (the
+reader trusts the mounted cluster CA for its own requests only), sets
+`INFRASTRUCTURE_SOURCE=kubernetes`, and allows the API's egress to the API server
+(`apiServerEgress`: the node's private range on `6443`). The account, Role, and binding are pruned
+last, so a rollback moves the API off them before they go.
+
+- **Order matters.** The `portfolio` AppProject must allow ServiceAccount, Role, and RoleBinding
+  before Argo CD syncs the chart, or the whole sync is rejected. Apply the project first:
+  `kubectl diff -f infrastructure/argocd/project.yaml`, then
+  `kubectl apply -f infrastructure/argocd/project.yaml` (it only adds those three kinds). Then
+  merge; Argo CD creates the account, Role, and binding before the API (sync wave 2) rolls out.
+- **Impact:** one rolling restart of the API (new account, token, and environment); with
+  `maxUnavailable: 0` the old pod serves until the new one is ready. Nothing else changes. The
+  reader that trusts the cluster CA per request ships in the API image built from the same merge,
+  which the release pins a few minutes later; until then the previous image reads with the feature
+  on and logs `Infrastructure snapshot refresh failed` (TLS can't be verified). No page reads the
+  endpoint yet, so this is harmless; validate after the pin has synced.
+- **Validate:**
+  - `kubectl auth can-i list pods -n portfolio --as=system:serviceaccount:portfolio:portfolio-api`
+    → yes; the same for `get secrets`, `get pods --subresource=log`,
+    `create pods --subresource=exec`, and `list pods -n kube-system` → no.
+  - Inside the API pod, `GET /api/v1/infrastructure` returns `200` with the tunnel, API, worker,
+    PostgreSQL, and Redis known and no address, node name, or secret in the body; the API logs
+    show no `Infrastructure snapshot refresh failed` warnings.
+- **Rollback:** set `api.infrastructure.enabled: false` in the production values (or revert the
+  commit) and merge; Argo CD restarts the API without the token and removes the account, Role,
+  and binding (the endpoint answers `infrastructure_disabled` again). The extra project kinds can
+  stay; to remove them, revert `project.yaml` and apply it after the chart no longer renders them.
+
 ## 5. Release Flow
 
 1. Merge to `main`. CI passes.

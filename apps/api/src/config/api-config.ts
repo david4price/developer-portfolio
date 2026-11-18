@@ -22,7 +22,7 @@ export const infrastructureSourceNames = ['disabled', 'kubernetes'] as const;
 /**
  * Where the Infrastructure Explorer's snapshot comes from (P6-02). `kubernetes` reads the
  * workloads in one namespace through the in-cluster API server, with the pod's service account
- * token; it needs the read-only Role from P6-01 and `NODE_EXTRA_CA_CERTS` set to the cluster CA.
+ * token, trusting the mounted cluster CA for those requests only; it needs P6-01's read-only Role.
  */
 export type InfrastructureConfig =
   | { readonly enabled: false }
