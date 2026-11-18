@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readJsonBody } from '../../common/read-json-body.js';
 import {
   type AiCompletion,
   type AiCompletionRequest,
@@ -80,7 +81,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
         throw new AiUnavailableError('upstream_status', response.status);
       }
 
-      const parsed = completionSchema.safeParse(await this.readJson(response));
+      const parsed = completionSchema.safeParse(
+        await readJsonBody(response, this.maxResponseBytes),
+      );
       if (!parsed.success) throw new AiUnavailableError('invalid_response');
 
       const [choice] = parsed.data.choices;
@@ -94,31 +97,6 @@ export class OpenAiCompatibleProvider implements AiProvider {
       if (timeout.aborted) throw new AiUnavailableError('timeout');
       if (error instanceof AiUnavailableError || error instanceof AiOverloadedError) throw error;
       throw new AiUnavailableError('network');
-    }
-  }
-
-  /** Reads at most `maxResponseBytes` and parses JSON; anything else is a malformed reply. */
-  private async readJson(response: Response): Promise<unknown> {
-    const declared = Number(response.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > this.maxResponseBytes) {
-      await response.body?.cancel();
-      throw new AiUnavailableError('invalid_response');
-    }
-    if (response.body === null) throw new AiUnavailableError('invalid_response');
-
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    // Leaving the loop early (throw) cancels the stream and releases the connection.
-    for await (const chunk of response.body) {
-      total += chunk.byteLength;
-      if (total > this.maxResponseBytes) throw new AiUnavailableError('invalid_response');
-      chunks.push(chunk);
-    }
-
-    try {
-      return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
-    } catch {
-      throw new AiUnavailableError('invalid_response');
     }
   }
 }

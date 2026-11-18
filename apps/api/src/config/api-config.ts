@@ -17,6 +17,23 @@ export type AiProviderName = (typeof aiProviderNames)[number];
 
 export const messageGuardNames = ['rules', 'classifier'] as const;
 
+export const infrastructureSourceNames = ['disabled', 'kubernetes'] as const;
+
+/**
+ * Where the Infrastructure Explorer's snapshot comes from (P6-02). `kubernetes` reads the
+ * workloads in one namespace through the in-cluster API server, with the pod's service account
+ * token; it needs the read-only Role from P6-01 and `NODE_EXTRA_CA_CERTS` set to the cluster CA.
+ */
+export type InfrastructureConfig =
+  | { readonly enabled: false }
+  | {
+      readonly enabled: true;
+      readonly source: 'kubernetes';
+      readonly namespace: string;
+      /** `https://<host>:<port>` of the API server, from the variables Kubernetes injects. */
+      readonly apiServerUrl: string;
+    };
+
 /**
  * How visitor messages are screened (P5-08). `classifier` runs the rules, then a CPU injection
  * classifier loaded from `modelDir`; it needs about 650 MiB more memory than `rules`. With AI off
@@ -78,7 +95,13 @@ export interface ApiConfig {
   readonly turnstile:
     | { readonly enabled: false }
     | { readonly enabled: true; readonly secretKey: string; readonly hostnames: readonly string[] };
+  readonly infrastructure: InfrastructureConfig;
 }
+
+/** A Kubernetes namespace name (RFC 1123 label). */
+const namespaceName = z
+  .string()
+  .regex(/^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/, 'must be a Kubernetes namespace name');
 
 const count = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
 /** Compose passes unset optional settings as empty strings. Required enabled settings still fail. */
@@ -135,8 +158,24 @@ const apiEnvironmentSchema = z
     CHAT_GUARD_MODEL_DIR: z.string().trim().min(1).default('models/injection-classifier'),
     CHAT_GUARD_THRESHOLD: z.coerce.number().gt(0).max(1).default(0.5),
     CHAT_GUARD_TIMEOUT_MS: count(50, 10_000).default(2_000),
+    INFRASTRUCTURE_SOURCE: z.enum(infrastructureSourceNames).default('disabled'),
+    INFRASTRUCTURE_NAMESPACE: namespaceName.default('portfolio'),
+    // Injected by Kubernetes into every pod; only read when INFRASTRUCTURE_SOURCE=kubernetes.
+    KUBERNETES_SERVICE_HOST: optionalSetting(z.string().trim().min(1)),
+    KUBERNETES_SERVICE_PORT: optionalSetting(portFromEnv),
   })
   .superRefine((environment, context) => {
+    if (environment.INFRASTRUCTURE_SOURCE === 'kubernetes') {
+      for (const key of ['KUBERNETES_SERVICE_HOST', 'KUBERNETES_SERVICE_PORT'] as const) {
+        if (environment[key] === undefined) {
+          context.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required when INFRASTRUCTURE_SOURCE=kubernetes (set inside a pod)',
+          });
+        }
+      }
+    }
     if (!environment.AI_ENABLED) return;
     for (const key of ['TURNSTILE_SECRET_KEY', 'TURNSTILE_HOSTNAMES'] as const) {
       if (environment[key] === undefined) {
@@ -222,5 +261,24 @@ export function loadApiConfig(
             hostnames: parsed.TURNSTILE_HOSTNAMES,
           }
         : { enabled: false },
+    infrastructure:
+      parsed.INFRASTRUCTURE_SOURCE === 'kubernetes' &&
+      parsed.KUBERNETES_SERVICE_HOST !== undefined &&
+      parsed.KUBERNETES_SERVICE_PORT !== undefined
+        ? {
+            enabled: true,
+            source: 'kubernetes',
+            namespace: parsed.INFRASTRUCTURE_NAMESPACE,
+            apiServerUrl: apiServerUrl(
+              parsed.KUBERNETES_SERVICE_HOST,
+              parsed.KUBERNETES_SERVICE_PORT,
+            ),
+          }
+        : { enabled: false },
   };
+}
+
+/** The in-cluster API server's URL; IPv6 hosts need brackets. */
+function apiServerUrl(host: string, port: number): string {
+  return `https://${host.includes(':') ? `[${host}]` : host}:${port}`;
 }

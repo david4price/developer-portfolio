@@ -4,6 +4,7 @@ import { DatabaseModule, POSTGRES_READINESS } from './database/database.module.j
 import { AiModule } from './modules/ai/ai.module.js';
 import { ChatModule } from './modules/chat/chat.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { InfrastructureModule } from './modules/infrastructure/infrastructure.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { REDIS_READINESS, RedisModule } from './redis/redis.module.js';
 
@@ -32,6 +33,7 @@ export class AppModule {
         HealthModule.forChecks([POSTGRES_READINESS, REDIS_READINESS]),
         ProjectsModule,
         ChatModule,
+        InfrastructureModule,
       ],
     };
   }

@@ -104,5 +104,10 @@ It uses the snapshot shape the API will return (`InfrastructureSnapshot` in
   architecture note it belongs to on GitHub, from the same notes the chat uses. Only the visible
   face is interactive (`inert`); Esc, a click outside, or Close shuts it and returns focus; reduced
   motion swaps the flip and pop for an instant change.
-- Next: P6-02 serves the real snapshot. The page then fetches it every 12 s with the "not
-  configured", "unavailable", and loaded states the web rules require.
+- The API side exists (P6-02): `GET /api/v1/infrastructure` returns this snapshot from the
+  allowlist serializer, cached for 12 s, and is off until `INFRASTRUCTURE_SOURCE=kubernetes`. From
+  the cluster it fills health, replicas, image version, and failure for the tunnel, API, worker,
+  PostgreSQL, and Redis; the website, AI model, and Argo CD stay "unknown", and `sync` and
+  `release` wait for Argo CD's token (P6-03), traffic for metrics (P7-01).
+- Next: the read-only Role (🔒 P6-01) turns the endpoint on; then the page fetches it every 12 s
+  with the "not configured", "unavailable", and loaded states the web rules require.

@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Recently done**
 
+- P6-02: `GET /api/v1/infrastructure` serves the Infrastructure Explorer's snapshot through an
+  allowlist serializer (leak-tested: no IPs, node names, env values, secrets, registry paths, or
+  other namespaces), cached 12 s, off by default until the read-only Role (P6-01) exists.
 - P6-04 prototype: the Infrastructure Explorer as a power-grid blueprint on sample data at
   `/apps/infrastructure-explorer/` (steady, rollout, Redis down, API offline, stale): buildings
   seen from above light their windows by ready replicas, sparks run along the lines, in the
@@ -191,9 +194,9 @@ Phase 2 lacks only the owner's content (P2-12).
 
 **Next up, in order**
 
-1. **P6-02:** the allowlist serializer and snapshot endpoint (with leak tests), first against a
-   fake Kubernetes client; then 🔒 P6-01 and P6-03 for the read-only cluster and Argo CD access,
-   and the live map (P6-04).
+1. 🔒 **P6-01:** the read-only ServiceAccount and Role (get/list on deployments, statefulsets,
+   pods in `portfolio`), `NODE_EXTRA_CA_CERTS`, an egress NetworkPolicy to the API server, and
+   `INFRASTRUCTURE_SOURCE=kubernetes`; then the live map (P6-04) and 🔒 P6-03 (Argo CD token).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -201,7 +204,7 @@ Phase 2 lacks only the owner's content (P2-12).
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-04-explorer-prototype` (P6-04 prototype on sample data).
+**Branch in progress:** `feat/p6-02-infrastructure-snapshot` (P6-02 snapshot endpoint).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -463,12 +466,22 @@ Read-only inventory of the reference host. Findings:
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 
-## Phase 6: Infrastructure Explorer (0/4)
+## Phase 6: Infrastructure Explorer (1/4)
 
 - [ ] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
       P3-03. _Done when:_ `kubectl auth can-i` denies secrets, logs, and exec.
-- [ ] **P6-02** Allowlist serializer with a 10–15 s cache. _Needs:_ P6-01. _Done when:_ snapshot
+- [x] **P6-02** Allowlist serializer with a 10–15 s cache. _Needs:_ P6-01. _Done when:_ snapshot
       tests prove no IPs, node names, env, or other namespaces leak.
+      Done 2026-11-18, ahead of P6-01 and off by default: `GET /api/v1/infrastructure`
+      (`apps/api/src/modules/infrastructure/`) serializes Deployments, StatefulSets, and Pods in one
+      namespace through zod schemas that keep only allowlisted fields; leak tests plant IPs, node
+      names, env values, secret names, registry paths, annotations, and other namespaces in
+      realistic objects and find none in the output (a deliberate leak fails them). A 12 s cache,
+      shared reads, a 5 s read timeout, and a 12 s back-off after failures keep visitors off the
+      cluster; the last snapshot is served after a failure. The in-cluster reader uses plain
+      `fetch` with the pod's service account token (no new dependency) and is tested against a fake
+      API server. `INFRASTRUCTURE_SOURCE=disabled` (default) answers `503 infrastructure_disabled`,
+      so merging changes nothing live.
 - [ ] **P6-03** 🔒 Argo CD read-only token for sync status. _Needs:_ P3-04. _Done when:_ token
       scoped to one Application.
 - [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
