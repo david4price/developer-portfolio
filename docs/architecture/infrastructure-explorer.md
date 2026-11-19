@@ -182,5 +182,5 @@ the switch disabled and opens on the simulation.
   and a failed or stalled read leaves the lines without sparks rather than failing the
   snapshot. Traffic is read with each cluster refresh, so a fallback snapshot carries the
   levels it was built with; the page powers the map down within a minute of that anyway.
-- Next: P6-01 is live; publish/merge the P6-03 integration, then the page fetches every 12 s
-  with the "not configured", "unavailable", and loaded states the web rules require.
+- Status: live in production (P6-01 to P6-04 done). The offline drill (2026-11-19) showed the
+  whole grid offline, never healthy, while the API was at zero replicas.

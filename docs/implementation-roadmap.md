@@ -6,15 +6,21 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-19_
 
-**Current phase:** 6 (Infrastructure Explorer). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
+**Current phase:** 6 (Infrastructure Explorer; only P6-05's token rotation, due 2027-02-16, is
+left). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
 Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval work is parked on it.
 
 **Recently done**
 
-- P6-04 release versions and token reminder (code, `feat/p6-04-release-versions`): the API and
-  worker show their short source commit; the API warns daily from 14 days before the Argo CD
-  token expires. New task P6-05 tracks the rotation.
+- **P6-04 done** (2026-11-19): offline drill on production. With the API scaled to zero, the
+  explorer endpoint returned only `502`s and the owner saw the whole grid offline, never healthy;
+  the API was restored and ready within seconds. An unexplained earlier scale-to-zero stretched
+  the outage to about 4 minutes, so K3s API audit logging is now on to trace such writes
+  ([guide](deployment/kubernetes.md#api-audit-logging-approval-required)).
+- P6-04 release versions and token reminder merged and deployed (PR #58, 2026-11-19): the API
+  and worker show their short source commit; the API checks hourly and warns daily from 14 days
+  before the Argo CD token expires. New task P6-05 tracks the rotation.
 - P6-04 traffic sparks merged and deployed (PR #57, 2026-11-19): Redis request counters give the
   API, its tunnel, and the AI model an `idle`/`low`/`busy` level, so the live map's lines pulse;
   the narrow layout's worker–PostgreSQL line moved in from the frame's edge.
@@ -214,10 +220,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Next up, in order**
 
-1. **P6-04:** the offline drill on production (the map must say "unavailable", never
-   "healthy"; it briefly stops the API, so it needs approval). Everything else in P6-04 is
-   built. Then **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from
-   2027-02-02).
+1. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -225,8 +228,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-04-release-versions` (P6-04 source-commit versions and the
-token-expiry reminder).
+**Branch in progress:** `docs/p6-04-done` (P6-04 ticked, audit logging guide).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -237,6 +239,7 @@ Open every PR against `main`.
 - [x] Router forwards no ports to the reference host (confirmed 2026-11-13).
 - [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
 - [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
+- [x] K3s API audit logging applied (2026-11-19).
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -488,7 +491,7 @@ Read-only inventory of the reference host. Findings:
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 
-## Phase 6: Infrastructure Explorer (3/5)
+## Phase 6: Infrastructure Explorer (4/5)
 
 - [x] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
       P3-03. _Done when:_ `kubectl auth can-i` denies secrets, logs, and exec.
@@ -518,7 +521,7 @@ Read-only inventory of the reference host. Findings:
       against live Argo CD with TLS verification. Production API wiring is prepared locally and
       still awaits merging and the image rollout; the endpoint still has empty sync/
       release until then. [Provisioning and rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
-- [ ] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
+- [x] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
       Design: an animated blueprint of a power grid, with buildings lit by their replicas and
       sparks on the lines ([visual design](architecture/infrastructure-explorer.md)). A prototype
@@ -539,7 +542,10 @@ Read-only inventory of the reference host. Findings:
       sparks come from Redis request counters (PR #57). The API and worker show the short source
       commit the release recorded instead of an image digest, and the API logs a daily warning
       from 14 days before the Argo CD token expires (`feat/p6-04-release-versions`).
-      Still open: the offline drill on production.
+      Offline drill done 2026-11-19: with the API at zero replicas the endpoint returned only
+      `502`s and the whole grid showed offline, never healthy (owner observed); restored within
+      seconds. An unidentified client had scaled the API down ~3 minutes before the drill
+      started, so the outage ran ~4 minutes; K3s API audit logging is now on (2026-11-19).
 - [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
       P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
       back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
