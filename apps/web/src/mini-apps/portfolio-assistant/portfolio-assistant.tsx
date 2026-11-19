@@ -203,8 +203,9 @@ export function PortfolioChat({
     <section className="chat" aria-label="Portfolio chat">
       <div className="chat-scroll" ref={log}>
         <p className="chat-intro">
-          Ask in English about the projects and technologies in this portfolio. Answers may contain
-          mistakes. Messages are kept for up to 24 hours; please avoid sharing personal information.
+          Ask in English about the projects and technologies in this portfolio, or about the
+          developer behind it. Answers may contain mistakes. Messages are kept for up to 24 hours;
+          please avoid sharing personal information.
         </p>
         <ChatConversation
           assistantName={assistantName}

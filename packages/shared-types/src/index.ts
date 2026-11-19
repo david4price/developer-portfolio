@@ -107,20 +107,21 @@ export interface ChatMessageRequest {
   readonly message: string;
 }
 
-export type ChatLinkKind = 'project' | 'mini-app' | 'doc';
+export type ChatLinkKind = 'project' | 'mini-app' | 'doc' | 'page';
 
 /**
- * A page the assistant suggests: a site page, or (`doc`) a curated architecture note's source on
- * GitHub. The API only returns links to slugs in the registry, and clients rebuild `path` from
- * their own copy of it rather than trusting the response.
+ * A page the assistant suggests: a project or mini-app, one of the fixed site pages (`page`:
+ * About, Experience), or (`doc`) a curated architecture note's source on GitHub. The API only
+ * returns links to known slugs, and clients rebuild `path` from their own copy of the registry
+ * rather than trusting the response.
  */
 export interface ChatLink {
   readonly kind: ChatLinkKind;
   readonly slug: string;
   readonly title: string;
   /**
-   * Site-relative path with a trailing slash for pages (`/projects/<slug>/`), or the source's
-   * https URL on GitHub for `doc` links.
+   * Site-relative path with a trailing slash for pages (`/projects/<slug>/`, `/about/`), or the
+   * source's https URL on GitHub for `doc` links.
    */
   readonly path: string;
 }

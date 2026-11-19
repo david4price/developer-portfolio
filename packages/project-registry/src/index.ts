@@ -61,6 +61,21 @@ export function createProfile(input: ProfileInput): Profile {
 /** The validated owner profile shipped with this repository (home page, About, Experience). */
 export const profile: Profile = createProfile(profileData);
 
+/**
+ * Fixed site pages the chat assistant may link to by slug (P5-13), besides projects and
+ * mini-apps: where the profile it answers from is shown.
+ */
+export const SITE_PAGES = [
+  { slug: 'about', title: 'About', path: '/about/' },
+  { slug: 'experience', title: 'Experience', path: '/experience/' },
+] as const;
+
+export type SitePage = (typeof SITE_PAGES)[number];
+
+export function findSitePage(slug: string): SitePage | undefined {
+  return SITE_PAGES.find((page) => page.slug === slug);
+}
+
 export function createDocNotes(input: DocNotesInput): DocNotes {
   return docNotesSchema.parse(input);
 }

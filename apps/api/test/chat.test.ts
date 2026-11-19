@@ -37,6 +37,7 @@ import {
   RATE_LIMITER,
   type RateLimiter,
 } from '../src/modules/chat/limits.js';
+import { createProfile } from '@portfolio/project-registry';
 import { createTestApp } from './support/test-app.js';
 import {
   CHALLENGE_REPLAY_STORE,
@@ -417,6 +418,44 @@ describe('chat sessions and messages', () => {
       marked.json<ChatMessageResponse>().links.map(({ slug }) => slug),
       ['api-design'],
       'a doc link the model wrote is kept, and no second one is added',
+    );
+  });
+
+  it('adds no second link to a profile page the reply already marks', async () => {
+    await app.close();
+    const owner = createProfile({
+      name: 'Alex Example',
+      headline: 'Backend developer',
+      intro: 'I write APIs and dashboards for logistics companies.',
+      about: ['I like tests.'],
+      links: [],
+      experience: [],
+    });
+    const providers = chatProviders(store, ai, generousLimits, undefined, undefined, challenge).map(
+      (provider) =>
+        typeof provider === 'object' && provider.provide === KNOWLEDGE_BASE
+          ? {
+              provide: KNOWLEDGE_BASE,
+              useValue: new RegistryKnowledgeBase(testRegistry, testDocNotes, owner),
+            }
+          : provider,
+    );
+    app = await createTestApp({ controllers: [ChatController], providers });
+    const cookie = await startSession();
+
+    // The reply repeats the intro, so the fallback would pick About too.
+    ai.replyWith = 'They write APIs and dashboards for logistics companies. See [[page:about]].';
+    const marked = await send(cookie, 'Tell me about Alex');
+    assert.deepEqual(
+      marked.json<ChatMessageResponse>().links.map(({ kind, slug }) => `${kind}:${slug}`),
+      ['page:about'],
+    );
+    ai.replyWith = 'They write APIs and dashboards for logistics companies.';
+    const unmarked = await send(cookie, 'Tell me about Alex');
+    assert.deepEqual(
+      unmarked.json<ChatMessageResponse>().links.map(({ kind, slug }) => `${kind}:${slug}`),
+      ['page:about'],
+      'without the marker, the page it drew on is still linked',
     );
   });
 

@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   createDocNotes,
+  createProfile,
   createRegistry,
   docNotes,
   docNoteUrl,
+  profile,
   registry,
 } from '@portfolio/project-registry';
 import {
@@ -249,7 +251,7 @@ describe('architecture notes', () => {
   });
 
   it('answer deployment and CI questions with the release note', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     for (const question of ['How is this site deployed?', 'Which GitHub Actions run?']) {
       const retrieved = shipped.search(question, 3);
       assert.ok(
@@ -266,7 +268,7 @@ describe('architecture notes', () => {
   });
 
   it('find notes by the word forms visitors use', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     const firstNote: readonly [string, string][] = [
       ['Where is it hosted?', 'static-site'],
       ['How is it installed?', 'local-development'],
@@ -290,7 +292,7 @@ describe('architecture notes', () => {
   });
 
   it('ship whole: no shipped note is cut to fit its snippet', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     for (const note of docNotes.notes) {
       const marker = `[[doc:${note.slug}]]`;
       const snippet = shipped.search(note.title, 20).find((text) => text.endsWith(marker));
@@ -302,6 +304,214 @@ describe('architecture notes', () => {
       );
       assert.equal(shipped.resolve(note.slug, 'doc')?.path, docNoteUrl(note));
     }
+  });
+});
+
+describe('profile entries (P5-13)', () => {
+  const owner = createProfile({
+    name: 'Alex Example',
+    headline: 'Backend developer',
+    intro: 'I write APIs and dashboards for logistics companies.',
+    about: ['I started in support before moving into development.', 'I care about tests.'],
+    links: [],
+    experience: [
+      {
+        role: 'Backend Developer',
+        organization: 'Example Freight',
+        period: '2023 – present',
+        highlights: ['Built shipment tracking APIs with NestJS.'],
+      },
+      {
+        role: 'Support Engineer',
+        organization: 'Example Freight',
+        period: '2020 – 2023',
+        highlights: ['Investigated integration failures.'],
+      },
+    ],
+    personal: {
+      intro: 'Outside work I like being outdoors.',
+      interests: [
+        { name: 'Surfing', description: 'Dawn sessions whenever the swell allows.' },
+        { name: 'Mountain Biking', description: 'Enduro trails and technical descents.' },
+        { name: 'Running', description: 'Training for a half marathon.' },
+      ],
+    },
+  });
+  const withProfile = new RegistryKnowledgeBase(testRegistry, testDocNotes, owner);
+  /** A profile snippet's heading and the page its closing line links. */
+  const headers = (query: string, limit = 3) =>
+    withProfile
+      .search(query, limit)
+      .map((snippet) => `${snippet.split('\n').at(-1)} | ${firstLine(snippet)}`);
+
+  it('answers "where does <name> work?" with the summary and the roles, linked to their pages', () => {
+    assert.deepEqual(headers('Where does Alex work?'), [
+      'Page: [[page:about]] | Alex Example: Backend developer',
+      'Page: [[page:experience]] | Alex Example, Backend Developer at Example Freight (2023 – present)',
+      'Page: [[page:experience]] | Alex Example, Support Engineer at Example Freight (2020 – 2023)',
+    ]);
+  });
+
+  it('answers hobby and weekend questions with the personal section and interests', () => {
+    for (const question of ['What are his hobbies?', 'What does Alex do on weekends?']) {
+      assert.equal(
+        headers(question, 1)[0],
+        'Page: [[page:about]] | Alex Example outside work',
+        question,
+      );
+    }
+  });
+
+  it('finds an interest by the plain form of its "-ing" name', () => {
+    const interest = (name: string) => `Page: [[page:about]] | Alex Example's interest: ${name}`;
+    assert.equal(headers('Does he surf?', 1)[0], interest('Surfing'));
+    assert.equal(headers('Does Alex bike?', 1)[0], interest('Mountain Biking'));
+    assert.equal(headers('Does he run?', 1)[0], interest('Running'));
+  });
+
+  it("labels the owner's first-person text as their words, within the snippet cap", () => {
+    const [summary] = withProfile.search('Tell me about Alex', 1);
+    assert.match(
+      summary ?? '',
+      /\nIn Alex's words \("I" and "my" mean Alex, not you\): I write APIs and dashboards for logistics companies\.\nPage: \[\[page:about\]\]$/,
+    );
+    for (const query of ['Alex', 'his hobbies', 'his employer', 'does he surf']) {
+      for (const snippet of withProfile.search(query, 10)) {
+        assert.ok(snippet.length <= SNIPPET_MAX_CHARS);
+      }
+    }
+  });
+
+  it('keeps the closing page line even when the prose fills the snippet', () => {
+    const long = createProfile({
+      ...owner,
+      personal: {
+        intro: 'x'.repeat(500),
+        interests: [
+          { name: 'Surfing', description: `${'wave '.repeat(119)}end` },
+          { name: 'Coffee', description: 'Espresso.' },
+        ],
+      },
+    });
+    const [snippet] = new RegistryKnowledgeBase(testRegistry, testDocNotes, long).search(
+      'Does he surf?',
+      1,
+    );
+    assert.ok((snippet ?? '').length <= SNIPPET_MAX_CHARS);
+    assert.match(snippet ?? '', /…\nPage: \[\[page:about\]\]$/);
+  });
+
+  it('link the page a reply drew on even when the model leaves out the marker', () => {
+    const reply = 'They write APIs and dashboards for logistics companies, I hear.';
+    assert.deepEqual(withProfile.sourceFor('Tell me about Alex', 3, reply), {
+      kind: 'page',
+      slug: 'about',
+      title: 'About',
+      path: '/about/',
+    });
+  });
+
+  it('leaves project and architecture questions to projects and notes', () => {
+    assert.deepEqual(
+      withProfile.search('kubernetes', 2).map(firstLine),
+      knowledge.search('kubernetes', 2).map(firstLine),
+    );
+  });
+
+  it('resolves page markers to About and Experience only, and links them in replies', () => {
+    assert.deepEqual(withProfile.resolve('about', 'page'), {
+      kind: 'page',
+      slug: 'about',
+      title: 'About',
+      path: '/about/',
+    });
+    assert.equal(withProfile.resolve('admin', 'page'), undefined);
+    const resolved = resolveNavigationLinks(
+      'See [[page:experience]] and [[page:admin]], or [[ page : about ]].',
+      withProfile,
+    );
+    assert.equal(resolved.reply, 'See Experience and, or About.');
+    assert.deepEqual(
+      resolved.links.map(({ kind, slug, path }) => [kind, slug, path]),
+      [
+        ['page', 'experience', '/experience/'],
+        ['page', 'about', '/about/'],
+      ],
+    );
+  });
+
+  it('compete only when a question is about a person, so site questions keep their answers', () => {
+    // "role", "company", "background", "stack", and "time" are profile search words too.
+    for (const question of [
+      'What role does the API play?',
+      'Which company hosts it?',
+      'What runs in the background?',
+      'What is the tech stack?',
+      'What is the background job queue?',
+    ]) {
+      assert.deepEqual(withProfile.search(question, 3), knowledge.search(question, 3), question);
+    }
+    assert.ok(headers('Who is the developer?', 1)[0]?.startsWith('Page: [[page:about]]'));
+    assert.ok(headers('What does she like?', 1)[0]?.startsWith('Page: [[page:about]]'));
+  });
+
+  it('leave the shipped site questions exactly as they were without a profile', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
+    const siteOnly = new RegistryKnowledgeBase(registry, docNotes);
+    for (const question of [
+      'What role does Redis play?',
+      'What is the background job queue?',
+      'Which projects are free to use?',
+      'Is there a personal project?',
+      'What company built this?',
+      'What is this site built with?',
+      'How is this site deployed?',
+      'What is the tech stack?',
+    ]) {
+      assert.deepEqual(shipped.search(question, 3), siteOnly.search(question, 3), question);
+    }
+  });
+
+  it('compare replies with only the prose the model saw, so long entries still link', () => {
+    const highlights = Array.from(
+      { length: 8 },
+      (_, i) => `Shipped feature number ${i} ${'x'.repeat(200)}.`,
+    );
+    const long = createProfile({
+      ...owner,
+      experience: [{ role: 'Engineer', organization: 'Big Co', period: '2020', highlights }],
+    });
+    const base = new RegistryKnowledgeBase(testRegistry, testDocNotes, long);
+    const [snippet] = base.search('Where does Alex work at Big Co?', 1);
+    assert.ok(snippet?.includes('Big Co'));
+    // A reply repeating the visible start of the highlights links Experience.
+    assert.equal(
+      base.sourceFor('Where does Alex work at Big Co?', 1, `${highlights[0]} ${highlights[1]}`)
+        ?.slug,
+      'experience',
+    );
+  });
+
+  it('come with the shipped profile: questions about the owner reach their pages', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
+    const firstName = profile.name.split(' ')[0] ?? profile.name;
+    const pageOf = (snippet: string | undefined) => snippet?.split('\n').at(-1);
+    const work = shipped.search(`Where does ${firstName} work?`, 3).map(pageOf);
+    assert.equal(work[0], 'Page: [[page:about]]');
+    assert.ok(work.slice(1).every((line) => line === 'Page: [[page:experience]]'));
+    if (profile.personal !== undefined) {
+      assert.equal(pageOf(shipped.search('What are his hobbies?', 1)[0]), 'Page: [[page:about]]');
+    }
+  });
+});
+
+describe('prompt rules for the profile', () => {
+  it("widen the answer scope to the owner's background and interests, but not their private life", () => {
+    assert.match(SYSTEM_RULES, /projects, skills, work, and interests/);
+    assert.match(
+      personaRules(NAME),
+      /or private life beyond the data; suggest asking the developer/,
+    );
   });
 });
 

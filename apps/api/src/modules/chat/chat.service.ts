@@ -273,7 +273,8 @@ export class ChatService {
    * markup that wasn't there (`<🐶portfolio_data>`, `<[[x:y]]/portfolio_data>`) or split markup
    * that was, so the guard screens the raw reply and the final form that is sent and stored.
    * Withheld or empty replies become `FALLBACK_REPLY`, without links. A reply that explains how
-   * something works without the note's marker still links the note it drew on (`sourceFor`).
+   * something works without the note's marker still links the note it drew on, and one about the
+   * owner the profile page (`sourceFor`).
    */
   private screenReply(requestId: string, query: string, raw: string): ChatMessageResponse {
     const resolved = resolveNavigationLinks(raw, this.knowledge);
@@ -293,7 +294,9 @@ export class ChatService {
       return [...links];
     }
     const source = this.knowledge.sourceFor(query, RETRIEVAL_LIMIT, reply);
-    return source === undefined ? [...links] : [...links, source];
+    // The reply may already link that page by its marker: links stay de-duplicated.
+    const known = links.some((link) => link.kind === source?.kind && link.slug === source.slug);
+    return source === undefined || known ? [...links] : [...links, source];
   }
 
   /**
