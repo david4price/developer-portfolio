@@ -4,12 +4,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import { describe, it, type TestContext } from 'node:test';
 import {
+  AiOverloadedError,
   type AiProvider,
   type AiStatus,
   AiUnavailableError,
 } from '../src/modules/ai/ai-provider.js';
 import { DisabledAiProvider } from '../src/modules/ai/disabled-ai.provider.js';
-import { OpenAiCompatibleProvider } from '../src/modules/ai/openai-compatible.provider.js';
+import {
+  CHAT_FAILURE_WINDOW_MS,
+  OpenAiCompatibleProvider,
+} from '../src/modules/ai/openai-compatible.provider.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
 import { createSnapshotSource } from '../src/modules/infrastructure/infrastructure.module.js';
 import {
@@ -82,6 +86,12 @@ describe('OpenAiCompatibleProvider.status', () => {
   it('throws typed errors for statuses, redirects, bad bodies, and unreachable runtimes', async (t) => {
     const cases: Array<[Handler, AiUnavailableError['reason']]> = [
       [json(500, { error: 'private detail' }), 'upstream_status'],
+      // A proxy's page in front of a runtime that's gone: not the runtime being busy.
+      [
+        (_request, response) =>
+          response.writeHead(503, { 'content-type': 'text/html' }).end('<h1>no upstream</h1>'),
+        'upstream_status',
+      ],
       [json(200, { models: [] }), 'invalid_response'],
       [(_request, response) => response.writeHead(200).end('not json'), 'invalid_response'],
       [
@@ -117,6 +127,51 @@ describe('OpenAiCompatibleProvider.status', () => {
     await assert.rejects(bounded.status(new AbortController().signal), timedOut);
   });
 
+  it('counts a llama.cpp server as ready whatever name it lists, but not other single models', async (t) => {
+    const llama = await runtime(
+      t,
+      json(200, {
+        object: 'list',
+        data: [{ id: '/models/loaded-file.gguf', object: 'model', owned_by: 'llamacpp' }],
+      }),
+    );
+    assert.equal(await provider(llama.baseUrl).status(signal()), 'ready');
+    const other = await runtime(t, json(200, listing('ai/other-model')));
+    assert.equal(await provider(other.baseUrl).status(signal()), 'missing');
+  });
+
+  it('reads a listed model as failing after a broken chat reply, until one succeeds or 10 min pass', async (t) => {
+    let now = 1_000_000;
+    let chat: Handler = json(500, { error: 'failed to load model' });
+    const { baseUrl } = await runtime(t, (request, response) => {
+      if (request.url?.endsWith('/models')) return json(200, listing(MODEL))(request, response);
+      return chat(request, response);
+    });
+    const ai = new OpenAiCompatibleProvider({ baseUrl, model: MODEL, now: () => now });
+    const ask = { messages: [{ role: 'user', content: 'hi' }], maxOutputTokens: 5 } as const;
+    assert.equal(await ai.status(signal()), 'ready');
+    await assert.rejects(ai.complete(ask, signal()), AiUnavailableError);
+    assert.equal(await ai.status(signal()), 'failing');
+    now += CHAT_FAILURE_WINDOW_MS;
+    assert.equal(await ai.status(signal()), 'ready');
+    // A body chat can't use counts too; a good reply clears it.
+    chat = json(200, { choices: [] });
+    await assert.rejects(ai.complete(ask, signal()), AiUnavailableError);
+    assert.equal(await ai.status(signal()), 'failing');
+    chat = json(200, { choices: [{ message: { role: 'assistant', content: 'ok' } }] });
+    await ai.complete(ask, signal());
+    assert.equal(await ai.status(signal()), 'ready');
+    // Overload and a client hanging up are not the model failing.
+    chat = json(429, { error: 'busy' });
+    await assert.rejects(ai.complete(ask, signal()), AiOverloadedError);
+    chat = () => undefined;
+    const hangUp = new AbortController();
+    const pending = ai.complete(ask, hangUp.signal);
+    hangUp.abort(new Error('client gone'));
+    await assert.rejects(pending, /client gone/);
+    assert.equal(await ai.status(signal()), 'ready');
+  });
+
   it('has no status check when AI is off', () => {
     const disabled: AiProvider = new DisabledAiProvider();
     assert.equal(disabled.status, undefined);
@@ -139,6 +194,7 @@ describe('AI building in the snapshot', () => {
     const expected = {
       ready: { health: 'healthy', failure: null },
       busy: { health: 'degraded', failure: null },
+      failing: { health: 'down', failure: 'not-ready' },
       missing: { health: 'down', failure: 'not-ready' },
     } as const;
     for (const [status, state] of Object.entries(expected)) {

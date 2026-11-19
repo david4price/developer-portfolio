@@ -110,8 +110,10 @@ can't be read the last snapshot is served as it was, or `503 infrastructure_unav
 the first one; each failed read is logged as a warning with its reason and status only. Locally,
 leave it disabled. With AI enabled on the `openai-compatible` provider, each refresh also asks
 `GET <AI_BASE_URL>/models` (no prompt, no GPU time, 1.5 s deadline) to light the AI building:
-healthy when `AI_MODEL` is listed under exactly that name, degraded on `429`/`503`, otherwise
-down. Only that state is returned, never the model's name or the runtime's address.
+healthy when `AI_MODEL` is listed under exactly that name (or by a llama.cpp server), degraded on
+`429` or the runtime's own `503`, and down when the model is missing, the runtime can't be reached,
+or this process's latest chat reply in the past 10 minutes failed. Only that state is returned,
+never the model's name or the runtime's address.
 
 The optional P6-03 Argo CD source runs alongside that Kubernetes reader. Set `ARGOCD_ENABLED=true`
 and all of `ARGOCD_SERVER_URL` (an HTTPS origin), `ARGOCD_APPLICATION`, `ARGOCD_PROJECT`,

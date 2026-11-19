@@ -17,21 +17,37 @@ export interface OpenAiCompatibleOptions {
   readonly timeoutMs?: number;
   /** Upper bound on the response body; larger replies are treated as malformed. */
   readonly maxResponseBytes?: number;
+  readonly now?: () => number;
 }
 
 export const DEFAULT_AI_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_MODEL_LIST_BYTES = 64 * 1024;
+/** How long a failed chat reply keeps the status check at `failing` (unless one succeeds). */
+export const CHAT_FAILURE_WINDOW_MS = 10 * 60_000;
 
 /** Statuses that mean "busy, try later" rather than "broken". */
 const overloadStatuses = new Set([429, 503]);
 
-const modelListSchema = z.object({ data: z.array(z.object({ id: z.string() })) });
+/**
+ * How llama.cpp's server tags its model list; it answers with its loaded model whatever a request
+ * names.
+ */
+const LLAMA_CPP_OWNER = 'llamacpp';
+
+const modelListSchema = z.object({
+  data: z.array(z.object({ id: z.string(), owned_by: z.string().optional() })),
+});
 
 const completionSchema = z.object({
   choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1),
   usage: z.object({ completion_tokens: z.number().int().nonnegative() }).nullish(),
 });
+
+/** A runtime reply: the body for a 2xx, otherwise only the status and whether it was JSON. */
+type Reply =
+  | { readonly ok: true; readonly body: unknown }
+  | { readonly ok: false; readonly status: number; readonly json: boolean };
 
 /**
  * Adapter for any server that implements OpenAI's `POST /chat/completions` (llama.cpp server,
@@ -43,6 +59,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
   private readonly modelsEndpoint: string;
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
+  private readonly now: () => number;
+  /** This process's last broken chat reply (error status, bad body); null after a good one. */
+  private lastChatFailureAt: number | null = null;
 
   constructor(private readonly options: OpenAiCompatibleOptions) {
     const base = new URL(options.baseUrl);
@@ -54,6 +73,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     this.modelsEndpoint = `${root}/models`;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
     this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
+    this.now = options.now ?? Date.now;
   }
 
   async complete(request: AiCompletionRequest, signal: AbortSignal): Promise<AiCompletion> {
@@ -64,82 +84,104 @@ export class OpenAiCompatibleProvider implements AiProvider {
       throw new RangeError('messages must not be empty');
     }
 
-    const timeout = AbortSignal.timeout(this.timeoutMs);
-    const combined = AbortSignal.any([signal, timeout]);
-
-    try {
-      const response = await fetch(this.endpoint, {
+    const reply = await this.send(
+      this.endpoint,
+      {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: this.options.model,
           messages: request.messages.map(({ role, content }) => ({ role, content })),
           max_tokens: request.maxOutputTokens,
           stream: false,
         }),
-        // A redirect would send the prompt somewhere other than the configured endpoint.
-        redirect: 'error',
-        signal: combined,
-      });
-
-      if (!response.ok) {
-        await response.body?.cancel();
-        if (overloadStatuses.has(response.status)) throw new AiOverloadedError(response.status);
-        throw new AiUnavailableError('upstream_status', response.status);
-      }
-
-      const parsed = completionSchema.safeParse(
-        await readJsonBody(response, this.maxResponseBytes),
-      );
-      if (!parsed.success) throw new AiUnavailableError('invalid_response');
-
-      const [choice] = parsed.data.choices;
-      return {
-        content: choice?.message.content ?? '',
-        outputTokens: parsed.data.usage?.completion_tokens ?? null,
-      };
-    } catch (error) {
-      // The caller cancelled (e.g. the client disconnected): propagate its reason unchanged.
-      if (signal.aborted) throw signal.reason;
-      if (timeout.aborted) throw new AiUnavailableError('timeout');
-      if (error instanceof AiUnavailableError || error instanceof AiOverloadedError) throw error;
-      throw new AiUnavailableError('network');
+      },
+      signal,
+      this.maxResponseBytes,
+    );
+    if (!reply.ok) {
+      if (overloadStatuses.has(reply.status)) throw new AiOverloadedError(reply.status);
+      this.lastChatFailureAt = this.now();
+      throw new AiUnavailableError('upstream_status', reply.status);
     }
+    const parsed = completionSchema.safeParse(reply.body);
+    if (!parsed.success) {
+      this.lastChatFailureAt = this.now();
+      throw new AiUnavailableError('invalid_response');
+    }
+    this.lastChatFailureAt = null;
+    const [choice] = parsed.data.choices;
+    return {
+      content: choice?.message.content ?? '',
+      outputTokens: parsed.data.usage?.completion_tokens ?? null,
+    };
   }
 
   /**
    * `GET /models`: what the runtime has, without running anything. The configured model must be
-   * listed under exactly the name chat sends, as vLLM, LM Studio, and Docker Model Runner match
-   * it. (llama.cpp's server ignores the name and lists its file instead; there it reads as
-   * missing.)
+   * listed under exactly the name chat sends (vLLM, LM Studio, and Docker Model Runner match it
+   * exactly); llama.cpp's server, which serves its loaded model whatever the name, counts as
+   * ready when it lists one. A listed model whose last chat reply here (within
+   * `CHAT_FAILURE_WINDOW_MS`) was an error or a broken body reads as `failing`: listed, but not
+   * answering. A `503` counts as busy only when it's the runtime's own JSON error, not a proxy's
+   * page in front of a runtime that's gone.
    */
   async status(signal: AbortSignal): Promise<AiStatus> {
+    let reply: Reply;
+    try {
+      reply = await this.send(this.modelsEndpoint, {}, signal, MAX_MODEL_LIST_BYTES);
+    } catch (error) {
+      // The caller's deadline is a timeout here, not a cancellation to pass on.
+      if (signal.aborted) throw new AiUnavailableError('timeout');
+      throw error;
+    }
+    if (!reply.ok) {
+      if (reply.status === 429 || (reply.status === 503 && reply.json)) return 'busy';
+      throw new AiUnavailableError('upstream_status', reply.status);
+    }
+    const parsed = modelListSchema.safeParse(reply.body);
+    if (!parsed.success) throw new AiUnavailableError('invalid_response');
+    const models = parsed.data.data;
+    const listed =
+      models.some(({ id }) => id === this.options.model) ||
+      (models.length > 0 && models.every(({ owned_by }) => owned_by === LLAMA_CPP_OWNER));
+    if (!listed) return 'missing';
+    const failedAt = this.lastChatFailureAt;
+    return failedAt !== null && this.now() - failedAt < CHAT_FAILURE_WINDOW_MS
+      ? 'failing'
+      : 'ready';
+  }
+
+  /**
+   * One request to the configured runtime, shared by chat and the status check: JSON accepted,
+   * redirects refused (they would send a prompt elsewhere), bounded by `timeoutMs` and `signal`,
+   * error bodies discarded unread, and 2xx bodies read up to `maxBytes`. The caller's own abort
+   * propagates its reason unchanged; everything else becomes `AiUnavailableError`.
+   */
+  private async send(
+    url: string,
+    init: { method?: string; headers?: Record<string, string>; body?: string },
+    signal: AbortSignal,
+    maxBytes: number,
+  ): Promise<Reply> {
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
-    const failed = () => new AiUnavailableError(combined.aborted ? 'timeout' : 'network');
-    let response: Response;
     try {
-      response = await fetch(this.modelsEndpoint, {
-        headers: { accept: 'application/json' },
+      const response = await fetch(url, {
+        ...init,
+        headers: { ...init.headers, accept: 'application/json' },
         redirect: 'error',
         signal: combined,
       });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        const type = response.headers.get('content-type') ?? '';
+        return { ok: false, status: response.status, json: /\bjson\b/i.test(type) };
+      }
+      return { ok: true, body: await readJsonBody(response, maxBytes) };
     } catch {
-      throw failed();
+      if (signal.aborted) throw signal.reason;
+      throw new AiUnavailableError(timeout.aborted ? 'timeout' : 'network');
     }
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined);
-      if (overloadStatuses.has(response.status)) return 'busy';
-      throw new AiUnavailableError('upstream_status', response.status);
-    }
-    let body: unknown;
-    try {
-      body = await readJsonBody(response, MAX_MODEL_LIST_BYTES);
-    } catch {
-      throw failed();
-    }
-    const parsed = modelListSchema.safeParse(body);
-    if (!parsed.success) throw new AiUnavailableError('invalid_response');
-    return parsed.data.data.some(({ id }) => id === this.options.model) ? 'ready' : 'missing';
   }
 }
