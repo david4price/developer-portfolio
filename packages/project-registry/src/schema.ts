@@ -96,10 +96,28 @@ export const interestSchema = z.object({
   description: content(600),
 });
 
-/** The personal side of About: a short introduction and the owner's interests. */
+/**
+ * One of the owner's photos. `file` names two WebP files the web app serves from
+ * `public/photos/`: `<file>-sm.webp` (900 px on the long edge) for the gallery and
+ * `<file>-lg.webp` (up to 1,800 px) to open; `width` and `height` are the large one's.
+ */
+export const photoSchema = z.object({
+  file: z
+    .string()
+    .max(40)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'must be a lowercase, hyphenated file name'),
+  title: content(60),
+  /** What the image shows, for screen readers. */
+  alt: content(200),
+  width: z.number().int().min(1).max(4_000),
+  height: z.number().int().min(1).max(4_000),
+});
+
+/** The personal side of About: a short introduction, the owner's interests, and photos. */
 export const personalSchema = z.object({
   intro: content(500),
   interests: z.array(interestSchema).min(2).max(10),
+  photos: z.array(photoSchema).max(12).optional(),
 });
 
 export const profileLinkSchema = z.object({
@@ -146,6 +164,9 @@ export const profileSchema = z
     }
     for (const duplicate of duplicates(profile.personal?.interests.map(({ name }) => name) ?? [])) {
       issue(`duplicate interest: ${duplicate}`);
+    }
+    for (const duplicate of duplicates(profile.personal?.photos?.map(({ file }) => file) ?? [])) {
+      issue(`duplicate photo: ${duplicate}`);
     }
     for (const entry of profile.experience) {
       for (const duplicate of duplicates(entry.highlights)) {

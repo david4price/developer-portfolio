@@ -142,6 +142,42 @@ main {
   border-radius: var(--radius);
 }
 
+/* About's photos: a masonry of columns, so tall and wide shots sit together. */
+.photo-grid {
+  columns: 3 16rem;
+  column-gap: var(--space);
+  padding: 0;
+  list-style: none;
+}
+
+.photo-grid > li {
+  break-inside: avoid;
+  margin-bottom: var(--space);
+}
+
+.photo {
+  margin: 0;
+}
+
+.photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.photo a:focus-visible img {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.photo figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
 .ui-card__title {
   margin-top: 0;
   font-size: 1.15rem;

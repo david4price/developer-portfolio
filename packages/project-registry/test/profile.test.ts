@@ -123,6 +123,37 @@ describe('createProfile', () => {
     );
   });
 
+  it('accepts photos with plain file names and rejects bad names, duplicates, and too many', () => {
+    const personal = {
+      intro: 'Outside of work.',
+      interests: [
+        { name: 'Surfing', description: 'Dawn sessions.' },
+        { name: 'Guitar', description: 'Blues, mostly.' },
+      ],
+    };
+    const photo = {
+      file: 'kyoto-tower',
+      title: 'Kyoto Tower',
+      alt: 'A tower.',
+      width: 1200,
+      height: 1800,
+    };
+    const withPhotos = (photos: (typeof photo)[]) =>
+      createProfile({ ...validProfile, personal: { ...personal, photos } });
+    assert.equal(withPhotos([photo]).personal?.photos?.[0]?.file, 'kyoto-tower');
+    for (const file of ['../etc/passwd', 'Kyoto Tower', 'tower.webp', '-tower', '']) {
+      assert.throws(
+        () => withPhotos([{ ...photo, file }]),
+        /lowercase, hyphenated file name/,
+        file,
+      );
+    }
+    assert.throws(() => withPhotos([photo, photo]), /duplicate photo: kyoto-tower/);
+    const many = Array.from({ length: 13 }, (_, i) => ({ ...photo, file: `photo-${i}` }));
+    assert.throws(() => withPhotos(many), /expected array to have <=12/);
+    assert.throws(() => withPhotos([{ ...photo, alt: 'x'.repeat(201) }]), /<=200/);
+  });
+
   it('rejects non-https links', () => {
     assert.throws(() =>
       createProfile({ ...validProfile, links: [{ label: 'Site', href: 'http://example.com' }] }),

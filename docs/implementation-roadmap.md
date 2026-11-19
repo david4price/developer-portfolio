@@ -14,6 +14,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- About photos (`feat/about-photos`): eight of the owner's photos in a gallery under "Beyond the
+  code", from Tokyo, Kyoto, Cape Town, the Alps, and the night sky. Metadata is stripped, colour
+  is converted to sRGB, and each comes as 900 px and 1,800 px WebP; a test enforces all three.
 - **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
   - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
     Experience through a new `page` link kind that the web rebuilds from its own list. They
@@ -245,10 +248,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 1. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
-2. Owner content: photos for "Beyond the code" when ready; more projects; then **P5-10**, and
+2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
-**Branch in progress:** `feat/p5-13-profile-knowledge` (P5-13: the chat answers about the owner).
+**Branch in progress:** `feat/about-photos` (the owner's photos on About).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
