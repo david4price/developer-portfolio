@@ -255,8 +255,11 @@ audit log through a drop-in, `/etc/rancher/k3s/config.yaml.d/audit.yaml`, which 
     `user.username`, `verb`, `objectRef`, and `responseStatus.code`.
   - To find who scaled the API: `sudo grep '"subresource":"scale"' …/audit.log`.
   - To find who exec'd into a pod: `sudo grep '"subresource":"exec"' …/audit.log`.
-- **Note:** Metadata still records each request's URI, and for `exec` that includes the command
-  and its arguments, so never pass a secret as an `exec` argument.
+- **Note:** Metadata still records each request's URI. For `exec` that includes the command and
+  its arguments, and for `attach` and `port-forward` their parameters. Anything in those
+  arguments, such as a token expanded by your shell, sits in plain text in the root-only log
+  for up to 30 days, across up to 10 files. Treat the log as sensitive and never pass a secret
+  on an `exec` command line.
 - **Restart side effect:** for about a minute after the restart, the HPA can't read CPU
   metrics, so Argo CD briefly reports the app `Degraded`. It recovers on its own.
 - **Rollback:** remove `/etc/rancher/k3s/config.yaml.d/audit.yaml` and restart K3s. If K3s
@@ -273,8 +276,10 @@ apiserver_audit` shows three counters:
 - **Applied on the reference host (2026-11-19):**
   - The node, workloads, and Argo CD came back healthy.
   - Metadata events are counting, with no audit errors.
-  - A test `kubectl exec` was recorded: verb `get`, subresource `exec`, response `101`, with the
-    user and source.
+  - Each test request was recorded with its user and source:
+    - a `kubectl exec` (verb `get`, subresource `exec`, response `101`);
+    - a Secret `get`;
+    - a server-side dry-run `create`.
 
 ## 3. Secrets
 

@@ -13,6 +13,11 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Recently done**
 
+- **P7-06 done** (2026-11-19): K3s API audit logging is on, at Metadata level, for 30 days.
+  - Recorded: writes, `exec`, `attach`, `port-forward`, and Secret reads.
+  - Verified on the host: a test `exec`, a Secret read, and a server-side dry-run write each
+    appeared in the log; routine traffic is dropped at `None`; no audit errors.
+  - [Guide](deployment/kubernetes.md#api-audit-logging-p7-06-approval-required).
 - **P6-04 done** (2026-11-19): offline drill on production. With the API scaled to zero, the
   explorer endpoint returned only `502`s and the owner saw the page's "unavailable" state: the
   grid powered down under the "Grid offline: status not loaded" overlay, never healthy. The API
@@ -229,7 +234,8 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `docs/p6-04-done` (P6-04 ticked, P7-06 audit logging guide).
+**Branch in progress:** `docs/p6-04-done` (P6-04 ticked; P7-06 audit logging applied and
+verified).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -546,7 +552,7 @@ Read-only inventory of the reference host. Findings:
       `502`s, and the owner saw the page's "unavailable" state: the whole grid powered down
       under the "Grid offline: status not loaded" overlay, never healthy. Restored within
       seconds. An unidentified client had scaled the API down ~3 minutes before the drill
-      started, so the outage ran ~4 minutes; P7-06 adds audit logging to trace such writes.
+      started, so the outage ran ~4 minutes; P7-06 turned on audit logging to trace such writes.
 - [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
       P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
       back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
@@ -569,9 +575,10 @@ Read-only inventory of the reference host. Findings:
       (failed lint).
 - [x] **P7-06** 🔒 K3s API audit logging. _Needs:_ Phase 3. _Done when:_ writes, `exec`/`attach`/
       `port-forward`, and Secret reads are recorded at Metadata level (never bodies), routine
-      traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log keeps 30
-      days. [Guide](deployment/kubernetes.md#api-audit-logging-p7-06-approval-required).
+      traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log is
+      configured to keep 30 days. [Guide](deployment/kubernetes.md#api-audit-logging-p7-06-approval-required).
       Done 2026-11-19. Review found the first version dropped `exec` and Secret reads (both
       arrive as `get`); the revised policy and the `config.yaml.d` drop-in are applied. Verified:
-      node, workloads, and Argo CD healthy; no audit errors. A test `kubectl exec` was logged as
-      `get` on `pods/exec`, response `101`, with the user and source.
+      node, workloads, and Argo CD healthy; no audit errors; `None` counting routine traffic.
+      Each of these was logged with its user and source: - a test `kubectl exec` (as `get` on `pods/exec`, response `101`); - a Secret `get`; - a server-side dry-run `create`, which is never saved.
+      Retention is set to 30 days in the drop-in; it can only be observed over time.
