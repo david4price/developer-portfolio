@@ -28,16 +28,16 @@ app.kubernetes.io/part-of: portfolio
 {{- end }}
 
 {{/*
-The version label for an image: its source commit (`image.revision`, written by the release
-workflow) when set, otherwise the chart's appVersion. The Infrastructure Explorer shows the
-short commit (P6-04).
+The version label for an image: its source commit (`image.revision`, written quoted by the
+release workflow) when set, otherwise the chart's appVersion. The Infrastructure Explorer shows
+the short commit (P6-04). Usage: include "portfolio.imageVersion" (dict "root" $ "image" …)
 */}}
 {{- define "portfolio.imageVersion" -}}
-{{- $revision := .image.revision | default "" }}
-{{- if $revision }}
-{{- if not (kindIs "string" $revision) }}
+{{- $revision := .image.revision }}
+{{- if and (not (kindIs "invalid" $revision)) (not (kindIs "string" $revision)) }}
 {{- fail (printf "image %s: quote revision, or YAML reads an all-digit commit as a number" .image.repository) }}
 {{- end }}
+{{- if $revision }}
 {{- if not (regexMatch "^[0-9a-f]{40}$" $revision) }}
 {{- fail (printf "image %s: revision must be a full 40-character commit SHA" .image.repository) }}
 {{- end }}
@@ -54,9 +54,18 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
-{{/* Component labels; pass "version" for a workload built from this repository. */}}
+{{/*
+Component labels. Everything built from this repository's API or worker image (the API and its
+HPA, RBAC, Service, and NetworkPolicy; the migrate Job, which runs the API image; the worker)
+carries that image's version; other components carry the chart's appVersion.
+*/}}
 {{- define "portfolio.componentLabels" -}}
-{{ include "portfolio.versionedLabels" (dict "root" .root "version" (.version | default .root.Chart.AppVersion)) }}
+{{- $image := dict "api" .root.Values.api.image "migrate" .root.Values.api.image "worker" .root.Values.worker.image }}
+{{- $version := .root.Chart.AppVersion }}
+{{- if hasKey $image .component }}
+{{- $version = include "portfolio.imageVersion" (dict "root" .root "image" (get $image .component)) }}
+{{- end }}
+{{ include "portfolio.versionedLabels" (dict "root" .root "version" $version) }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 

@@ -1,5 +1,5 @@
 {{- $fullname := include "portfolio.fullname" . }}
-{{- $component := dict "root" $ "component" "api" "version" (include "portfolio.imageVersion" (dict "root" $ "image" .Values.api.image)) }}
+{{- $component := dict "root" $ "component" "api" }}
 {{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
 {{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
 {{- end }}

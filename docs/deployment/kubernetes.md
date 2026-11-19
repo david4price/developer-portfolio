@@ -366,10 +366,13 @@ and permits API egress to Argo CD server pods in the `argocd` namespace on TCP 8
 - **Availability:** Argo CD failure clears sync/release and its reachability health to unknown;
   fresh workload data still returns `200`. The optional source does not affect readiness. A
   successful read marks the Argo CD component reachable, not the Application aggregate healthy.
-- **Reminder:** from 14 days before the token's expiry (its JWT `exp` claim), the API logs a
-  warning once a day (`Argo CD explorer token expires soon; rotate it`, with the expiry date and
-  days left, never the token), and an error once a day after it has expired. Roadmap task P6-05
-  tracks the rotation.
+- **Reminder:** the API checks the token on startup and every hour, whether or not anyone opens
+  the explorer. From 14 days before its expiry (its JWT `exp` claim) it logs a warning once a day
+  (`Argo CD explorer token expires soon; rotate it`, with the expiry date and days left, never
+  the token), and an error once the token has expired. A Redis key per token expiry, level, and
+  UTC day keeps it to one line a day across replicas and restarts; a rotated token or the move
+  to expired logs at once, and if Redis is down it logs anyway. Roadmap task P6-05 tracks the
+  rotation.
 - **Rotate before 2027-02-16:** issue a second 90-day token, seal it (and the current server CA)
   into the same Secret, publish/apply the SealedSecret, and validate after the 12 s cache expires.
   Revoke the previous token only after that succeeds; retain its ID/issued-at outside Git until
