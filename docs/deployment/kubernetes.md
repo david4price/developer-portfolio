@@ -255,6 +255,10 @@ audit log through a drop-in, `/etc/rancher/k3s/config.yaml.d/audit.yaml`, which 
     `user.username`, `verb`, `objectRef`, and `responseStatus.code`.
   - To find who scaled the API: `sudo grep '"subresource":"scale"' …/audit.log`.
   - To find who exec'd into a pod: `sudo grep '"subresource":"exec"' …/audit.log`.
+- **Note:** Metadata still records each request's URI, and for `exec` that includes the command
+  and its arguments, so never pass a secret as an `exec` argument.
+- **Restart side effect:** for about a minute after the restart, the HPA can't read CPU
+  metrics, so Argo CD briefly reports the app `Degraded`. It recovers on its own.
 - **Rollback:** remove `/etc/rancher/k3s/config.yaml.d/audit.yaml` and restart K3s. If K3s
   doesn't come back after applying, that's the fix; check `journalctl -u k3s` for the policy
   error first.
@@ -266,6 +270,11 @@ apiserver_audit` shows three counters:
   - `apiserver_audit_event_total`: events written to the log.
   - `apiserver_audit_error_total`: events that failed to write (should stay absent or 0).
   - `apiserver_audit_level_total`: requests per policy level, `None` (dropped) included.
+- **Applied on the reference host (2026-11-19):**
+  - The node, workloads, and Argo CD came back healthy.
+  - Metadata events are counting, with no audit errors.
+  - A test `kubectl exec` was recorded: verb `get`, subresource `exec`, response `101`, with the
+    user and source.
 
 ## 3. Secrets
 
