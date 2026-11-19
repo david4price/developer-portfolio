@@ -26,6 +26,10 @@ describe('shipped profile', () => {
 
   it('has no placeholder text left (P2-12)', () => {
     assert.doesNotMatch(JSON.stringify(profile), /Portfolio Owner|Replace (this|with)|Role title/);
+    for (const entry of profile.experience) {
+      assert.notEqual(entry.organization, 'Organization');
+      assert.notEqual(entry.period, 'Start – End');
+    }
   });
 });
 
@@ -65,9 +69,11 @@ describe('createProfile', () => {
     assert.deepEqual(createProfile({ ...validProfile, personal }), { ...validProfile, personal });
     const [first] = personal.interests;
     assert.ok(first);
+    const tooSmall = /expected array to have >=2/;
+    const tooBig = (limit: number) => new RegExp(`expected (array|string) to have <=${limit}`);
     assert.throws(
       () => createProfile({ ...validProfile, personal: { ...personal, interests: [first] } }),
-      'at least two interests',
+      tooSmall,
     );
     assert.throws(
       () =>
@@ -92,11 +98,28 @@ describe('createProfile', () => {
         }),
       /prompt control markup/,
     );
-    assert.throws(() =>
-      createProfile({
-        ...validProfile,
-        personal: { ...personal, interests: [first, { name: 'x'.repeat(41), description: 'y' }] },
-      }),
+    assert.throws(
+      () =>
+        createProfile({
+          ...validProfile,
+          personal: { ...personal, interests: [first, { name: 'x'.repeat(41), description: 'y' }] },
+        }),
+      tooBig(40),
+    );
+    assert.throws(
+      () =>
+        createProfile({
+          ...validProfile,
+          personal: {
+            ...personal,
+            interests: [first, { name: 'Long', description: 'y'.repeat(601) }],
+          },
+        }),
+      tooBig(600),
+    );
+    assert.throws(
+      () => createProfile({ ...validProfile, personal: { ...personal, intro: 'z'.repeat(501) } }),
+      tooBig(500),
     );
   });
 

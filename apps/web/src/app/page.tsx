@@ -12,7 +12,9 @@ export default function HomePage() {
         <h1 id="intro-heading">{profile.name}</h1>
         <p className="lead">{profile.headline}</p>
         <p>{profile.intro}</p>
-        <ApiStatus />
+        <p>
+          Live status of this site&apos;s self-hosted API: <ApiStatus />
+        </p>
       </section>
 
       <section aria-labelledby="featured-heading">
