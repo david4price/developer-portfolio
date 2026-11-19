@@ -9,10 +9,15 @@ _Last updated: 2026-11-19_
 **Current phase:** 6 (Infrastructure Explorer; only P6-05's token rotation, due 2027-02-16, is
 left). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
-Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval work is parked on it.
+Phase 2 is complete with the owner's profile (P2-12); Phase 5 has P5-13 (index the profile for the
+chat) next, then retrieval measurement (P5-10) once there are more projects.
 
 **Recently done**
 
+- **P2-12 done** (`feat/p2-12-profile`): the owner's own profile replaces every placeholder on the
+  home page, About, and Experience: a backend developer in aviation software, with two roles at
+  one employer. Drafted by the owner's own agent, with private details left out. The chat
+  doesn't index it yet (P5-13).
 - **P7-06 done** (2026-11-19): K3s API audit logging is on, at Metadata level, for 30 days.
   - Recorded: writes, `exec`, `attach`, `port-forward`, and Secret reads.
   - Verified on the host: a test `exec`, a Secret read, and a server-side dry-run write each
@@ -226,16 +231,13 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Next up, in order**
 
-1. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
-2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
-   shows keyword search missing paraphrased questions.
+1. **P5-13:** index the profile (About, Experience) in the chat's knowledge base, so the
+   assistant can answer questions about the owner.
+2. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
+3. Owner content: more projects; then **P5-10**, and **P5-11** only if P5-10 shows keyword search
+   missing paraphrased questions.
 
-**Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
-replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
-the chat's `KnowledgeBase` alongside projects.
-
-**Branch in progress:** `docs/p6-04-done` (P6-04 ticked; P7-06 audit logging applied and
-verified).
+**Branch in progress:** `feat/p2-12-profile` (P2-12: the owner's profile replaces the placeholders).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -245,7 +247,7 @@ Open every PR against `main`.
 - [x] Backup destination (P1-04): local for now.
 - [x] Router forwards no ports to the reference host (confirmed 2026-11-13).
 - [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
-- [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
+- [x] Profile content for About and Experience (P2-12, 2026-11-19).
 - [x] K3s API audit logging applied with `sudo` (P7-06, 2026-11-19).
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
@@ -279,7 +281,7 @@ Read-only inventory of the reference host. Findings:
       directory outside the cluster; a disk failure loses both data and backups. Pick an
       off-host destination before treating the site as production.
 
-## Phase 2: Foundation (14/15)
+## Phase 2: Foundation (15/15)
 
 - [x] **P2-01** pnpm workspace, strict TS, ESM, ESLint, Prettier. _Done when:_ `pnpm check` passes.
 - [x] **P2-02** Shared packages: config, shared-types, project-registry, ui. _Needs:_ P2-01.
@@ -302,9 +304,12 @@ Read-only inventory of the reference host. Findings:
 - [x] **P2-10** Dockerfiles (api, worker, web). _Needs:_ P2-09. _Done when:_ CI builds all images.
 - [x] **P2-11** CI: check, integration, secret scan, signatures, image builds. _Needs:_ P2-01.
       _Done when:_ workflow green. First green run on PR #1, 2026-11-11.
-- [ ] **P2-12** Replace placeholder profile and experience content. _Done when:_ no placeholder
+- [x] **P2-12** Replace placeholder profile and experience content. _Done when:_ no placeholder
       text on About or Experience. _Owner:_ provides the content. The profile already lives in the
       shared registry package with schema checks (2026-11-17); only the text remains.
+      Done 2026-11-19: the owner's profile (drafted by the owner's own agent with private details
+      left out) is in `profile-data.ts`. The static export has no placeholder text, and the new
+      content shows on the home page, About, and Experience.
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker
       job, outage recovery); browser rendering not yet checked.
@@ -384,7 +389,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (10/12)
+## Phase 5: AI Chatbot (10/13)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -497,6 +502,11 @@ Read-only inventory of the reference host. Findings:
       and forward hooks; [guide](deployment/kubernetes.md#inference-port-guard-p5-12)). A LAN PC no
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
+- [ ] **P5-13** Index the owner's profile in the chat's knowledge base. _Needs:_ P2-12, P5-03.
+      _Done when:_ questions about the owner's role, employer, experience, or stack retrieve the
+      About or Experience content and link to that page; the profile passes the same control-markup
+      and hidden-text checks as projects (already enforced by its schema); grounding tests cover
+      it.
 
 ## Phase 6: Infrastructure Explorer (4/5)
 
