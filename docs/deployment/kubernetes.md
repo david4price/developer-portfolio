@@ -178,6 +178,109 @@ WantedBy=multi-user.target
 - Verified 2026-11-15: a LAN device no longer reaches the runtime; the host, the API pod, and the
   public site work; the worker pod is refused; Docker, K3s, Tailscale, and the K3s guard unaffected.
 
+### API audit logging (P7-06, approval required)
+
+Without an audit log, nothing reliably records who changed what in the cluster. About three
+minutes before the P6-04 offline drill started, a client nobody could identify scaled the API
+Deployment to zero. A scale write does leave a managed-fields entry (`subresource: scale`), but
+the drill's restore scaled it back up and took that entry over before anyone looked. So before
+restoring after an unexpected change, read
+`kubectl get deploy <name> -o yaml --show-managed-fields` first. K3s turns on the API server's
+audit log through a drop-in, `/etc/rancher/k3s/config.yaml.d/audit.yaml`, which it reads after
+`config.yaml` and merges with the flags in its systemd unit.
+
+- **Policy** (`/etc/rancher/k3s/audit-policy.yaml`, root `0600`): Metadata level only, so who,
+  which resource, when, and the response code, never request or response bodies (Secret values
+  are never logged).
+  - **Recorded:** `kubectl exec`, `attach`, and `port-forward`. They arrive as `get` upgrades
+    on `pods/exec`, `pods/attach`, and `pods/portforward`, so these rules come before reads are
+    dropped. Secret `get` and `list`, and every write: create, update, patch, delete, `scale`
+    included.
+  - **Dropped as noise:** other reads (`get`, `list`, `watch`, Secret watches included), health
+    and discovery URLs, leases, events, endpoints, endpoint slices, and kubelets' node and pod
+    status updates.
+
+  ```yaml
+  apiVersion: audit.k8s.io/v1
+  kind: Policy
+  omitStages: [RequestReceived]
+  rules:
+    - level: Metadata
+      resources:
+        - { group: '', resources: [pods/exec, pods/attach, pods/portforward] }
+    - level: Metadata
+      verbs: [get, list]
+      resources:
+        - { group: '', resources: [secrets] }
+    - level: None
+      verbs: [get, list, watch]
+    - level: None
+      nonResourceURLs: ['/healthz*', '/livez*', '/readyz*', '/version', '/openapi*', '/api*']
+    - level: None
+      resources:
+        - { group: coordination.k8s.io, resources: [leases] }
+        - { group: '', resources: [events, endpoints] }
+        - { group: discovery.k8s.io, resources: [endpointslices] }
+        - { group: events.k8s.io, resources: [events] }
+    - level: None
+      userGroups: ['system:nodes']
+      resources:
+        - { group: '', resources: [nodes/status, pods/status] }
+    - level: Metadata
+  ```
+
+- **Config:** `/etc/rancher/k3s/config.yaml.d/audit.yaml`, root `0644`. It holds no secrets, and
+  K3s's bundled `kubectl` reads its config files too, warning `permission denied` on every call
+  if it can't. Keep secrets such as `token:` in `config.yaml` itself, at `0600`. If `config.yaml`
+  ever sets `kube-apiserver-arg`, move these lines into it, because a later file's list replaces
+  an earlier one's.
+
+  ```yaml
+  kube-apiserver-arg:
+    - audit-policy-file=/etc/rancher/k3s/audit-policy.yaml
+    - audit-log-path=/var/lib/rancher/k3s/server/logs/audit.log
+    - audit-log-maxage=30
+    - audit-log-maxbackup=9
+    - audit-log-maxsize=100
+  ```
+
+- **Apply:** check what's already there: `sudo ls -la /etc/rancher/k3s/`, plus `config.yaml.d/`
+  if it exists. Install the policy and the drop-in as root, then `sudo systemctl restart k3s`.
+  The control plane (kubectl, Argo CD syncs, the HPA) is unavailable during the restart, for
+  under a minute; running pods keep serving.
+- **Validate:**
+  - `kubectl get nodes` is `Ready`.
+  - After any change (an Argo CD sync, a `kubectl scale`), run
+    `sudo tail -n 5 /var/lib/rancher/k3s/server/logs/audit.log`. It shows JSON lines with
+    `user.username`, `verb`, `objectRef`, and `responseStatus.code`.
+  - To find who scaled the API: `sudo grep '"subresource":"scale"' …/audit.log`.
+  - To find who exec'd into a pod: `sudo grep '"subresource":"exec"' …/audit.log`.
+- **Note:** Metadata still records each request's URI. For `exec` that includes the command and
+  its arguments, and for `attach` and `port-forward` their parameters. Anything in those
+  arguments, such as a token expanded by your shell, sits in plain text in the root-only log
+  for up to 30 days, across up to 10 files. Treat the log as sensitive and never pass a secret
+  on an `exec` command line.
+- **Restart side effect:** for about a minute after the restart, the HPA can't read CPU
+  metrics, so Argo CD briefly reports the app `Degraded`. It recovers on its own.
+- **Rollback:** remove `/etc/rancher/k3s/config.yaml.d/audit.yaml` and restart K3s. If K3s
+  doesn't come back after applying, that's the fix; check `journalctl -u k3s` for the policy
+  error first.
+- **Retention:** the active file plus 9 rotated ones of 100 MB (1 GB at most), deleted after 30
+  days, whichever limit comes first. On the reference host about 13 events a minute (~19 MB a
+  day) means the 30 days apply.
+- **Checking without root:** with an admin kubeconfig, `kubectl get --raw /metrics | grep
+apiserver_audit` shows three counters:
+  - `apiserver_audit_event_total`: events written to the log.
+  - `apiserver_audit_error_total`: events that failed to write (should stay absent or 0).
+  - `apiserver_audit_level_total`: requests per policy level, `None` (dropped) included.
+- **Applied on the reference host (2026-11-19):**
+  - The node, workloads, and Argo CD came back healthy.
+  - Metadata events are counting, with no audit errors.
+  - Each test request was recorded with its user and source:
+    - a `kubectl exec` (verb `get`, subresource `exec`, response `101`);
+    - a Secret `get`;
+    - a server-side dry-run `create`.
+
 ## 3. Secrets
 
 The reference deployment keeps every Secret in Git as a **SealedSecret** (ADR 0001, P3-08). The

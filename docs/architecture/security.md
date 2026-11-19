@@ -154,6 +154,21 @@ The public surface is a static site and a small REST API. The main risks:
   - raw events or logs
   - namespaces other than the allowlisted one
 
+## Cluster API Audit Log (Confirmed on the reference host, P7-06)
+
+- **Recorded:** K3s's API server logs every write (`scale` included), every `exec`, `attach`,
+  and `port-forward`, and every Secret `get` and `list`. Each entry has the user, source,
+  resource, and response code.
+- **Level:** Metadata only, so request and response bodies, and Secret values with them, are
+  never recorded.
+- **Dropped:** other reads and routine controller traffic.
+- **Retention:** 30 days, at most 1 GB, in a root-only log on the host.
+- **Request URIs are recorded,** so `exec` commands and their arguments, and `attach` and
+  `port-forward` parameters, are in the log. Treat the log as sensitive, and never pass a secret
+  on an `exec` command line.
+- Setup, validation, and rollback:
+  [Kubernetes guide](../deployment/kubernetes.md#api-audit-logging-p7-06-approval-required).
+
 ## Repository Hygiene (Confirmed)
 
 - `.env*` is ignored, except `.env.example`, which holds placeholders only.
