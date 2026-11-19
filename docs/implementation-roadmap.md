@@ -14,10 +14,11 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 **Recently done**
 
 - **P6-04 done** (2026-11-19): offline drill on production. With the API scaled to zero, the
-  explorer endpoint returned only `502`s and the owner saw the whole grid offline, never healthy;
-  the API was restored and ready within seconds. An unexplained earlier scale-to-zero stretched
-  the outage to about 4 minutes, so K3s API audit logging is now on to trace such writes
-  ([guide](deployment/kubernetes.md#api-audit-logging-approval-required)).
+  explorer endpoint returned only `502`s and the owner saw the page's "unavailable" state: the
+  grid powered down under the "Grid offline: status not loaded" overlay, never healthy. The API
+  was restored and ready within seconds. An unexplained earlier scale-to-zero stretched the
+  outage to about 4 minutes, so **P7-06** turns on K3s API audit logging to trace such writes
+  ([guide](deployment/kubernetes.md#api-audit-logging-p7-06-approval-required)).
 - P6-04 release versions and token reminder merged and deployed (PR #58, 2026-11-19): the API
   and worker show their short source commit; the API checks hourly and warns daily from 14 days
   before the Argo CD token expires. New task P6-05 tracks the rotation.
@@ -36,8 +37,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
   only the `portfolio` Application (and its own project's metadata, implicit in Argo CD). Sync,
   update, delete, override, restart, logs, exec, and other Applications/projects are denied.
   The adapter's live read returned a sanitized sync status and deployed GitOps revision/time.
-  API configuration, Secret mount, and egress are implemented locally; production activation
-  awaits merging this change and its image rollout. Token rotation is due before 2027-02-16.
+  Live in production since the P6-03 rollout. Token rotation is due before 2027-02-16 (P6-05).
 - P6-02: `GET /api/v1/infrastructure` serves the Infrastructure Explorer's snapshot through an
   allowlist serializer (leak-tested: no IPs, node names, env values, secrets, registry paths, or
   other namespaces), cached 12 s, off by default; enabled in production with P6-01.
@@ -220,15 +220,16 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Next up, in order**
 
-1. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
-2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
+1. **P7-06:** the owner re-applies the revised audit policy and drop-in (one K3s restart).
+2. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
+3. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
 **Parked:** P2-12's text. The owner hasn't written the profile yet; when the bullets below arrive,
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `docs/p6-04-done` (P6-04 ticked, audit logging guide).
+**Branch in progress:** `docs/p6-04-done` (P6-04 ticked, P7-06 audit logging guide).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -239,7 +240,7 @@ Open every PR against `main`.
 - [x] Router forwards no ports to the reference host (confirmed 2026-11-13).
 - [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
 - [ ] Send rough bullets for About and Experience (roles, years, stack, highlights) to draft P2-12.
-- [x] K3s API audit logging applied (2026-11-19).
+- [ ] Re-apply the revised K3s audit policy and its drop-in with `sudo` (P7-06).
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -518,9 +519,8 @@ Read-only inventory of the reference host. Findings:
       probes deny write/actions, logs, exec, and other Applications/projects. Its own project
       metadata is implicitly readable in Argo CD. The 90-day token and server CA are sealed in
       `portfolio-argocd-reader`; token expires 2027-02-16. The compiled adapter was validated
-      against live Argo CD with TLS verification. Production API wiring is prepared locally and
-      still awaits merging and the image rollout; the endpoint still has empty sync/
-      release until then. [Provisioning and rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
+      against live Argo CD with TLS verification, and the production API serves sync and
+      release from it. [Provisioning and rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 - [x] **P6-04** React dashboard with an explicit "unavailable" state. _Needs:_ P6-02. _Done when:_
       offline drill shows "unavailable", never "healthy".
       Design: an animated blueprint of a power grid, with buildings lit by their replicas and
@@ -541,17 +541,18 @@ Read-only inventory of the reference host. Findings:
       `GET /models` (healthy, degraded, or down; never the model's name; PR #56). Traffic
       sparks come from Redis request counters (PR #57). The API and worker show the short source
       commit the release recorded instead of an image digest, and the API logs a daily warning
-      from 14 days before the Argo CD token expires (`feat/p6-04-release-versions`).
+      from 14 days before the Argo CD token expires (PR #58).
       Offline drill done 2026-11-19: with the API at zero replicas the endpoint returned only
-      `502`s and the whole grid showed offline, never healthy (owner observed); restored within
+      `502`s, and the owner saw the page's "unavailable" state: the whole grid powered down
+      under the "Grid offline: status not loaded" overlay, never healthy. Restored within
       seconds. An unidentified client had scaled the API down ~3 minutes before the drill
-      started, so the outage ran ~4 minutes; K3s API audit logging is now on (2026-11-19).
+      started, so the outage ran ~4 minutes; P7-06 adds audit logging to trace such writes.
 - [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
       P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
       back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
       on 2027-02-02. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (0/5)
+## Phase 7: Hardening (0/6)
 
 - [ ] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -566,3 +567,10 @@ Read-only inventory of the reference host. Findings:
       Nest dependency injection still works (decorator metadata); the TypeScript major-version
       ignore is removed from `.github/dependabot.yml`. Dependabot PR #2 was the first attempt
       (failed lint).
+- [ ] **P7-06** 🔒 K3s API audit logging. _Needs:_ Phase 3. _Done when:_ writes, `exec`/`attach`/
+      `port-forward`, and Secret reads are recorded at Metadata level (never bodies), routine
+      traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log keeps 30
+      days. [Guide](deployment/kubernetes.md#api-audit-logging-p7-06-approval-required).
+      First version applied 2026-11-19 after the P6-04 drill; review found it dropped `exec`
+      and Secret reads (both arrive as `get`), so a revised policy and a `config.yaml.d` drop-in
+      wait on the owner's `sudo`.

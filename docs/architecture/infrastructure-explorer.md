@@ -1,7 +1,7 @@
 # Infrastructure Explorer: Visual Design
 
-**Status: prototype Confirmed on sample data (P6-04, 2026-11-18); workload API live (P6-01/02),
-Argo CD reader implemented/live-tested (P6-03, production activation pending); live page Proposed.**
+**Status: Confirmed live in production (P6-01 to P6-04, 2026-11-19): workload API, Argo CD
+reader, AI check, traffic, and the live page with its simulation; offline drill passed.**
 The data rules are in [Security](security.md#infrastructure-explorer-serializer-confirmed-in-code-p6-02-access-confirmed-in-the-chart-p6-01);
 this document covers what the page looks like and how data drives it.
 
@@ -158,8 +158,7 @@ the switch disabled and opens on the simulation.
   cache, and never fails the snapshot; an outage is logged when it starts or its reason
   changes, and once when it ends (an unexpected error, a bug, is always logged with its stack).
   With AI off, or an adapter without a status check, the building stays unknown.
-- P6-03 adds an optional Argo CD reader (implemented; token and adapter live-tested, production
-  activation pending this change's rollout): `sync` comes from the Application; `release` is its
+- **Argo CD (Confirmed live, P6-03):** an optional reader: `sync` comes from the Application; `release` is its
   last successfully deployed GitOps revision and deployment time, not the API's source commit
   or image pin time. The Argo CD component is healthy when its API is reachable, unknown when
   unavailable. Deployment facts become unknown if its read fails; workload facts can stay fresh.
@@ -182,5 +181,6 @@ the switch disabled and opens on the simulation.
   and a failed or stalled read leaves the lines without sparks rather than failing the
   snapshot. Traffic is read with each cluster refresh, so a fallback snapshot carries the
   levels it was built with; the page powers the map down within a minute of that anyway.
-- Status: live in production (P6-01 to P6-04 done). The offline drill (2026-11-19) showed the
-  whole grid offline, never healthy, while the API was at zero replicas.
+- Status: live in production (P6-01 to P6-04 done). In the offline drill (2026-11-19), with the
+  API at zero replicas, the owner saw the page's "unavailable" state: the whole grid powered
+  down under the "Grid offline: status not loaded" overlay, never healthy.
