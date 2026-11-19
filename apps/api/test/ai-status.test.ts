@@ -13,6 +13,7 @@ import { DisabledAiProvider } from '../src/modules/ai/disabled-ai.provider.js';
 import { OpenAiCompatibleProvider } from '../src/modules/ai/openai-compatible.provider.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
 import { createSnapshotSource } from '../src/modules/infrastructure/infrastructure.module.js';
+import { NoopTrafficCounter } from '../src/modules/infrastructure/traffic.js';
 import {
   AI_STATUS_TIMEOUT_MS,
   INFRASTRUCTURE_SNAPSHOTS,
@@ -293,7 +294,7 @@ describe('AI status wiring', () => {
     apiServerUrl: 'https://192.0.2.1:443',
   } as const;
   const aiStatusOf = (ai: AiProvider) => {
-    const source = createSnapshotSource(kubernetes, ai);
+    const source = createSnapshotSource(kubernetes, ai, new NoopTrafficCounter());
     assert.ok(source instanceof InfrastructureSnapshotService);
     return (source as unknown as { options: { aiStatus?: (s: AbortSignal) => Promise<AiStatus> } })
       .options.aiStatus;

@@ -12,8 +12,11 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Recently done**
 
-- P6-04 AI probe (code, `feat/p6-04-richer-data`): the AI building shows the model runtime's real
-  state from its model list, with no model name or address in the response.
+- P6-04 traffic sparks (code, `feat/p6-04-traffic`): Redis request counters give the API, its
+  tunnel, and the AI model an `idle`/`low`/`busy` level, so the live map's lines pulse; the
+  narrow layout's worker–PostgreSQL line moved in from the frame's edge.
+- P6-04 AI probe merged and deployed (PR #56, 2026-11-19): the AI building shows the model
+  runtime's real state from its model list, with no model name or address in the response.
 - P6-04 live view merged and deployed (PR #55, 2026-11-18).
 - P6-04 live view (code): the Infrastructure Explorer reads the real cluster every 12 s, with a
   "Live data" switch for the simulation; every state other than fresh data powers the map down.
@@ -210,9 +213,8 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 1. **P6-04:** the offline drill on production (the map must say "unavailable", never
    "healthy"; it briefly stops the API, so it needs approval). The AI model's real state is
-   built; the rest of the richer data follows: release commits instead of image digests,
-   request-rate buckets for sparks (a Redis counter, ahead of P7-01), and a warning before the
-   Argo CD token expires (due 2027-02-16).
+   live and traffic sparks are built; still to come: release commits instead of image digests,
+   and a warning before the Argo CD token expires (due 2027-02-16).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -220,7 +222,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-04-richer-data` (P6-04 richer data: the AI probe first).
+**Branch in progress:** `feat/p6-04-traffic` (P6-04 traffic sparks and the mobile wire fix).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -529,9 +531,10 @@ Read-only inventory of the reference host. Findings:
       without an API). The website building is filled in by the visitor's own page load. Both
       mini-apps are `available` in the registry, and the page no longer hard-codes badge text.
       Merged and deployed (PR #55). The AI building now shows the runtime's real state from
-      `GET /models` (healthy, degraded, or down; never the model's name).
-      Still open: the offline drill on production, then release commits, sparks, and the
-      Argo CD token-expiry warning.
+      `GET /models` (healthy, degraded, or down; never the model's name; PR #56). Traffic
+      sparks come from Redis request counters (`feat/p6-04-traffic`).
+      Still open: the offline drill on production, then release commits and the Argo CD
+      token-expiry warning.
 
 ## Phase 7: Hardening (0/5)
 

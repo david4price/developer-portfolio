@@ -145,7 +145,7 @@ function facts(id: CardId, power: MapPower, now: number): CardDetails['facts'] {
         ? '—'
         : `${replicas.ready} ready, ${replicas.available} available, ${replicas.desired} desired`,
     ],
-    ['Traffic', component.traffic ?? 'not measured yet'],
+    ['Traffic', component.traffic ?? 'not measured'],
     updated,
   ];
 }
