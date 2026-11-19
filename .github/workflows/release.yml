@@ -90,6 +90,7 @@ jobs:
           for digest in "$API_DIGEST" "$WORKER_DIGEST"; do
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "bad digest: $digest" >&2; exit 1; }
           done
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad source commit: $SOURCE_SHA" >&2; exit 1; }
           # Never move production backwards: skip if the pinned build is newer than this one.
           if [[ -f "$file" ]]; then
             pinned="$(sed -n 's/^# source-commit: \([0-9a-f]\{40\}\)$/\1/p' "$file")"
@@ -106,10 +107,12 @@ jobs:
             image:
               repository: ghcr.io/${owner}/portfolio-api
               digest: ${API_DIGEST}
+              revision: '${SOURCE_SHA}'
           worker:
             image:
               repository: ghcr.io/${owner}/portfolio-worker
               digest: ${WORKER_DIGEST}
+              revision: '${SOURCE_SHA}'
           EOF
       - name: Commit and push
         env:

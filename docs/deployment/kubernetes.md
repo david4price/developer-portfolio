@@ -366,6 +366,10 @@ and permits API egress to Argo CD server pods in the `argocd` namespace on TCP 8
 - **Availability:** Argo CD failure clears sync/release and its reachability health to unknown;
   fresh workload data still returns `200`. The optional source does not affect readiness. A
   successful read marks the Argo CD component reachable, not the Application aggregate healthy.
+- **Reminder:** from 14 days before the token's expiry (its JWT `exp` claim), the API logs a
+  warning once a day (`Argo CD explorer token expires soon; rotate it`, with the expiry date and
+  days left, never the token), and an error once a day after it has expired. Roadmap task P6-05
+  tracks the rotation.
 - **Rotate before 2027-02-16:** issue a second 90-day token, seal it (and the current server CA)
   into the same Secret, publish/apply the SealedSecret, and validate after the 12 s cache expires.
   Revoke the previous token only after that succeeds; retain its ID/issued-at outside Git until
@@ -384,7 +388,10 @@ Argo CD references: [project roles and expiring tokens](https://argo-cd.readthed
 1. Merge to `main`. CI passes.
 2. The release workflow (`.github/workflows/release.yml`) starts only after CI succeeds on a push
    to `main`. It builds the api and worker images, pushes them to GHCR tagged with the commit SHA,
-   and commits their digests to `infrastructure/environments/production/images.yaml`. People
+   and commits their digests to `infrastructure/environments/production/images.yaml`, each with
+   the source commit it was built from (`image.revision`, quoted). The chart puts that commit in
+   the API and worker workloads' `app.kubernetes.io/version` label, and the Infrastructure
+   Explorer shows it short as their version (P6-04). People
    edit `values.yaml` next to it, which pins PostgreSQL and Redis by digest. The workflow refuses
    to replace a newer pin with an older build, and its commits don't trigger CI, so it can't
    loop. Its token permissions are set per job (`packages: write` to push, `contents: write` to

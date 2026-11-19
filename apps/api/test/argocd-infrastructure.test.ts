@@ -11,6 +11,8 @@ import { loadApiConfig } from '../src/config/api-config.js';
 import {
   ArgoCdApplicationReader,
   serializeDeploymentStatus,
+  TOKEN_EXPIRY_WARNING_MS,
+  tokenExpiresAt,
 } from '../src/modules/infrastructure/argocd-application.reader.js';
 import { DeploymentReadError } from '../src/modules/infrastructure/deployment-reader.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
@@ -270,6 +272,81 @@ describe('ArgoCdApplicationReader', () => {
       readFile: () => Promise.reject(new Error('private path')),
     });
     await assert.rejects(missing.read(AbortSignal.timeout(1_000)), { reason: 'credentials' });
+  });
+});
+
+describe('Argo CD token expiry reminder', () => {
+  const DAY = 24 * 60 * 60_000;
+  const jwt = (claims: object) =>
+    ['{"alg":"HS256"}', JSON.stringify(claims), 'signature']
+      .map((part, i) => (i < 2 ? Buffer.from(part).toString('base64url') : part))
+      .join('.');
+
+  it('reads only the expiry claim, and nothing from tokens without one', () => {
+    assert.equal(
+      tokenExpiresAt(jwt({ exp: 1_800_000_000, sub: 'proj:portfolio:explorer' })),
+      1_800_000_000_000,
+    );
+    for (const token of [
+      'opaque-token',
+      jwt({ sub: 'x' }),
+      jwt({ exp: 'soon' }),
+      'a.%%%.c',
+      'a.b',
+    ]) {
+      assert.equal(tokenExpiresAt(token), null, token);
+    }
+  });
+
+  it('warns daily from 14 days out, errors after expiry, and never logs the token', async (t) => {
+    const expiresAt = Date.parse('2027-02-16T00:00:00Z');
+    const token = jwt({ exp: expiresAt / 1_000, jti: 'private-token-id' });
+    let now = expiresAt - TOKEN_EXPIRY_WARNING_MS - DAY;
+    const server = createServer((_request, response) =>
+      response.end(JSON.stringify(application())),
+    );
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => server.close());
+    const reader = new ArgoCdApplicationReader({
+      serverUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      application: 'portfolio',
+      project: 'portfolio',
+      tokenFile: '/token',
+      caFile: '/ca',
+      allowInsecureHttpForTests: true,
+      readFile: async () => token,
+      now: () => now,
+    });
+    const warned: unknown[] = [];
+    const errored: unknown[] = [];
+    const logger = (reader as unknown as { logger: { warn: unknown; error: unknown } }).logger;
+    t.mock.method(logger as { warn: (entry: unknown) => void }, 'warn', (entry: unknown) =>
+      warned.push(entry),
+    );
+    t.mock.method(logger as { error: (entry: unknown) => void }, 'error', (entry: unknown) =>
+      errored.push(entry),
+    );
+    const read = () => reader.read(AbortSignal.timeout(1_000));
+
+    await read();
+    assert.equal(warned.length, 0, 'more than 14 days left');
+    now = expiresAt - 10 * DAY;
+    await read();
+    await read();
+    assert.equal(warned.length, 1, 'once, not on every refresh');
+    assert.deepEqual(warned[0], {
+      message: 'Argo CD explorer token expires soon; rotate it',
+      expiresAt: '2027-02-16T00:00:00.000Z',
+      daysLeft: 10,
+      runbook: 'docs/deployment/kubernetes.md#argo-cd-explorer-token-p6-03',
+    });
+    now += DAY;
+    await read();
+    assert.equal(warned.length, 2, 'again a day later');
+    now = expiresAt + DAY;
+    await read();
+    assert.equal(errored.length, 1);
+    assert.doesNotMatch(JSON.stringify([...warned, ...errored]), /private-token-id|signature|eyJ/);
   });
 });
 

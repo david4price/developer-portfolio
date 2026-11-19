@@ -163,7 +163,10 @@ export interface ReplicaCounts {
 export interface InfrastructureComponent {
   readonly id: InfrastructureComponentId;
   readonly health: InfrastructureHealth;
-  /** Image tag only, never a registry path or digest; `null` for components without one. */
+  /**
+   * The short source commit for workloads the release pins (P6-04), otherwise the image tag or a
+   * short `sha256:` digest; never a registry path. `null` for components without one.
+   */
   readonly version: string | null;
   /** Workload replica counts; `null` for components outside the cluster. */
   readonly replicas: ReplicaCounts | null;

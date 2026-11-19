@@ -14,12 +14,37 @@
 
 {{/* Labels shared by every resource. */}}
 {{- define "portfolio.labels" -}}
-helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
-app.kubernetes.io/name: {{ include "portfolio.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{ include "portfolio.versionedLabels" (dict "root" . "version" .Chart.AppVersion) }}
+{{- end }}
+
+{{/* The shared labels with a given app.kubernetes.io/version. Usage: (dict "root" $ "version" "…") */}}
+{{- define "portfolio.versionedLabels" -}}
+helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" }}
+app.kubernetes.io/name: {{ include "portfolio.name" .root }}
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/version: {{ .version | quote }}
+app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 app.kubernetes.io/part-of: portfolio
+{{- end }}
+
+{{/*
+The version label for an image: its source commit (`image.revision`, written by the release
+workflow) when set, otherwise the chart's appVersion. The Infrastructure Explorer shows the
+short commit (P6-04).
+*/}}
+{{- define "portfolio.imageVersion" -}}
+{{- $revision := .image.revision | default "" }}
+{{- if $revision }}
+{{- if not (kindIs "string" $revision) }}
+{{- fail (printf "image %s: quote revision, or YAML reads an all-digit commit as a number" .image.repository) }}
+{{- end }}
+{{- if not (regexMatch "^[0-9a-f]{40}$" $revision) }}
+{{- fail (printf "image %s: revision must be a full 40-character commit SHA" .image.repository) }}
+{{- end }}
+{{- $revision }}
+{{- else }}
+{{- .root.Chart.AppVersion }}
+{{- end }}
 {{- end }}
 
 {{/* Selector labels for one component. Usage: include "portfolio.selectorLabels" (dict "root" $ "component" "api") */}}
@@ -29,8 +54,9 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
+{{/* Component labels; pass "version" for a workload built from this repository. */}}
 {{- define "portfolio.componentLabels" -}}
-{{ include "portfolio.labels" .root }}
+{{ include "portfolio.versionedLabels" (dict "root" .root "version" (.version | default .root.Chart.AppVersion)) }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 

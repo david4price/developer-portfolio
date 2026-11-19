@@ -1,5 +1,5 @@
 {{- $fullname := include "portfolio.fullname" . }}
-{{- $component := dict "root" $ "component" "worker" }}
+{{- $component := dict "root" $ "component" "worker" "version" (include "portfolio.imageVersion" (dict "root" $ "image" .Values.worker.image)) }}
 {{- with .Values.worker }}
 apiVersion: apps/v1
 kind: Deployment
