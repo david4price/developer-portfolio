@@ -49,8 +49,8 @@ The page must never show "healthy" when it cannot know: offline or stale data po
 down instead of freezing the last good state.
 
 The release input is the short last-deployed GitOps revision and deployment time from Argo CD
-history (P6-03); it is neither the API source commit nor the image pin time. A **bucketed request
-rate** per Service still needs P7-01 metrics and allowlist/leak tests before it can be shown.
+history (P6-03); it is neither the API source commit nor the image pin time. The **bucketed
+request rate** comes from Redis counters (P6-04, below), ahead of P7-01's metrics.
 
 ## Implementation Notes
 
@@ -96,7 +96,7 @@ the switch disabled and opens on the simulation.
   `ssr: false` (it shows times relative to now).
 - Rules as built: a snapshot older than 60 s, or none at all, powers the map down with
   "unavailable"; a component the snapshot omits is "unknown", never healthy; a conduit takes the
-  worse health of its two ends; pulses run only where traffic data exists (none yet, until P7-01)
+  worse health of its two ends; pulses run only where traffic data exists
   and never into a down component; the core flickers only while a component is progressing, so a
   crash-looping component shows as down, not as a rollout; the delivery path bursts for 15 minutes
   after a GitOps revision is deployed.
@@ -156,6 +156,18 @@ the switch disabled and opens on the simulation.
   last successfully deployed GitOps revision and deployment time, not the API's source commit
   or image pin time. The Argo CD component is healthy when its API is reachable, unknown when
   unavailable. Deployment facts become unknown if its read fails; workload facts can stay fresh.
-  Traffic still waits for metrics (P7-01).
+- **Traffic (Confirmed in code, P6-04):** the API counts visitor requests in Redis, one key per
+  source per minute (`portfolio:infrastructure:traffic:<api|ai>:<minute>`, expiring a minute
+  after the window), shared by every replica. A Nest interceptor counts every handled API
+  request (errors too) except health probes and the explorer's own `GET /infrastructure`
+  polling, so watching the map doesn't make it look busy; a chat message counts as AI traffic
+  once it got a reply. Each refresh sums the last 5 minutes: none → `idle`, under 60 → `low`,
+  60 or more (about 12 a minute) → `busy`. The API's level goes on the API and on the tunnel
+  every request crosses (when the tunnel runs in the cluster); the AI's on a probed model.
+  The worker, PostgreSQL, and Redis aren't measured and carry none of their own; a line takes
+  its busier end, so the API's lines pulse with it. Only the bucket leaves the API, never a
+  count, a route, or anything per client. Counting runs only while the view is enabled;
+  writes are fire-and-forget (a Redis outage logs once and never delays a request), and a
+  failed read leaves the lines without sparks rather than failing the snapshot.
 - Next: P6-01 is live; publish/merge the P6-03 integration, then the page fetches every 12 s
   with the "not configured", "unavailable", and loaded states the web rules require.

@@ -3,6 +3,7 @@ import type { InfrastructureComponent, InfrastructureSnapshot } from '@portfolio
 import { type AiStatus, AiUnavailableError } from '../ai/ai-provider.js';
 import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
+import type { TrafficLevels } from './traffic.js';
 import {
   DeploymentReadError,
   type DeploymentReader,
@@ -54,6 +55,8 @@ export interface SnapshotServiceOptions {
   readonly aiStatus?: (signal: AbortSignal) => Promise<AiStatus>;
   /** The AI check's own deadline; `AI_STATUS_TIMEOUT_MS` by default. */
   readonly aiTimeoutMs?: number;
+  /** Bucketed request rates; without them no line carries sparks. */
+  readonly traffic?: () => Promise<TrafficLevels>;
 }
 
 /**
@@ -73,6 +76,24 @@ const AI_STATE: Readonly<
 };
 
 /**
+ * Where each level shows: the API's requests on the API and on the tunnel every one of them
+ * crosses (when the tunnel runs in the cluster), chat replies on a probed AI model. Nothing else
+ * is measured, so it stays without traffic.
+ */
+const trafficFor =
+  (levels: TrafficLevels) =>
+  (component: InfrastructureComponent): InfrastructureComponent => {
+    if (component.id === 'api') return { ...component, traffic: levels.api };
+    if (component.id === 'tunnel' && component.replicas !== null) {
+      return { ...component, traffic: levels.api };
+    }
+    if (component.id === 'ai' && component.health !== 'unknown') {
+      return { ...component, traffic: levels.ai };
+    }
+    return component;
+  };
+
+/**
  * Serves the Infrastructure Explorer's snapshot. Visitors never reach the cluster directly: a
  * snapshot is reused for `ttlMs`, concurrent requests share one read, and a failed read is not
  * retried before `ttlMs` has passed. After a failure the last good snapshot is served as it was;
@@ -86,6 +107,8 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private inflight: Promise<InfrastructureSnapshot> | null = null;
   /** The last AI probe failure (reason and status), so an outage logs when it changes only. */
   private aiFailure: string | null = null;
+  /** Whether the last traffic read failed, so a Redis outage logs once. */
+  private trafficFailing = false;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
   private readonly now: () => number;
@@ -114,10 +137,11 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private async refresh(): Promise<InfrastructureSnapshot> {
     try {
       const signal = AbortSignal.timeout(this.timeoutMs);
-      const [objects, deployment, ai] = await Promise.all([
+      const [objects, deployment, ai, traffic] = await Promise.all([
         this.reader.read(signal),
         this.readDeployment(signal),
         this.readAi(signal),
+        this.readTraffic(signal),
       ]);
       const workloads = serializeSnapshot(objects, {
         namespace: this.options.namespace,
@@ -130,10 +154,11 @@ export class InfrastructureSnapshotService implements SnapshotSource {
         if (component.id === 'ai' && ai !== null) return { ...component, ...AI_STATE[ai] };
         return component;
       });
+      const withTraffic = traffic === null ? components : components.map(trafficFor(traffic));
       const snapshot: InfrastructureSnapshot = {
         ...workloads,
         ...(deployment ?? {}),
-        components,
+        components: withTraffic,
       };
       this.cached = { snapshot, at: this.now() };
       this.failedAt = null;
@@ -191,6 +216,34 @@ export class InfrastructureSnapshotService implements SnapshotSource {
       }
       this.aiFailure = key ?? 'unexpected';
       return 'unreachable';
+    }
+  }
+
+  /** Never fails the snapshot: without levels the lines simply carry no sparks. */
+  private async readTraffic(signal: AbortSignal): Promise<TrafficLevels | null> {
+    if (this.options.traffic === undefined) return null;
+    let onAbort: (() => void) | undefined;
+    try {
+      signal.throwIfAborted();
+      const aborted = new Promise<never>((_resolve, reject) => {
+        onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
+      const levels = await Promise.race([this.options.traffic(), aborted]);
+      this.trafficFailing = false;
+      return levels;
+    } catch (error) {
+      if (!this.trafficFailing) {
+        this.logger.warn({
+          message: 'Traffic levels refresh failed',
+          error: error instanceof Error ? error.message : 'non-error thrown',
+        });
+      }
+      this.trafficFailing = true;
+      return null;
+    } finally {
+      // The race is settled: the deadline firing later must not reject into nothing.
+      if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
     }
   }
 
