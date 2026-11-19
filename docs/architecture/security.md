@@ -172,7 +172,8 @@ The public surface is a static site and a small REST API. The main risks:
 ## Repository Hygiene (Confirmed)
 
 - `.env*` is ignored, except `.env.example`, which holds placeholders only.
-- CI runs secret scanning (gitleaks) and a dependency audit on every push and pull request.
+- CI runs secret scanning (gitleaks) and a package signature audit (`pnpm audit signatures`) on
+  every push and pull request.
 - The CI workflow has read-only permissions and no deploy step. Untrusted pull requests never get
   credentials or reach self-hosted runners.
 - Documentation describes the reference deployment with placeholders. Real hostnames, addresses,
@@ -181,5 +182,9 @@ The public surface is a static site and a small REST API. The main risks:
 ## Supply Chain (Proposed)
 
 - Images are built on GitHub-hosted runners, published to GHCR, and deployed by digest.
-- Dependabot covers npm, GitHub Actions, and Docker base images.
+- Dependabot alerts and security updates cover npm, GitHub Actions, and Docker base images: a PR
+  opens only for a known vulnerability. Routine version PRs are off by the owner's choice, and
+  versions are updated deliberately. CI's `pnpm audit signatures` checks that packages are
+  genuinely from the registry, not whether they have vulnerabilities, so Dependabot alerts are
+  the vulnerability check.
 - Runtime images run as a non-root user with no build tooling (multi-stage builds).

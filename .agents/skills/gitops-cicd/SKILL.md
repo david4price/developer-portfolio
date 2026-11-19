@@ -22,7 +22,8 @@ Rules for any workflow change:
 - `pull_request` workflows never receive deploy credentials, publish images, or run on
   self-hosted runners. Fork PRs are untrusted code.
 - Use `pnpm install --frozen-lockfile`; never relax pnpm's supply-chain policies in CI.
-- Pin actions to a major version; Dependabot keeps them current.
+- Pin actions to a major version and update them deliberately; Dependabot opens PRs only for
+  security fixes.
 - Keep CI fast: path filters only when they can't skip required checks.
 
 ## Release Flow (Phase 3 target)

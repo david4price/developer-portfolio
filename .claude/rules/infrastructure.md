@@ -22,7 +22,7 @@ paths:
   HPA-managed Deployments.
 - GitHub Actions: workflow `permissions` default to `contents: read`; grant more per job only when
   needed. Pull requests never get deploy credentials or self-hosted runners. Pin actions to a
-  major version (Dependabot updates them).
+  major version (updated deliberately; Dependabot opens PRs only for security fixes).
 - Keep pnpm supply-chain settings in `pnpm-workspace.yaml` intact; don't add release-age
   exclusions or allow build scripts without a stated reason.
 - Anything that changes a running system is out of scope unless explicitly requested; see the
