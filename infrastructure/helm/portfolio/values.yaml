@@ -17,6 +17,9 @@ api:
     repository: ghcr.io/example/portfolio-api
     tag: ''
     digest: ''
+    # The 40-character commit the image was built from (set by the release workflow); labels the
+    # workload's app.kubernetes.io/version, shown short by the Infrastructure Explorer.
+    revision: ''
   replicaCount: 1
   # CPU-based HorizontalPodAutoscaler (P3-06). When enabled, replicaCount is ignored.
   autoscaling:
@@ -113,6 +116,7 @@ worker:
     repository: ghcr.io/example/portfolio-worker
     tag: ''
     digest: ''
+    revision: ''
   replicaCount: 1
   logLevel: log
   concurrency: 1

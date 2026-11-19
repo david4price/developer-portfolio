@@ -125,6 +125,18 @@ export function imageVersion(image: string): string | null {
   return /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(tag) ? tag : null;
 }
 
+/** The standard version label; the chart sets it to the source commit for the API and worker. */
+export const VERSION_LABEL = 'app.kubernetes.io/version';
+
+/**
+ * The workload's source commit, short (7 hex characters), when its version label holds a full
+ * commit SHA; anything else (the chart's appVersion, a third-party image) gives `null`.
+ */
+export function commitVersion(labels: Readonly<Record<string, string>> | undefined): string | null {
+  const commit = /^([0-9a-f]{7})[0-9a-f]{33}$/.exec(labels?.[VERSION_LABEL] ?? '');
+  return commit === null ? null : (commit[1] ?? null);
+}
+
 const FAILURE_ORDER: readonly InfrastructureFailure[] = [
   'crash-loop',
   'image-pull',
@@ -217,7 +229,7 @@ export interface SerializeOptions {
 /**
  * The public snapshot from raw cluster objects. The website, the AI runtime, and Argo CD aren't
  * workloads in the namespace, so they stay `unknown` here; Argo CD's sync status and the latest
- * release come with its read-only token (P6-03), and request rates with metrics (P7-01).
+ * release come with its read-only token (P6-03), and request rates from the traffic counters.
  */
 export function serializeSnapshot(
   objects: ClusterObjects,
@@ -245,7 +257,8 @@ export function serializeSnapshot(
     return {
       id,
       health,
-      version: imageVersion(image),
+      // The commit it was built from where the release recorded one, otherwise the image's.
+      version: commitVersion(workload.metadata.labels) ?? imageVersion(image),
       replicas,
       traffic: null,
       // Healthy, or scaled to zero on purpose: there is no failure to report.

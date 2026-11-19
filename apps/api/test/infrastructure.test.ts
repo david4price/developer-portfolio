@@ -23,6 +23,7 @@ import {
 } from '../src/modules/infrastructure/infrastructure-snapshot.service.js';
 import { KubernetesClusterReader } from '../src/modules/infrastructure/kubernetes-cluster.reader.js';
 import {
+  commitVersion,
   imageVersion,
   serializeSnapshot,
 } from '../src/modules/infrastructure/snapshot-serializer.js';
@@ -321,6 +322,39 @@ describe('health and failure rules', () => {
     assert.equal(imageVersion('registry.local:5000/team/app'), null, 'a port is not a tag');
     assert.equal(imageVersion('postgres'), null);
     assert.equal(imageVersion('app@md5:abc'), null);
+  });
+
+  it('shows the short source commit the release recorded, else the image version', () => {
+    const commit = '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567';
+    const versioned = (version: string) => {
+      const workload = deployment('api');
+      return {
+        ...workload,
+        metadata: {
+          ...workload.metadata,
+          labels: { ...workload.metadata.labels, 'app.kubernetes.io/version': version },
+        },
+      };
+    };
+    const versionOf = (workload: unknown) =>
+      serializeSnapshot(
+        { deployments: [workload], statefulSets: [], pods: [] },
+        { namespace: NAMESPACE, now: NOW },
+      ).components.find(({ id }) => id === 'api')?.version;
+    assert.equal(versionOf(versioned(commit)), '0a1b2c3');
+    // The chart's appVersion, a short or uppercase SHA, or junk: not a recorded commit.
+    for (const other of ['0.1.0', commit.slice(0, 12), commit.toUpperCase(), `${commit}0`]) {
+      assert.equal(versionOf(versioned(other)), 'sha256:ab12cd3', other);
+    }
+    assert.equal(commitVersion(undefined), null);
+    // Only the short form leaves the API.
+    const body = JSON.stringify(
+      serializeSnapshot(
+        { deployments: [versioned(commit)], statefulSets: [], pods: [] },
+        { namespace: NAMESPACE, now: NOW },
+      ),
+    );
+    assert.doesNotMatch(body, new RegExp(commit));
   });
 });
 

@@ -128,7 +128,8 @@ The public surface is a static site and a small REST API. The main risks:
   check none reach the output. It emits only:
   - app name
   - health and sync status
-  - image version (tag, not registry path; a short `sha256:` prefix for images pinned by digest)
+  - image version (tag, not registry path; a short `sha256:` prefix for images pinned by digest;
+    the 7-character source commit from the workload's version label for the API and worker)
   - desired, available, and ready counts
   - rollout progress
   - a coarse failure category

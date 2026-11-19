@@ -2,6 +2,7 @@
 api:
   image:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    revision: '0000000000000000000000000000000000000000'
   corsOrigins: https://portfolio.example.com
   trustCloudflareClientIp: true
   autoscaling:
@@ -9,6 +10,7 @@ api:
 worker:
   image:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    revision: '0000000000000000000000000000000000000000'
 postgres:
   backup:
     enabled: true

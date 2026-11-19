@@ -12,9 +12,12 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Recently done**
 
-- P6-04 traffic sparks (code, `feat/p6-04-traffic`): Redis request counters give the API, its
-  tunnel, and the AI model an `idle`/`low`/`busy` level, so the live map's lines pulse; the
-  narrow layout's worker–PostgreSQL line moved in from the frame's edge.
+- P6-04 release versions and token reminder (code, `feat/p6-04-release-versions`): the API and
+  worker show their short source commit; the API warns daily from 14 days before the Argo CD
+  token expires. New task P6-05 tracks the rotation.
+- P6-04 traffic sparks merged and deployed (PR #57, 2026-11-19): Redis request counters give the
+  API, its tunnel, and the AI model an `idle`/`low`/`busy` level, so the live map's lines pulse;
+  the narrow layout's worker–PostgreSQL line moved in from the frame's edge.
 - P6-04 AI probe merged and deployed (PR #56, 2026-11-19): the AI building shows the model
   runtime's real state from its model list, with no model name or address in the response.
 - P6-04 live view merged and deployed (PR #55, 2026-11-18).
@@ -212,9 +215,9 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 **Next up, in order**
 
 1. **P6-04:** the offline drill on production (the map must say "unavailable", never
-   "healthy"; it briefly stops the API, so it needs approval). The AI model's real state is
-   live and traffic sparks are built; still to come: release commits instead of image digests,
-   and a warning before the Argo CD token expires (due 2027-02-16).
+   "healthy"; it briefly stops the API, so it needs approval). Everything else in P6-04 is
+   built. Then **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from
+   2027-02-02).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -222,7 +225,8 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-04-traffic` (P6-04 traffic sparks and the mobile wire fix).
+**Branch in progress:** `feat/p6-04-release-versions` (P6-04 source-commit versions and the
+token-expiry reminder).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -484,7 +488,7 @@ Read-only inventory of the reference host. Findings:
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 
-## Phase 6: Infrastructure Explorer (3/4)
+## Phase 6: Infrastructure Explorer (3/5)
 
 - [x] **P6-01** 🔒 Read-only ServiceAccount and Role for the `portfolio` namespace. _Needs:_
       P3-03. _Done when:_ `kubectl auth can-i` denies secrets, logs, and exec.
@@ -532,9 +536,14 @@ Read-only inventory of the reference host. Findings:
       mini-apps are `available` in the registry, and the page no longer hard-codes badge text.
       Merged and deployed (PR #55). The AI building now shows the runtime's real state from
       `GET /models` (healthy, degraded, or down; never the model's name; PR #56). Traffic
-      sparks come from Redis request counters (`feat/p6-04-traffic`).
-      Still open: the offline drill on production, then release commits and the Argo CD
-      token-expiry warning.
+      sparks come from Redis request counters (PR #57). The API and worker show the short source
+      commit the release recorded instead of an image digest, and the API logs a daily warning
+      from 14 days before the Argo CD token expires (`feat/p6-04-release-versions`).
+      Still open: the offline drill on production.
+- [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
+      P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
+      back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
+      on 2027-02-02. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
 ## Phase 7: Hardening (0/5)
 

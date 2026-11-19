@@ -12,6 +12,11 @@ import {
   ArgoCdApplicationReader,
   serializeDeploymentStatus,
 } from '../src/modules/infrastructure/argocd-application.reader.js';
+import {
+  ArgoCdTokenReminder,
+  TOKEN_EXPIRY_WARNING_MS,
+  tokenExpiresAt,
+} from '../src/modules/infrastructure/argocd-token-reminder.js';
 import { DeploymentReadError } from '../src/modules/infrastructure/deployment-reader.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
 import {
@@ -270,6 +275,143 @@ describe('ArgoCdApplicationReader', () => {
       readFile: () => Promise.reject(new Error('private path')),
     });
     await assert.rejects(missing.read(AbortSignal.timeout(1_000)), { reason: 'credentials' });
+  });
+});
+
+describe('Argo CD token expiry reminder', () => {
+  const DAY = 24 * 60 * 60_000;
+  const jwt = (claims: object) =>
+    ['{"alg":"HS256"}', JSON.stringify(claims), 'signature']
+      .map((part, i) => (i < 2 ? Buffer.from(part).toString('base64url') : part))
+      .join('.');
+
+  /** A Redis stand-in for SET … EX … NX: the first claim of a key wins. */
+  class FakeStore {
+    readonly keys = new Set<string>();
+    failing = false;
+    async set(key: string) {
+      if (this.failing) throw new Error('connection lost');
+      if (this.keys.has(key)) return null;
+      this.keys.add(key);
+      return 'OK';
+    }
+  }
+
+  const setup = (initialToken: string, now: number) => {
+    const logged: { level: 'warn' | 'error'; entry: object }[] = [];
+    const state = { token: initialToken, now, unreadable: false };
+    const store = new FakeStore();
+    const reminder = (shared = store) =>
+      new ArgoCdTokenReminder({
+        readToken: async () => {
+          if (state.unreadable) throw new Error('ENOENT');
+          return `${state.token}\n`;
+        },
+        store: shared,
+        now: () => state.now,
+        logger: {
+          warn: (entry) => logged.push({ level: 'warn', entry }),
+          error: (entry) => logged.push({ level: 'error', entry }),
+        },
+      });
+    return { logged, state, store, reminder };
+  };
+
+  const expiresAt = Date.parse('2027-02-16T00:00:00Z');
+  const token = jwt({ exp: expiresAt / 1_000, jti: 'private-token-id' });
+
+  it('reads only the expiry claim, and nothing from tokens without one', () => {
+    assert.equal(tokenExpiresAt(jwt({ exp: 1_800_000_000 })), 1_800_000_000_000);
+    for (const value of [
+      'opaque-token',
+      jwt({ sub: 'x' }),
+      jwt({ exp: 'soon' }),
+      jwt({ exp: 1e300 }),
+      'a.%%%.c',
+      'a.b',
+    ]) {
+      assert.equal(tokenExpiresAt(value), null, value);
+    }
+  });
+
+  it('warns once a day from 14 days out, across replicas and restarts', async () => {
+    const { logged, state, store, reminder } = setup(
+      token,
+      expiresAt - TOKEN_EXPIRY_WARNING_MS - DAY,
+    );
+    await reminder().check();
+    assert.equal(logged.length, 0, 'more than 14 days left');
+    state.now = expiresAt - 10 * DAY + 60_000;
+    // Two replicas, then a restarted one, on the same day: one line.
+    await reminder().check();
+    await reminder(store).check();
+    await reminder().check();
+    assert.equal(logged.length, 1);
+    assert.deepEqual(logged[0], {
+      level: 'warn',
+      entry: {
+        message: 'Argo CD explorer token expires soon; rotate it',
+        expiresAt: '2027-02-16T00:00:00.000Z',
+        daysLeft: 10,
+        runbook: 'docs/deployment/kubernetes.md#argo-cd-explorer-token-p6-03',
+      },
+    });
+    state.now += DAY;
+    await reminder().check();
+    assert.equal(logged.length, 2, 'again the next day');
+  });
+
+  it('errors as soon as the token expires, even after a warning that day', async () => {
+    const { logged, state, reminder } = setup(token, expiresAt - 2 * 60 * 60_000);
+    await reminder().check();
+    state.now = expiresAt + 60_000;
+    await reminder().check();
+    assert.deepEqual(
+      logged.map(({ level }) => level),
+      ['warn', 'error'],
+    );
+  });
+
+  it('logs a rotated token that is also near expiry at once', async () => {
+    const { logged, state, reminder } = setup(token, expiresAt - 5 * DAY);
+    await reminder().check();
+    state.token = jwt({ exp: (expiresAt - DAY) / 1_000 });
+    await reminder().check();
+    assert.equal(logged.length, 2);
+  });
+
+  it('logs anyway when Redis is down, stays quiet without a readable JWT, and never logs the token', async () => {
+    const { logged, state, store, reminder } = setup(token, expiresAt - DAY);
+    store.failing = true;
+    await reminder().check();
+    assert.equal(logged.length, 1);
+    state.unreadable = true;
+    await reminder().check();
+    state.unreadable = false;
+    state.token = 'opaque-token';
+    await reminder().check();
+    assert.equal(logged.length, 1);
+    assert.doesNotMatch(JSON.stringify(logged), /private-token-id|signature|eyJ/);
+  });
+
+  it('checks on startup and then on its interval, without keeping the process alive', async () => {
+    const warned: object[] = [];
+    let checks = 0;
+    const instance = new ArgoCdTokenReminder({
+      readToken: async () => {
+        checks++;
+        return token;
+      },
+      store: new FakeStore(),
+      now: () => expiresAt - DAY,
+      intervalMs: 20,
+      logger: { warn: (entry) => warned.push(entry), error: () => undefined },
+    });
+    instance.onApplicationBootstrap();
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    instance.onApplicationShutdown();
+    assert.ok(checks >= 2, 'startup, then the interval');
+    assert.equal(warned.length, 1, 'the day was claimed once');
   });
 });
 

@@ -128,6 +128,13 @@ the switch disabled and opens on the simulation.
   allowlist serializer, cached for 12 s, and is off until `INFRASTRUCTURE_SOURCE=kubernetes`. From
   the cluster it fills health, replicas, image version, and failure for the tunnel, API, worker,
   PostgreSQL, and Redis. The website stays "unknown" on the API (the visitor's page fills it in).
+- **Versions (Confirmed in code, P6-04):** the API and worker show the short source commit they
+  were built from, read from their `app.kubernetes.io/version` label, which the chart sets from
+  the release workflow's `image.revision` on everything built from those images (Deployments,
+  the API's HPA, Service, RBAC, and NetworkPolicy, and the migrate Job). Only a full 40-character lowercase commit counts
+  (anything else, such as the chart's appVersion, falls back to the image tag or a short
+  `sha256:` digest), and only its first 7 characters leave the API. Third-party images
+  (PostgreSQL, Redis, the tunnel) keep their tag or digest.
 - **AI model (Confirmed in code, P6-04):** the model runs outside the cluster, so on each refresh
   the API asks the chat's own adapter for a status check (an optional `status()` on the
   `AiProvider` port). The `openai-compatible` adapter calls `GET <AI_BASE_URL>/models`, which

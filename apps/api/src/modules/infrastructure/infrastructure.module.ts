@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import type { Redis } from 'ioredis';
@@ -12,6 +13,7 @@ import {
 } from './infrastructure-snapshot.service.js';
 import { KubernetesClusterReader } from './kubernetes-cluster.reader.js';
 import { ArgoCdApplicationReader } from './argocd-application.reader.js';
+import { ArgoCdTokenReminder } from './argocd-token-reminder.js';
 import { REDIS } from '../../redis/redis.module.js';
 import {
   NoopTrafficCounter,
@@ -67,6 +69,20 @@ export function createSnapshotSource(
       inject: [API_CONFIG, AI_PROVIDER, TRAFFIC_COUNTER],
       useFactory: (config: ApiConfig, ai: AiProvider, traffic: TrafficCounter) =>
         createSnapshotSource(config.infrastructure, ai, traffic),
+    },
+    {
+      // Hourly, whether or not anyone opens the explorer; only with the Argo CD reader on.
+      provide: ArgoCdTokenReminder,
+      inject: [API_CONFIG, REDIS],
+      useFactory: (config: ApiConfig, redis: Redis): ArgoCdTokenReminder | null => {
+        const infrastructure = config.infrastructure;
+        if (!infrastructure.enabled || infrastructure.argocd === undefined) return null;
+        const { tokenFile } = infrastructure.argocd;
+        return new ArgoCdTokenReminder({
+          readToken: () => readFile(tokenFile, 'utf8'),
+          store: redis,
+        });
+      },
     },
     {
       provide: APP_INTERCEPTOR,
