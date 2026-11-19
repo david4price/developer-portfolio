@@ -476,6 +476,10 @@ and permits API egress to Argo CD server pods in the `argocd` namespace on TCP 8
   UTC day keeps it to one line a day across replicas and restarts; a rotated token or the move
   to expired logs at once, and if Redis is down it logs anyway. Roadmap task P6-05 tracks the
   rotation.
+- **Outside the cluster too:** the reference deployment's operator also gets a chat-bot
+  reminder, and outage alerts, from a separate watcher in their homelab. It reads only the
+  public `GET /api/v1/infrastructure` snapshot (no credentials, no inbound port), and the
+  token's expiry date is set in its own configuration. Update that date after each rotation.
 - **Rotate before 2027-02-16:** issue a second 90-day token, seal it (and the current server CA)
   into the same Secret, publish/apply the SealedSecret, and validate after the 12 s cache expires.
   Revoke the previous token only after that succeeds; retain its ID/issued-at outside Git until

@@ -589,7 +589,9 @@ Read-only inventory of the reference host. Findings:
 - [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
       P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
       back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
-      on 2027-02-02. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
+      on 2027-02-02, and the owner's homelab chat bot (which watches the public snapshot) sends
+      a daily reminder from the same date. Steps:
+      [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
 ## Phase 7: Hardening (1/6)
 
