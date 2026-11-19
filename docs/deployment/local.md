@@ -172,8 +172,9 @@ one-shot jobs also use a read-only root filesystem.
 
 - Projects and mini-apps: `packages/project-registry/src/data.ts`. Entries are validated, so a bad
   slug, duplicate, or non-HTTPS link fails tests and the build. Run `pnpm db:seed` after changes.
-- Profile, About, and Experience: `packages/project-registry/src/profile-data.ts` (validated by
-  the same schema checks as projects).
+- Profile, About (including the optional "Beyond the code" interests, `personal`), and Experience:
+  `packages/project-registry/src/profile-data.ts` (validated by the same schema checks as
+  projects).
 - Architecture notes for the chat assistant: `packages/project-registry/src/docs-data.ts`. Keep each
   note short (400 characters at most), current, and free of private details; `source` must be a
   file or folder in this repository (folders end with `/`), and `repositoryUrl`/`branch` point the
