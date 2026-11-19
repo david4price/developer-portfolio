@@ -1,7 +1,8 @@
-# Security fixes only (owner's choice, 2026-11-19). Routine version PRs are off
-# (`open-pull-requests-limit: 0`); Dependabot alerts and security updates, enabled in the
-# repository's settings, still open a PR when a dependency has a known vulnerability (CI only
-# checks package signatures). Versions are otherwise updated deliberately, not on a schedule.
+# Security fixes only (ADR 0002, docs/architecture/adr-0002-dependency-updates.md). Routine
+# version PRs are off (`open-pull-requests-limit: 0`). Dependabot alerts and security updates,
+# enabled in the repository's settings, still open a PR when an npm package or a GitHub Action
+# has a known vulnerability. Docker isn't covered by security updates (see the ADR), and there
+# are no ignore rules, because they would now only hold back security fixes.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -9,22 +10,9 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 0
-    ignore:
-      # typescript-eslint supports TypeScript < 6.1; TS 7 is roadmap task P7-05.
-      - dependency-name: typescript
-        update-types: ['version-update:semver-major']
-      # Types must match the runtime: Node 24 (.node-version, engines).
-      - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 0
-
-  - package-ecosystem: docker
-    directory: /infrastructure/docker
     schedule:
       interval: monthly
     open-pull-requests-limit: 0

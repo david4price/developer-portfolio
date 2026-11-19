@@ -608,9 +608,10 @@ Read-only inventory of the reference host. Findings:
       when:_ monthly estimate is within $0–10.
 - [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. _Done when:_
       typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
-      Nest dependency injection still works (decorator metadata); the TypeScript major-version
-      ignore is removed from `.github/dependabot.yml`. Dependabot PR #2 was the first attempt
-      (failed lint).
+      Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
+      attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
+      ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
+      hand: check typescript-eslint's peer range from time to time.
 - [x] **P7-06** 🔒 K3s API audit logging. _Needs:_ Phase 3. _Done when:_ writes, `exec`/`attach`/
       `port-forward`, and Secret reads are recorded at Metadata level (never bodies), routine
       traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log is
