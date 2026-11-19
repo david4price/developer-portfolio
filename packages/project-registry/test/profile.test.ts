@@ -123,23 +123,26 @@ describe('createProfile', () => {
     );
   });
 
-  it('accepts photos with plain file names and rejects bad names, duplicates, and too many', () => {
-    const personal = {
-      intro: 'Outside of work.',
-      interests: [
-        { name: 'Surfing', description: 'Dawn sessions.' },
-        { name: 'Guitar', description: 'Blues, mostly.' },
-      ],
-    };
+  it('accepts photos behind a card and rejects bad names, duplicates, and too many', () => {
     const photo = {
       file: 'kyoto-tower',
       alt: 'A tower.',
       width: 1200,
       height: 1800,
     };
-    const withPhotos = (photos: (typeof photo)[]) =>
-      createProfile({ ...validProfile, personal: { ...personal, photos } });
-    assert.equal(withPhotos([photo]).personal?.photos?.[0]?.file, 'kyoto-tower');
+    // Photos sit behind interest cards; the second card can carry its own.
+    const withPhotos = (photos: (typeof photo)[], others: (typeof photo)[] = []) =>
+      createProfile({
+        ...validProfile,
+        personal: {
+          intro: 'Outside of work.',
+          interests: [
+            { name: 'Photography', description: 'Mostly travel.', photos },
+            { name: 'Guitar', description: 'Blues, mostly.', photos: others },
+          ],
+        },
+      });
+    assert.equal(withPhotos([photo]).personal?.interests[0]?.photos?.[0]?.file, 'kyoto-tower');
     for (const file of ['../etc/passwd', 'Kyoto Tower', 'tower.webp', '-tower', '']) {
       assert.throws(
         () => withPhotos([{ ...photo, file }]),
@@ -148,8 +151,13 @@ describe('createProfile', () => {
       );
     }
     assert.throws(() => withPhotos([photo, photo]), /duplicate photo: kyoto-tower/);
-    const many = Array.from({ length: 13 }, (_, i) => ({ ...photo, file: `photo-${i}` }));
-    assert.throws(() => withPhotos(many), /expected array to have <=12/);
+    assert.throws(
+      () => withPhotos([photo], [photo]),
+      /duplicate photo: kyoto-tower/,
+      'one card each',
+    );
+    const many = Array.from({ length: 21 }, (_, i) => ({ ...photo, file: `photo-${i}` }));
+    assert.throws(() => withPhotos(many), /expected array to have <=20/);
     assert.throws(() => withPhotos([{ ...photo, alt: 'x'.repeat(201) }]), /<=200/);
   });
 

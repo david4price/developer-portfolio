@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { it } from 'node:test';
 import { profile } from '@portfolio/project-registry';
@@ -9,7 +9,8 @@ const photoFile = (name: string) =>
   fileURLToPath(new URL(`../../public/photos/${name}.webp`, import.meta.url));
 
 it('ships every listed photo in both sizes, metadata-free and within budget', async () => {
-  const photos = profile.personal?.photos ?? [];
+  const photos = (profile.personal?.interests ?? []).flatMap((interest) => interest.photos ?? []);
+  assert.ok(photos.length > 0, 'the shipped profile has photos');
   for (const photo of photos) {
     const large = await readFile(photoFile(`${photo.file}-lg`));
     const small = await readFile(photoFile(`${photo.file}-sm`));
@@ -34,4 +35,18 @@ it('ships every listed photo in both sizes, metadata-free and within budget', as
     assert.ok(small.length < 160_000, `${photo.file}: gallery file over 160 KB`);
     assert.ok(large.length < 500_000, `${photo.file}: full-size file over 500 KB`);
   }
+});
+
+it('ships no photo that no card lists', async () => {
+  const listed = new Set(
+    (profile.personal?.interests ?? []).flatMap((interest) =>
+      (interest.photos ?? []).flatMap(({ file }) => [`${file}-sm.webp`, `${file}-lg.webp`]),
+    ),
+  );
+  const shipped = await readdir(fileURLToPath(new URL('../../public/photos/', import.meta.url)));
+  assert.deepEqual(
+    shipped.filter((name) => !listed.has(name)),
+    [],
+    'files in public/photos that no interest lists',
+  );
 });

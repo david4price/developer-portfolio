@@ -14,9 +14,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- About photos (`feat/about-photos`): eight of the owner's photos as white-framed prints, no
-  captions, under "Beyond the code", from Tokyo, Kyoto, Cape Town, the Alps, and the night sky. Metadata is stripped, colour
-  is converted to sRGB, and each comes as 900 px and 1,800 px WebP; a test enforces all three.
+- About photos (`feat/about-photos`): 19 of the owner's photos sit behind the interest cards
+  they belong to (Photography 14, Scar 4, Mountain Biking 1), as prints peeking out from behind
+  each card that open as white-framed prints without captions. Scar's card comes first. Metadata
+  (including GPS on two phone photos) is stripped and colour converted to sRGB; tests enforce it.
 - **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
   - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
     Experience through a new `page` link kind that the web rebuilds from its own list. They

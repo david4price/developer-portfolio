@@ -90,12 +90,6 @@ export const experienceEntrySchema = z.object({
   highlights: z.array(content(300)).min(1).max(8),
 });
 
-/** One interest in the About page's personal section. */
-export const interestSchema = z.object({
-  name: content(40),
-  description: content(600),
-});
-
 /**
  * One of the owner's photos. `file` names two WebP files the web app serves from
  * `public/photos/`: `<file>-sm.webp` (900 px on the long edge) for the gallery and
@@ -112,11 +106,17 @@ export const photoSchema = z.object({
   height: z.number().int().min(1).max(4_000),
 });
 
-/** The personal side of About: a short introduction, the owner's interests, and photos. */
+/** One interest in the About page's personal section, with the photos behind its card. */
+export const interestSchema = z.object({
+  name: content(40),
+  description: content(600),
+  photos: z.array(photoSchema).max(20).optional(),
+});
+
+/** The personal side of About: a short introduction and the owner's interests. */
 export const personalSchema = z.object({
   intro: content(500),
   interests: z.array(interestSchema).min(2).max(10),
-  photos: z.array(photoSchema).max(12).optional(),
 });
 
 export const profileLinkSchema = z.object({
@@ -164,7 +164,11 @@ export const profileSchema = z
     for (const duplicate of duplicates(profile.personal?.interests.map(({ name }) => name) ?? [])) {
       issue(`duplicate interest: ${duplicate}`);
     }
-    for (const duplicate of duplicates(profile.personal?.photos?.map(({ file }) => file) ?? [])) {
+    // A photo sits behind one card only.
+    const photoFiles = (profile.personal?.interests ?? []).flatMap(({ photos }) =>
+      (photos ?? []).map(({ file }) => file),
+    );
+    for (const duplicate of duplicates(photoFiles)) {
       issue(`duplicate photo: ${duplicate}`);
     }
     for (const entry of profile.experience) {

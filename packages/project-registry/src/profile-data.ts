@@ -95,6 +95,43 @@ export const profileData: ProfileInput = {
       'disappearing down a new rabbit hole.',
     interests: [
       {
+        name: 'Scar, My Four-Legged Sidekick',
+        description:
+          "Meet Scar, my four-legged best friend and occasional office buddy. He's a big part " +
+          "of my life, whether we're spending time outdoors, relaxing at home, or he's joining " +
+          "me for a day at work. He's also made his way into my developer portfolio as a " +
+          "pixel-art character, so I guess he's officially part of the development team. Still " +
+          'waiting for his first pull request, though.',
+        photos: [
+          {
+            file: 'scar-trail',
+            alt:
+              'Scar, a black dog with a white chest and an orange name tag, walking a dirt path ' +
+              'through tall green plants.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'scar-flowers',
+            alt: 'Scar standing among tall grass and yellow wildflowers at dusk.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'scar-under-table',
+            alt: 'Scar peeking up from between two café tables, nose first.',
+            width: 768,
+            height: 1024,
+          },
+          {
+            file: 'scar-office',
+            alt: 'Scar curled up on his mat by a frosted glass door at the office.',
+            width: 768,
+            height: 1024,
+          },
+        ],
+      },
+      {
         name: 'Mountain Biking',
         description:
           'Mountain biking is one of my biggest passions, especially enduro and technical trail ' +
@@ -103,6 +140,16 @@ export const profileData: ProfileInput = {
           'a difficult section, figuring out the right line, and finally getting it right. I ' +
           "ride both traditional mountain bikes and e-MTBs, and I'm always looking to improve " +
           'my technique and confidence on the trails.',
+        photos: [
+          {
+            file: 'alps-ride',
+            alt:
+              'David with his mountain bike on a ridge above green valleys and rocky Alpine ' +
+              'peaks.',
+            width: 768,
+            height: 1024,
+          },
+        ],
       },
       {
         name: 'Surfing',
@@ -132,6 +179,110 @@ export const profileData: ProfileInput = {
           "out what I had in mind. It's one of those hobbies where there's always something new " +
           "to learn, and it's a good excuse to slow down and pay attention to the details " +
           'around me.',
+        photos: [
+          {
+            file: 'kyoto-pagoda',
+            alt: 'A red pagoda rising out of a dense, sunlit forest on a hillside in Kyoto.',
+            width: 1800,
+            height: 1200,
+          },
+          {
+            file: 'egret',
+            alt: 'A white egret wading through dark, rippling water in low evening light.',
+            width: 1200,
+            height: 1800,
+          },
+          {
+            file: 'shibuya-crossing',
+            alt:
+              'A black sedan with cream wheels crossing the Shibuya intersection in Tokyo while ' +
+              'a crowd watches from the curb.',
+            width: 1800,
+            height: 1200,
+          },
+          {
+            file: 'bamboo',
+            alt: 'Inside a dark bamboo grove, sunlight and lens flare falling between the stalks.',
+            width: 1800,
+            height: 1200,
+          },
+          {
+            file: 'kitten-stairs',
+            alt:
+              'A tabby kitten peeking around a wall on a flight of stone stairs, in black and ' +
+              'white.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'kyoto-tower',
+            alt:
+              'Kyoto Tower, white with an orange crown, against a blue sky and clouds, framed ' +
+              'by dark leaves.',
+            width: 1200,
+            height: 1800,
+          },
+          {
+            file: 'milky-way',
+            alt: 'The Milky Way rising over a dark ridge in a sky full of stars.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'temple-roof',
+            alt:
+              'The corner of a temple roof, its tiles and gold-edged beams against a pale blue ' +
+              'sky.',
+            width: 1800,
+            height: 1200,
+          },
+          {
+            file: 'spiral-stairs',
+            alt:
+              'Looking down a concrete spiral staircase, its dark handrail curling into the ' +
+              'light, in black and white.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'orb-weaver',
+            alt:
+              'A yellow-and-black orb-weaver spider in its sunlit web against a deep green ' +
+              'background.',
+            width: 1200,
+            height: 1800,
+          },
+          {
+            file: 'cape-coast',
+            alt:
+              'A mountain headland and a small town on a calm blue bay under a pale sky, shot ' +
+              'on film.',
+            width: 1800,
+            height: 1216,
+          },
+          {
+            file: 'rose',
+            alt:
+              'A single pink rose among green leaves, with autumn trees and an old building ' +
+              'behind it.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'park-bench',
+            alt: 'A person on a park bench under autumn trees, looking out over a moat.',
+            width: 724,
+            height: 1086,
+          },
+          {
+            file: 'wheat-field',
+            alt:
+              'A field of ripening wheat under a wide blue sky, with palm trees and a building ' +
+              'on the horizon.',
+            width: 724,
+            height: 1086,
+          },
+        ],
       },
       {
         name: 'Guitar & Music',
@@ -171,65 +322,6 @@ export const profileData: ProfileInput = {
           'my favorite films, and Attack on Titan is one of my favorite anime series. I love ' +
           'stories that make you think, surprise you, or leave you with something to talk about ' +
           'afterward.',
-      },
-      {
-        name: 'Scar, My Four-Legged Sidekick 🐾',
-        description:
-          "Meet Scar, my four-legged best friend and occasional office buddy. He's a big part " +
-          "of my life, whether we're spending time outdoors, relaxing at home, or he's joining " +
-          "me for a day at work. He's also made his way into my developer portfolio as a " +
-          "pixel-art character, so I guess he's officially part of the development team. Still " +
-          'waiting for his first pull request, though.',
-      },
-    ],
-    photos: [
-      {
-        file: 'shibuya-crossing',
-        alt: 'A black sedan with cream wheels crossing the Shibuya intersection in Tokyo while a crowd watches from the curb.',
-        width: 1800,
-        height: 1200,
-      },
-      {
-        file: 'kyoto-tower',
-        alt: 'Kyoto Tower, white with an orange crown, against a blue sky and clouds, framed by dark leaves.',
-        width: 1200,
-        height: 1800,
-      },
-      {
-        file: 'kyoto-pagoda',
-        alt: 'A red pagoda rising out of a dense, sunlit forest on a hillside in Kyoto.',
-        width: 1800,
-        height: 1200,
-      },
-      {
-        file: 'egret',
-        alt: 'A white egret wading through dark, rippling water in low evening light.',
-        width: 1200,
-        height: 1800,
-      },
-      {
-        file: 'orb-weaver',
-        alt: 'A yellow-and-black orb-weaver spider in its sunlit web against a deep green background.',
-        width: 1200,
-        height: 1800,
-      },
-      {
-        file: 'milky-way',
-        alt: 'The Milky Way rising over a dark ridge in a sky full of stars.',
-        width: 724,
-        height: 1086,
-      },
-      {
-        file: 'cape-coast',
-        alt: 'A mountain headland and a small town on a calm blue bay under a pale sky, shot on film.',
-        width: 1800,
-        height: 1216,
-      },
-      {
-        file: 'alps-ride',
-        alt: 'David with his mountain bike on a ridge above green valleys and rocky Alpine peaks.',
-        width: 768,
-        height: 1024,
       },
     ],
   },

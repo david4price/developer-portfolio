@@ -163,7 +163,10 @@ main {
 
 .photo-print {
   display: block;
+  width: 100%;
   padding: 0.55rem;
+  border: 0;
+  cursor: zoom-in;
   background: var(--color-print);
   border-radius: 2px;
   box-shadow: var(--shadow-print);
@@ -201,6 +204,241 @@ main {
   .photo-grid > li:nth-child(even) .photo-print,
   .photo-grid > li:nth-child(3n) .photo-print {
     transform: none;
+    transition: none;
+  }
+}
+
+/* Interest cards on About: cards with photos have a few prints tucked behind them, peeking out
+   above the top edge, and a button that opens all of them. */
+.interest-grid {
+  /* Room for the prints above each card, lifted on hover (up to about 3.6rem), plus a margin. */
+  row-gap: calc(var(--space) * 4.5);
+  padding-top: calc(var(--space) * 3.75);
+}
+
+.interest-card {
+  position: relative;
+  isolation: isolate;
+}
+
+/* In front of the prints, which sit behind it as a sibling and peek out above its top edge. A
+   column, so the photos button sits at the bottom of every card in a row, whatever the text. */
+.interest-card__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.interest-card__prints {
+  position: absolute;
+  z-index: 0;
+  top: -2.7rem;
+  right: 1.1rem;
+  display: flex;
+  cursor: pointer;
+}
+
+.interest-card__prints img {
+  width: 4rem;
+  height: 5rem;
+  object-fit: cover;
+  margin-left: -1.2rem;
+  border: 0.3rem solid var(--color-print);
+  border-radius: 2px;
+  box-shadow: var(--shadow-print);
+  transform: rotate(-9deg);
+  transition: transform 180ms ease;
+}
+
+.interest-card__prints img:nth-child(2) {
+  transform: translateY(-0.35rem) rotate(4deg);
+}
+
+.interest-card__prints img:nth-child(3) {
+  transform: rotate(11deg);
+}
+
+.interest-card:hover .interest-card__prints img,
+.interest-card:focus-within .interest-card__prints img {
+  transform: translateY(-0.5rem) rotate(-12deg);
+}
+
+.interest-card:hover .interest-card__prints img:nth-child(2),
+.interest-card:focus-within .interest-card__prints img:nth-child(2) {
+  transform: translateY(-0.9rem) rotate(3deg);
+}
+
+.interest-card:hover .interest-card__prints img:nth-child(3),
+.interest-card:focus-within .interest-card__prints img:nth-child(3) {
+  transform: translateY(-0.5rem) rotate(14deg);
+}
+
+.interest-card__open {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.interest-card__open:hover {
+  border-color: var(--color-accent);
+}
+
+/* The photos behind a card, as prints in a dialog. */
+.photo-dialog {
+  width: min(64rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.photo-dialog::backdrop {
+  background: rgb(12 10 9 / 0.7);
+}
+
+.photo-dialog__content {
+  padding: calc(var(--space) * 1.25);
+}
+
+.photo-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.photo-dialog__header h3 {
+  margin: 0;
+}
+
+.photo-dialog__header button {
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* One photo enlarged inside the dialog: a single print, fitted to the window. */
+.photo-viewer {
+  margin-top: var(--space);
+  outline: none;
+}
+
+.photo-viewer__print {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* The print's white border, around the photo at either size. */
+.photo-viewer__frame {
+  flex: none;
+  max-width: 100%;
+  padding: 0.6rem;
+  background: var(--color-print);
+  border-radius: 2px;
+  box-shadow: var(--shadow-print);
+}
+
+.photo-viewer__frame img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  /* Fitted, the dialog must not scroll: the window less the dialog's margin, padding, header,
+     the frame, and the controls (about 12.5rem; 2.5rem more on narrow screens, where the
+     controls wrap onto two rows), plus a little slack. */
+  max-height: calc(100dvh - 14rem);
+  cursor: zoom-in;
+  user-select: none;
+}
+
+@media (max-width: 40rem) {
+  .photo-viewer__frame img {
+    max-height: calc(100dvh - 17rem);
+  }
+
+  .photo-viewer__print.is-zoomed {
+    max-height: calc(100dvh - 14rem);
+  }
+}
+
+/* Bigger: the dialog widens to the window, and the print grows to its file's full size inside a
+   scrollable view (drag, scroll, or swipe to move around). */
+.photo-dialog.is-zoomed {
+  width: calc(100vw - 1rem);
+  max-height: calc(100dvh - 1rem);
+}
+
+.photo-viewer__print.is-zoomed {
+  justify-content: flex-start;
+  /* Only the photo scrolls, never the dialog around it (same budget as fitted, less the frame
+     and the margin the wider dialog gives back). */
+  max-height: calc(100dvh - 11rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.photo-viewer__print.is-zoomed .photo-viewer__frame {
+  max-width: none;
+  margin: auto;
+}
+
+.photo-viewer__print.is-zoomed img {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+
+.photo-viewer__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) / 2);
+  margin-top: var(--space);
+}
+
+.photo-viewer__nav {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) / 2);
+}
+
+.photo-viewer__count {
+  min-width: 3.5rem;
+  color: var(--color-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-viewer__controls button {
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interest-card__prints img,
+  .interest-card:hover .interest-card__prints img,
+  .interest-card:focus-within .interest-card__prints img {
     transition: none;
   }
 }
