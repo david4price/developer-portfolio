@@ -129,13 +129,23 @@ the switch disabled and opens on the simulation.
   the cluster it fills health, replicas, image version, and failure for the tunnel, API, worker,
   PostgreSQL, and Redis. The website stays "unknown" on the API (the visitor's page fills it in).
 - **AI model (Confirmed in code, P6-04):** the model runs outside the cluster, so on each refresh
-  the API also asks the runtime for `GET <AI_BASE_URL>/models`, which lists what it can serve
-  without running the model (no GPU time, no prompt). Only the outcome reaches the snapshot:
-  the configured model listed → healthy; `429`/`503` → degraded; listed without it → down
-  (`not-ready`); no answer, an error status, a redirect, or a bad body → down (`unreachable`).
-  The model's name, the runtime's address, and its reply never leave the API. The probe shares
-  the snapshot's 12 s cache and 5 s deadline, and its failure never fails the snapshot. With AI
-  off (or a provider without a model list) there is no probe and the building stays unknown.
+  the API asks the chat's own adapter for a status check (an optional `status()` on the
+  `AiProvider` port). The `openai-compatible` adapter calls `GET <AI_BASE_URL>/models`, which
+  lists the models the runtime has without running one (no GPU time, no prompt). Only the
+  outcome reaches the snapshot:
+  - the configured model listed (ignoring case and an implied `:latest`), or a runtime that
+    lists exactly one model (llama.cpp's server answers with its loaded model whatever a
+    request names) → healthy;
+  - `429`/`503` → degraded, the same "at capacity or still loading" the chat treats as overload;
+  - several models listed, none of them the configured one → down (`not-ready`);
+  - no answer, another error status, a redirect, or a bad body → down (`unreachable`).
+- Limits: a listed model isn't proven to load (a model that fails to load on the GPU still
+  shows healthy until P7-01's alerting watches chat failures), and a proxy's `503` in front of a
+  dead runtime reads as degraded rather than down. The model's name, the runtime's address, and
+  its reply never leave the API. The probe has its own 1.5 s deadline inside the snapshot's 5 s
+  one, shares the 12 s cache, and never fails the snapshot; an outage is logged once when it
+  starts and once when it ends. With AI off, or an adapter without a status check, the building
+  stays unknown.
 - P6-03 adds an optional Argo CD reader (implemented; token and adapter live-tested, production
   activation pending this change's rollout): `sync` comes from the Application; `release` is its
   last successfully deployed GitOps revision and deployment time, not the API's source commit

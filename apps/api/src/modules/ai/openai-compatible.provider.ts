@@ -5,6 +5,8 @@ import {
   type AiCompletionRequest,
   AiOverloadedError,
   type AiProvider,
+  type AiStatus,
+  AiStatusError,
   AiUnavailableError,
 } from './ai-provider.js';
 
@@ -20,9 +22,18 @@ export interface OpenAiCompatibleOptions {
 
 export const DEFAULT_AI_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_MODEL_LIST_BYTES = 64 * 1024;
 
 /** Statuses that mean "busy, try later" rather than "broken". */
 const overloadStatuses = new Set([429, 503]);
+
+const modelListSchema = z.object({ data: z.array(z.object({ id: z.string() })) });
+
+/**
+ * Model ids as runtimes spell them: case aside, Docker Model Runner and Ollama treat a missing
+ * tag as `:latest`.
+ */
+const modelKey = (id: string) => id.toLowerCase().replace(/:latest$/, '');
 
 const completionSchema = z.object({
   choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1),
@@ -36,6 +47,7 @@ const completionSchema = z.object({
 export class OpenAiCompatibleProvider implements AiProvider {
   readonly enabled = true;
   private readonly endpoint: string;
+  private readonly modelsEndpoint: string;
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
 
@@ -44,7 +56,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
     if (base.protocol !== 'http:' && base.protocol !== 'https:') {
       throw new Error('AI base URL must use http or https');
     }
-    this.endpoint = `${base.href.replace(/\/+$/, '')}/chat/completions`;
+    const root = base.href.replace(/\/+$/, '');
+    this.endpoint = `${root}/chat/completions`;
+    this.modelsEndpoint = `${root}/models`;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
     this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
   }
@@ -98,5 +112,40 @@ export class OpenAiCompatibleProvider implements AiProvider {
       if (error instanceof AiUnavailableError || error instanceof AiOverloadedError) throw error;
       throw new AiUnavailableError('network');
     }
+  }
+
+  /**
+   * `GET /models`: what the runtime has, without running anything. A runtime that lists exactly
+   * one model (llama.cpp's server, which answers every request with its loaded model whatever
+   * the request names) counts as ready.
+   */
+  async status(signal: AbortSignal): Promise<AiStatus> {
+    let response: Response;
+    try {
+      response = await fetch(this.modelsEndpoint, {
+        headers: { accept: 'application/json' },
+        redirect: 'error',
+        signal,
+      });
+    } catch {
+      throw new AiStatusError(signal.aborted ? 'timeout' : 'network');
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      if (overloadStatuses.has(response.status)) return 'busy';
+      throw new AiStatusError('upstream_status', response.status);
+    }
+    let body: unknown;
+    try {
+      body = await readJsonBody(response, MAX_MODEL_LIST_BYTES);
+    } catch {
+      throw new AiStatusError(signal.aborted ? 'timeout' : 'network');
+    }
+    const parsed = modelListSchema.safeParse(body);
+    if (!parsed.success) throw new AiStatusError('invalid_response');
+    const models = parsed.data.data;
+    const wanted = modelKey(this.options.model);
+    if (models.length === 1 || models.some(({ id }) => modelKey(id) === wanted)) return 'ready';
+    return 'missing';
   }
 }

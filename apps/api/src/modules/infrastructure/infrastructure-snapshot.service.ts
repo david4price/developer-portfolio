@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { InfrastructureComponent, InfrastructureSnapshot } from '@portfolio/shared-types';
-import { type AiStatus, AiStatusError, type AiStatusReader } from './ai-status.reader.js';
+import { type AiStatus, AiStatusError } from '../ai/ai-provider.js';
 import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
 import {
@@ -50,9 +50,15 @@ export interface SnapshotServiceOptions {
   readonly timeoutMs?: number;
   readonly now?: () => number;
   readonly deploymentReader?: DeploymentReader;
-  /** The model runtime, outside the cluster; without one the AI building stays unknown. */
-  readonly aiStatusReader?: AiStatusReader;
+  /** Asks the model runtime, outside the cluster; without it the AI building stays unknown. */
+  readonly aiStatus?: (signal: AbortSignal) => Promise<AiStatus>;
 }
+
+/**
+ * The AI probe's own deadline, well inside the cluster read's: a runtime that doesn't answer
+ * (host asleep, packets dropped) must not hold every refresh for the full 5 s.
+ */
+export const AI_STATUS_TIMEOUT_MS = 1_500;
 
 /** The AI building's state from the runtime's answer, or from not getting one. */
 const AI_STATE: Readonly<
@@ -76,6 +82,8 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private cached: { readonly snapshot: InfrastructureSnapshot; readonly at: number } | null = null;
   private failedAt: number | null = null;
   private inflight: Promise<InfrastructureSnapshot> | null = null;
+  /** Whether the last AI probe failed, so an outage logs once, not on every refresh. */
+  private aiFailing = false;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
   private readonly now: () => number;
@@ -151,18 +159,32 @@ export class InfrastructureSnapshotService implements SnapshotSource {
       : Promise.resolve(this.cached.snapshot);
   }
 
-  /** Never fails the snapshot: an unreachable runtime is drawn as down, not hidden. */
+  /**
+   * Never fails the snapshot: an unreachable runtime is drawn as down, not hidden. A failure is
+   * logged when it starts (with the stack if it's a bug here) and the recovery when it ends.
+   */
   private async readAi(signal: AbortSignal): Promise<AiStatus | 'unreachable' | null> {
-    if (this.options.aiStatusReader === undefined) return null;
+    if (this.options.aiStatus === undefined) return null;
     try {
-      return await this.options.aiStatusReader.read(signal);
+      const status = await this.options.aiStatus(
+        AbortSignal.any([signal, AbortSignal.timeout(AI_STATUS_TIMEOUT_MS)]),
+      );
+      if (this.aiFailing) this.logger.log({ message: 'AI runtime status readable again' });
+      this.aiFailing = false;
+      return status;
     } catch (error) {
-      const failure = error instanceof AiStatusError ? error : null;
-      this.logger.warn({
-        message: 'AI runtime status refresh failed',
-        reason: failure?.reason ?? 'unexpected',
-        status: failure?.status ?? null,
-      });
+      if (!this.aiFailing) {
+        const failure = error instanceof AiStatusError ? error : null;
+        this.logger.warn({
+          message: 'AI runtime status refresh failed',
+          reason: failure?.reason ?? 'unexpected',
+          status: failure?.upstreamStatus ?? null,
+          ...(failure === null && {
+            error: error instanceof Error ? error.stack : 'non-error thrown',
+          }),
+        });
+      }
+      this.aiFailing = true;
       return 'unreachable';
     }
   }

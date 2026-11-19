@@ -135,10 +135,10 @@ The public surface is a static site and a small REST API. The main risks:
   - the last-updated time, and the snapshot's age when served (`ageSeconds`, derived from it)
   - the last deployed GitOps revision: short commit SHA and deployment time from Argo CD
     history (P6-03); never the pending comparison target or raw Application object
-  - the AI model's health and coarse failure, from the runtime's `GET /models` (P6-04). The reply
-    is only compared with the configured model; the model's name, the runtime's address, and
-    the reply itself are never returned or logged. The probe sends no prompt and refuses
-    redirects
+  - the AI model's health and coarse failure, from the chat adapter's status check (`GET /models`
+    on the runtime, P6-04). The reply is only compared with the configured model; the model's
+    name, the runtime's address, and the reply itself are never returned or logged. The check
+    sends no prompt, refuses redirects, and reads at most 64 KiB
   - **Proposed addition** (already in the `InfrastructureSnapshot` type and filled with sample
     data in the P6-04 prototype; the API emits `null` until its source exists):
     - a bucketed request rate per component (`idle`, `low`, `busy`; from P7-01 metrics, never
