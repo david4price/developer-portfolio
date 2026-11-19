@@ -22,7 +22,22 @@ export interface AiCompletion {
 export interface AiProvider {
   readonly enabled: boolean;
   complete(request: AiCompletionRequest, signal: AbortSignal): Promise<AiCompletion>;
+  /**
+   * A cheap check of the runtime for the Infrastructure Explorer (P6-04): no prompt, no model
+   * run. Bounded by the adapter's own timeout as well as `signal`; failures throw
+   * `AiUnavailableError`. Adapters without such a check leave it out (the map shows unknown).
+   */
+  status?(signal: AbortSignal): Promise<AiStatus>;
 }
+
+/**
+ * What the runtime said about the configured model:
+ * - `ready`: the runtime lists it (listing doesn't prove it loads, only that it's there);
+ * - `busy`: at capacity or still loading (`429`, or the runtime's own JSON `503`), the same
+ *   overload chat reports;
+ * - `missing`: the runtime answered without it (an empty list included).
+ */
+export type AiStatus = 'ready' | 'busy' | 'missing';
 
 export class AiDisabledError extends Error {
   constructor() {

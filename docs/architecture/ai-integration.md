@@ -94,7 +94,10 @@ Implemented (P5-02, P5-03, P5-04 server boundary, P5-05): `POST /api/v1/chat/ses
 `{ "reply": string, "links": ChatLink[] }`) with the per-session lock, quotas, message screening,
 registry retrieval, and validated links. Errors: `401 chat_session_required`, `409 chat_busy`,
 `403 challenge_failed`, `422 message_rejected`, `429 rate_limited`,
-`503 ai_disabled | ai_overloaded | ai_unavailable | challenge_unavailable`.
+`503 ai_disabled | ai_overloaded | ai_unavailable | challenge_unavailable`. From the runtime,
+`429` or its own JSON `503` ("loading", "at capacity") becomes `ai_overloaded`; a non-JSON `503`
+(a proxy's page in front of a runtime that's gone) and every other error status become
+`ai_unavailable`. The Infrastructure Explorer's AI check uses the same rule.
 Session details are in [security](security.md#sessions-confirmed-p5-02). Browser integration is
 **Confirmed in code** as a floating popup in the shared layout: a resting dog button opens a
 comic-style speech bubble in a native top-layer dialog; the React chat client loads on the first click.
