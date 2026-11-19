@@ -108,7 +108,10 @@ export const photoSchema = z.object({
 
 /** One interest in the About page's personal section, with the photos behind its card. */
 export const interestSchema = z.object({
-  name: content(40),
+  /** No emoji: a screen reader would read it aloud in the card's heading and the dialog's title. */
+  name: content(40).refine((value) => !/\p{Extended_Pictographic}/u.test(value), {
+    message: 'must not contain emoji',
+  }),
   description: content(600),
   photos: z.array(photoSchema).max(20).optional(),
 });

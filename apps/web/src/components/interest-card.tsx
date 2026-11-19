@@ -49,6 +49,7 @@ export function InterestCard({ name, description, photos = [] }: InterestCardPro
   const dialog = useRef<HTMLDialogElement>(null);
   const prints = useRef<(HTMLButtonElement | null)[]>([]);
   const viewer = useRef<HTMLDivElement>(null);
+  const pressedOnBackdrop = useRef(false);
   const titleId = useId();
   /** The enlarged photo's index, or `null` while the prints are shown. */
   const [shown, setShown] = useState<number | null>(null);
@@ -79,14 +80,21 @@ export function InterestCard({ name, description, photos = [] }: InterestCardPro
 
   // Once the print has grown, scroll so the clicked spot sits in the middle of the view (the
   // browser clamps the position to what it can scroll).
+  // The bigger view takes focus, so the arrow keys scroll it; fitted again, the viewer has it.
+  const wasZoomed = useRef(false);
   useLayoutEffect(() => {
     const view = viewport.current;
     const image = photo.current;
-    if (!zoomed || view === null || image === null) return;
-    view.scrollLeft =
-      image.offsetLeft + focusAt.current.x * image.offsetWidth - view.clientWidth / 2;
-    view.scrollTop =
-      image.offsetTop + focusAt.current.y * image.offsetHeight - view.clientHeight / 2;
+    if (zoomed && view !== null && image !== null) {
+      view.scrollLeft =
+        image.offsetLeft + focusAt.current.x * image.offsetWidth - view.clientWidth / 2;
+      view.scrollTop =
+        image.offsetTop + focusAt.current.y * image.offsetHeight - view.clientHeight / 2;
+      view.focus({ preventScroll: true });
+    } else if (!zoomed && wasZoomed.current) {
+      viewer.current?.focus({ preventScroll: true });
+    }
+    wasZoomed.current = zoomed;
   }, [zoomed]);
 
   const open = () => {
@@ -99,24 +107,33 @@ export function InterestCard({ name, description, photos = [] }: InterestCardPro
     setShown(index);
   };
   const back = () => setShown(null);
-  const step = (by: number) =>
-    setShown((current) =>
-      current === null ? current : (current + by + photos.length) % photos.length,
-    );
+  const step = (by: number) => {
+    if (shown === null) return;
+    const next = (shown + by + photos.length) % photos.length;
+    // "Back to all photos" returns to the print being viewed, not the first one opened.
+    returnTo.current = next;
+    setShown(next);
+  };
 
   // Each photo, and going back to the prints, starts unzoomed.
   useEffect(() => setZoomed(false), [shown]);
 
+  // Entering from the prints, the viewer takes focus; stepping between photos leaves focus where
+  // it is (on Next or Previous); going back, the print being viewed gets it.
+  const wasShown = useRef<number | null>(null);
   useEffect(() => {
-    if (shown !== null) {
+    if (shown !== null && wasShown.current === null) {
       viewer.current?.focus();
-    } else if (returnTo.current !== null) {
+    } else if (shown === null && returnTo.current !== null) {
       prints.current[returnTo.current]?.focus();
       returnTo.current = null;
     }
+    wasShown.current = shown;
   }, [shown]);
 
   const onViewerKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Bigger, the arrow keys scroll the photo (the focused view), not change it.
+    if (zoomed) return;
     if (event.key === 'ArrowRight') step(1);
     else if (event.key === 'ArrowLeft') step(-1);
     else return;
@@ -168,9 +185,14 @@ export function InterestCard({ name, description, photos = [] }: InterestCardPro
                 returnTo.current = null;
                 setShown(null);
               }}
+              onPointerDown={(event) => {
+                pressedOnBackdrop.current = event.target === event.currentTarget;
+              }}
               onClick={(event) => {
-                // A click on the backdrop lands on the dialog itself, outside its content.
-                if (event.target === event.currentTarget) close();
+                // A click on the backdrop lands on the dialog itself, outside its content. Only a
+                // press that also started there closes: a drag released past the edge doesn't.
+                if (event.target === event.currentTarget && pressedOnBackdrop.current) close();
+                pressedOnBackdrop.current = false;
               }}
             >
               <div className="photo-dialog__content">
@@ -219,6 +241,12 @@ export function InterestCard({ name, description, photos = [] }: InterestCardPro
                     <div
                       ref={viewport}
                       className={zoomed ? 'photo-viewer__print is-zoomed' : 'photo-viewer__print'}
+                      // Bigger, it scrolls: focusable, so the arrow keys move around the photo.
+                      tabIndex={zoomed ? 0 : undefined}
+                      role={zoomed ? 'region' : undefined}
+                      aria-label={
+                        zoomed ? 'Bigger photo, use the arrow keys to move around' : undefined
+                      }
                     >
                       {/* The print's white border, around the photo at either size. */}
                       <div className="photo-viewer__frame">

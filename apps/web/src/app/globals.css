@@ -130,6 +130,10 @@ a:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
+}
+
+/* Links get a soft corner; buttons keep their own shape (pills stay pills). */
+a:focus-visible {
   border-radius: 4px;
 }
 
@@ -159,6 +163,8 @@ button:focus-visible {
   position: sticky;
   top: 0;
   z-index: 20;
+  /* Opaque where color-mix() isn't supported, so content never shows through. */
+  background: var(--color-bg);
   background: color-mix(in srgb, var(--color-bg) 82%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--color-border);
@@ -571,6 +577,8 @@ main {
 /* The photos behind a card, as prints in a dialog. */
 .photo-dialog {
   width: min(64rem, calc(100vw - 2rem));
+  /* The browser caps modal dialogs a little narrower than the window; these set their own. */
+  max-width: none;
   max-height: calc(100dvh - 2rem);
   padding: 0;
   color: var(--color-text);
@@ -633,16 +641,6 @@ main {
   user-select: none;
 }
 
-@media (max-width: 40rem) {
-  .photo-viewer__frame img {
-    max-height: calc(100dvh - 17rem);
-  }
-
-  .photo-viewer__print.is-zoomed {
-    max-height: calc(100dvh - 14rem);
-  }
-}
-
 /* Bigger: the dialog widens to the window, and the print grows to its file's full size inside a
    scrollable view (drag, scroll, or swipe to move around). */
 .photo-dialog.is-zoomed {
@@ -668,6 +666,18 @@ main {
   max-width: none;
   max-height: none;
   cursor: zoom-out;
+}
+
+/* Narrow screens wrap the controls onto two rows: more room for them, fitted or bigger. Last, so
+   it overrides the rules above at equal specificity. */
+@media (max-width: 40rem) {
+  .photo-viewer__frame img {
+    max-height: calc(100dvh - 17rem);
+  }
+
+  .photo-viewer__print.is-zoomed {
+    max-height: calc(100dvh - 14rem);
+  }
 }
 
 .photo-viewer__controls {

@@ -123,6 +123,21 @@ describe('createProfile', () => {
     );
   });
 
+  it('rejects emoji in an interest name', () => {
+    const personal = (name: string) => ({
+      intro: 'Outside of work.',
+      interests: [
+        { name, description: 'A dog.' },
+        { name: 'Guitar', description: 'Blues, mostly.' },
+      ],
+    });
+    assert.ok(createProfile({ ...validProfile, personal: personal('Scar, My Sidekick') }));
+    assert.throws(
+      () => createProfile({ ...validProfile, personal: personal('Scar 🐾') }),
+      /must not contain emoji/,
+    );
+  });
+
   it('accepts photos behind a card and rejects bad names, duplicates, and too many', () => {
     const photo = {
       file: 'kyoto-tower',
