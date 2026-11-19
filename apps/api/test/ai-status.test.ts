@@ -3,10 +3,15 @@ import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, it, type TestContext } from 'node:test';
-import { type AiProvider, type AiStatus, AiStatusError } from '../src/modules/ai/ai-provider.js';
+import {
+  type AiProvider,
+  type AiStatus,
+  AiUnavailableError,
+} from '../src/modules/ai/ai-provider.js';
 import { DisabledAiProvider } from '../src/modules/ai/disabled-ai.provider.js';
 import { OpenAiCompatibleProvider } from '../src/modules/ai/openai-compatible.provider.js';
 import { InfrastructureController } from '../src/modules/infrastructure/infrastructure.controller.js';
+import { createSnapshotSource } from '../src/modules/infrastructure/infrastructure.module.js';
 import {
   AI_STATUS_TIMEOUT_MS,
   INFRASTRUCTURE_SNAPSHOTS,
@@ -56,14 +61,11 @@ describe('OpenAiCompatibleProvider.status', () => {
     assert.deepEqual(paths, ['GET /engines/v1/models']);
   });
 
-  it('matches ids regardless of case and an implied :latest tag', async (t) => {
-    const { baseUrl } = await runtime(t, json(200, listing('other', 'AI/SmolLM2:latest')));
-    assert.equal(await provider(baseUrl, 'ai/smollm2').status(signal()), 'ready');
-  });
-
-  it('counts a runtime with one listed model as ready, whatever its id (llama.cpp)', async (t) => {
-    const { baseUrl } = await runtime(t, json(200, listing('/models/loaded-file.gguf')));
-    assert.equal(await provider(baseUrl).status(signal()), 'ready');
+  it('matches only the exact name chat sends: no case folding, implied tags, or lone models', async (t) => {
+    const { baseUrl } = await runtime(t, json(200, listing('AI/SmolLM2:latest')));
+    assert.equal(await provider(baseUrl, 'ai/smollm2').status(signal()), 'missing');
+    assert.equal(await provider(baseUrl, 'AI/SmolLM2').status(signal()), 'missing');
+    assert.equal(await provider(baseUrl, 'AI/SmolLM2:latest').status(signal()), 'ready');
   });
 
   it('reports missing when several models are listed without it, and busy on 429/503', async (t) => {
@@ -78,7 +80,7 @@ describe('OpenAiCompatibleProvider.status', () => {
   });
 
   it('throws typed errors for statuses, redirects, bad bodies, and unreachable runtimes', async (t) => {
-    const cases: Array<[Handler, AiStatusError['reason']]> = [
+    const cases: Array<[Handler, AiUnavailableError['reason']]> = [
       [json(500, { error: 'private detail' }), 'upstream_status'],
       [json(200, { models: [] }), 'invalid_response'],
       [(_request, response) => response.writeHead(200).end('not json'), 'invalid_response'],
@@ -96,22 +98,23 @@ describe('OpenAiCompatibleProvider.status', () => {
       const { baseUrl } = await runtime(t, handler);
       await assert.rejects(
         provider(baseUrl).status(signal()),
-        (error: unknown) => error instanceof AiStatusError && error.reason === reason,
+        (error: unknown) => error instanceof AiUnavailableError && error.reason === reason,
       );
     }
     // Port 1: nothing listens there, so the connection is refused.
     await assert.rejects(
       provider('http://127.0.0.1:1/engines/v1').status(signal()),
-      (error: unknown) => error instanceof AiStatusError && error.reason === 'network',
+      (error: unknown) => error instanceof AiUnavailableError && error.reason === 'network',
     );
   });
 
-  it('reports a stalled runtime as a timeout', async (t) => {
+  it('reports a stalled runtime as a timeout, by the caller or its own deadline', async (t) => {
     const { baseUrl } = await runtime(t, () => undefined);
-    await assert.rejects(
-      provider(baseUrl).status(AbortSignal.timeout(100)),
-      (error: unknown) => error instanceof AiStatusError && error.reason === 'timeout',
-    );
+    const timedOut = (error: unknown) =>
+      error instanceof AiUnavailableError && error.reason === 'timeout';
+    await assert.rejects(provider(baseUrl).status(AbortSignal.timeout(100)), timedOut);
+    const bounded = new OpenAiCompatibleProvider({ baseUrl, model: MODEL, timeoutMs: 100 });
+    await assert.rejects(bounded.status(new AbortController().signal), timedOut);
   });
 
   it('has no status check when AI is off', () => {
@@ -126,6 +129,7 @@ describe('AI building in the snapshot', () => {
     new InfrastructureSnapshotService(workloads, {
       namespace: 'portfolio',
       ttlMs: 0,
+      aiTimeoutMs: 50,
       ...(aiStatus === undefined ? {} : { aiStatus }),
     });
   const aiOf = async (source: InfrastructureSnapshotService) =>
@@ -146,7 +150,7 @@ describe('AI building in the snapshot', () => {
   it('draws an unreachable runtime as down without failing the snapshot', async () => {
     const ai = await aiOf(
       service(async () => {
-        throw new AiStatusError('network');
+        throw new AiUnavailableError('network');
       }),
     );
     assert.equal(ai?.health, 'down');
@@ -161,13 +165,14 @@ describe('AI building in the snapshot', () => {
         (signal) =>
           new Promise((_resolve, reject) => {
             probeSignal = signal;
-            signal.addEventListener('abort', () => reject(new AiStatusError('timeout')));
+            signal.addEventListener('abort', () => reject(new AiUnavailableError('timeout')));
           }),
       ),
     );
     assert.equal(ai?.failure, 'unreachable');
     assert.ok(probeSignal?.aborted);
-    assert.ok(Date.now() - started < AI_STATUS_TIMEOUT_MS + 1_000);
+    assert.ok(Date.now() - started < 1_000);
+    assert.ok(AI_STATUS_TIMEOUT_MS < 5_000);
   });
 
   it('logs an outage once, with the stack for an unexpected error, and its recovery', async (t) => {
@@ -185,17 +190,23 @@ describe('AI building in the snapshot', () => {
     t.mock.method(logger as { log: (entry: unknown) => void }, 'log', (entry: unknown) =>
       logged.push(entry),
     );
-    for (let i = 0; i < 3; i++) await source.snapshot();
-    assert.equal(warned.length, 1);
+    // A bug logs every time, with its stack.
+    for (let i = 0; i < 2; i++) await source.snapshot();
+    assert.equal(warned.length, 2);
     assert.match(JSON.stringify(warned[0]), /"reason":"unexpected".*bug in the probe/);
+    // An outage logs once while its reason stays the same, and again when the reason changes.
+    fail = new AiUnavailableError('network');
+    for (let i = 0; i < 3; i++) await source.snapshot();
+    assert.equal(warned.length, 3);
+    assert.doesNotMatch(JSON.stringify(warned[2]), /stack|error"/);
+    fail = new AiUnavailableError('upstream_status', 500);
+    await source.snapshot();
+    assert.equal(warned.length, 4);
+    // Recovery logs once.
     fail = null;
     await source.snapshot();
     await source.snapshot();
     assert.equal(logged.length, 1);
-    fail = new AiStatusError('upstream_status', 500);
-    await source.snapshot();
-    assert.equal(warned.length, 2);
-    assert.doesNotMatch(JSON.stringify(warned[1]), /stack|error"/);
   });
 
   it('leaves the AI building unknown without a probe', async () => {
@@ -224,5 +235,39 @@ describe('AI building in the snapshot', () => {
       assert.doesNotMatch(response.body, /private|127\.0\.0\.1|engines|Q4|other/);
     }
     assert.equal(paths.length, 1);
+  });
+});
+
+describe('AI status wiring', () => {
+  const kubernetes = {
+    enabled: true,
+    source: 'kubernetes',
+    namespace: 'portfolio',
+    apiServerUrl: 'https://192.0.2.1:443',
+  } as const;
+  const aiStatusOf = (ai: AiProvider) => {
+    const source = createSnapshotSource(kubernetes, ai);
+    assert.ok(source instanceof InfrastructureSnapshotService);
+    return (source as unknown as { options: { aiStatus?: (s: AbortSignal) => Promise<AiStatus> } })
+      .options.aiStatus;
+  };
+
+  it('asks the chat adapter, bound to it, only when AI is enabled and it has a check', async () => {
+    class Checked {
+      enabled = true;
+      private readonly answer: AiStatus = 'ready';
+      complete(): Promise<never> {
+        return Promise.reject(new Error('unused'));
+      }
+      status(): Promise<AiStatus> {
+        return Promise.resolve(this.answer);
+      }
+    }
+    const status = aiStatusOf(new Checked());
+    assert.equal(await status?.(signal()), 'ready');
+    const off = new Checked();
+    off.enabled = false;
+    assert.equal(aiStatusOf(off), undefined);
+    assert.equal(aiStatusOf(new DisabledAiProvider()), undefined);
   });
 });

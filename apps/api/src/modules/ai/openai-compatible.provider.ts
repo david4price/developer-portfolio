@@ -6,7 +6,6 @@ import {
   AiOverloadedError,
   type AiProvider,
   type AiStatus,
-  AiStatusError,
   AiUnavailableError,
 } from './ai-provider.js';
 
@@ -28,12 +27,6 @@ const MAX_MODEL_LIST_BYTES = 64 * 1024;
 const overloadStatuses = new Set([429, 503]);
 
 const modelListSchema = z.object({ data: z.array(z.object({ id: z.string() })) });
-
-/**
- * Model ids as runtimes spell them: case aside, Docker Model Runner and Ollama treat a missing
- * tag as `:latest`.
- */
-const modelKey = (id: string) => id.toLowerCase().replace(/:latest$/, '');
 
 const completionSchema = z.object({
   choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1),
@@ -115,37 +108,38 @@ export class OpenAiCompatibleProvider implements AiProvider {
   }
 
   /**
-   * `GET /models`: what the runtime has, without running anything. A runtime that lists exactly
-   * one model (llama.cpp's server, which answers every request with its loaded model whatever
-   * the request names) counts as ready.
+   * `GET /models`: what the runtime has, without running anything. The configured model must be
+   * listed under exactly the name chat sends, as vLLM, LM Studio, and Docker Model Runner match
+   * it. (llama.cpp's server ignores the name and lists its file instead; there it reads as
+   * missing.)
    */
   async status(signal: AbortSignal): Promise<AiStatus> {
+    const timeout = AbortSignal.timeout(this.timeoutMs);
+    const combined = AbortSignal.any([signal, timeout]);
+    const failed = () => new AiUnavailableError(combined.aborted ? 'timeout' : 'network');
     let response: Response;
     try {
       response = await fetch(this.modelsEndpoint, {
         headers: { accept: 'application/json' },
         redirect: 'error',
-        signal,
+        signal: combined,
       });
     } catch {
-      throw new AiStatusError(signal.aborted ? 'timeout' : 'network');
+      throw failed();
     }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
       if (overloadStatuses.has(response.status)) return 'busy';
-      throw new AiStatusError('upstream_status', response.status);
+      throw new AiUnavailableError('upstream_status', response.status);
     }
     let body: unknown;
     try {
       body = await readJsonBody(response, MAX_MODEL_LIST_BYTES);
     } catch {
-      throw new AiStatusError(signal.aborted ? 'timeout' : 'network');
+      throw failed();
     }
     const parsed = modelListSchema.safeParse(body);
-    if (!parsed.success) throw new AiStatusError('invalid_response');
-    const models = parsed.data.data;
-    const wanted = modelKey(this.options.model);
-    if (models.length === 1 || models.some(({ id }) => modelKey(id) === wanted)) return 'ready';
-    return 'missing';
+    if (!parsed.success) throw new AiUnavailableError('invalid_response');
+    return parsed.data.data.some(({ id }) => id === this.options.model) ? 'ready' : 'missing';
   }
 }

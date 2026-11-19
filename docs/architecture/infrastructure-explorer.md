@@ -133,19 +133,19 @@ the switch disabled and opens on the simulation.
   `AiProvider` port). The `openai-compatible` adapter calls `GET <AI_BASE_URL>/models`, which
   lists the models the runtime has without running one (no GPU time, no prompt). Only the
   outcome reaches the snapshot:
-  - the configured model listed (ignoring case and an implied `:latest`), or a runtime that
-    lists exactly one model (llama.cpp's server answers with its loaded model whatever a
-    request names) → healthy;
+  - the configured model listed under exactly the name chat sends (`AI_MODEL`) → healthy;
   - `429`/`503` → degraded, the same "at capacity or still loading" the chat treats as overload;
-  - several models listed, none of them the configured one → down (`not-ready`);
+  - a list without it, an empty one included → down (`not-ready`);
   - no answer, another error status, a redirect, or a bad body → down (`unreachable`).
 - Limits: a listed model isn't proven to load (a model that fails to load on the GPU still
-  shows healthy until P7-01's alerting watches chat failures), and a proxy's `503` in front of a
-  dead runtime reads as degraded rather than down. The model's name, the runtime's address, and
-  its reply never leave the API. The probe has its own 1.5 s deadline inside the snapshot's 5 s
-  one, shares the 12 s cache, and never fails the snapshot; an outage is logged once when it
-  starts and once when it ends. With AI off, or an adapter without a status check, the building
-  stays unknown.
+  shows healthy until P7-01's alerting watches chat failures); a proxy's `503` in front of a
+  dead runtime reads as degraded rather than down; and llama.cpp's server, which lists its model
+  file rather than the requested name, reads as down even while chat works. The model's name,
+  the runtime's address, and its reply never leave the API. The probe has its own 1.5 s
+  deadline inside the snapshot's 5 s one, shares the 12 s cache, and never fails the snapshot;
+  an outage is logged when it starts or its reason changes, and once when it ends (an
+  unexpected error, a bug, is always logged with its stack). With AI off, or an adapter without
+  a status check, the building stays unknown.
 - P6-03 adds an optional Argo CD reader (implemented; token and adapter live-tested, production
   activation pending this change's rollout): `sync` comes from the Application; `release` is its
   last successfully deployed GitOps revision and deployment time, not the API's source commit

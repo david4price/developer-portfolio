@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { InfrastructureComponent, InfrastructureSnapshot } from '@portfolio/shared-types';
-import { type AiStatus, AiStatusError } from '../ai/ai-provider.js';
+import { type AiStatus, AiUnavailableError } from '../ai/ai-provider.js';
 import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
 import {
@@ -52,6 +52,8 @@ export interface SnapshotServiceOptions {
   readonly deploymentReader?: DeploymentReader;
   /** Asks the model runtime, outside the cluster; without it the AI building stays unknown. */
   readonly aiStatus?: (signal: AbortSignal) => Promise<AiStatus>;
+  /** The AI check's own deadline; `AI_STATUS_TIMEOUT_MS` by default. */
+  readonly aiTimeoutMs?: number;
 }
 
 /**
@@ -82,8 +84,8 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private cached: { readonly snapshot: InfrastructureSnapshot; readonly at: number } | null = null;
   private failedAt: number | null = null;
   private inflight: Promise<InfrastructureSnapshot> | null = null;
-  /** Whether the last AI probe failed, so an outage logs once, not on every refresh. */
-  private aiFailing = false;
+  /** The last AI probe failure (reason and status), so an outage logs when it changes only. */
+  private aiFailure: string | null = null;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
   private readonly now: () => number;
@@ -161,20 +163,23 @@ export class InfrastructureSnapshotService implements SnapshotSource {
 
   /**
    * Never fails the snapshot: an unreachable runtime is drawn as down, not hidden. A failure is
-   * logged when it starts (with the stack if it's a bug here) and the recovery when it ends.
+   * logged when it starts or changes (always, with the stack, if it's a bug here), and the
+   * recovery when it ends.
    */
   private async readAi(signal: AbortSignal): Promise<AiStatus | 'unreachable' | null> {
     if (this.options.aiStatus === undefined) return null;
+    const deadline = this.options.aiTimeoutMs ?? AI_STATUS_TIMEOUT_MS;
     try {
       const status = await this.options.aiStatus(
-        AbortSignal.any([signal, AbortSignal.timeout(AI_STATUS_TIMEOUT_MS)]),
+        AbortSignal.any([signal, AbortSignal.timeout(deadline)]),
       );
-      if (this.aiFailing) this.logger.log({ message: 'AI runtime status readable again' });
-      this.aiFailing = false;
+      if (this.aiFailure !== null) this.logger.log({ message: 'AI runtime status readable again' });
+      this.aiFailure = null;
       return status;
     } catch (error) {
-      if (!this.aiFailing) {
-        const failure = error instanceof AiStatusError ? error : null;
+      const failure = error instanceof AiUnavailableError ? error : null;
+      const key = failure === null ? null : `${failure.reason}:${failure.upstreamStatus}`;
+      if (key === null || key !== this.aiFailure) {
         this.logger.warn({
           message: 'AI runtime status refresh failed',
           reason: failure?.reason ?? 'unexpected',
@@ -184,7 +189,7 @@ export class InfrastructureSnapshotService implements SnapshotSource {
           }),
         });
       }
-      this.aiFailing = true;
+      this.aiFailure = key ?? 'unexpected';
       return 'unreachable';
     }
   }
