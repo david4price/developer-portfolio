@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { profile } from '@portfolio/project-registry';
 import { FloatingChat } from '@/components/floating-chat';
+import { SiteNav } from '@/components/site-nav';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,22 +30,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/" className="site-title">
               {profile.name}
             </Link>
-            <nav aria-label="Main">
-              <ul className="nav-list">
-                {navigation.map((item) => (
-                  <li key={item.href}>
-                    <Link href={item.href}>{item.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <SiteNav items={navigation} />
           </div>
         </header>
         <main id="main" className="container">
           {children}
         </main>
         <footer className="site-footer">
-          <div className="container">
+          <div className="container site-footer__inner">
+            <span>{profile.name}</span>
             <a href="https://github.com/david4price/developer-portfolio">Source on GitHub</a>
           </div>
         </footer>

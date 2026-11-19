@@ -90,10 +90,30 @@ export const experienceEntrySchema = z.object({
   highlights: z.array(content(300)).min(1).max(8),
 });
 
-/** One interest in the About page's personal section. */
+/**
+ * One of the owner's photos. `file` names two WebP files the web app serves from
+ * `public/photos/`: `<file>-sm.webp` (900 px on the long edge) for the gallery and
+ * `<file>-lg.webp` (up to 1,800 px) to open; `width` and `height` are the large one's.
+ */
+export const photoSchema = z.object({
+  file: z
+    .string()
+    .max(40)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'must be a lowercase, hyphenated file name'),
+  /** What the image shows, for screen readers (the site shows no captions). */
+  alt: content(200),
+  width: z.number().int().min(1).max(4_000),
+  height: z.number().int().min(1).max(4_000),
+});
+
+/** One interest in the About page's personal section, with the photos behind its card. */
 export const interestSchema = z.object({
-  name: content(40),
+  /** No emoji: a screen reader would read it aloud in the card's heading and the dialog's title. */
+  name: content(40).refine((value) => !/\p{Extended_Pictographic}/u.test(value), {
+    message: 'must not contain emoji',
+  }),
   description: content(600),
+  photos: z.array(photoSchema).max(20).optional(),
 });
 
 /** The personal side of About: a short introduction and the owner's interests. */
@@ -146,6 +166,13 @@ export const profileSchema = z
     }
     for (const duplicate of duplicates(profile.personal?.interests.map(({ name }) => name) ?? [])) {
       issue(`duplicate interest: ${duplicate}`);
+    }
+    // A photo sits behind one card only.
+    const photoFiles = (profile.personal?.interests ?? []).flatMap(({ photos }) =>
+      (photos ?? []).map(({ file }) => file),
+    );
+    for (const duplicate of duplicates(photoFiles)) {
+      issue(`duplicate photo: ${duplicate}`);
     }
     for (const entry of profile.experience) {
       for (const duplicate of duplicates(entry.highlights)) {

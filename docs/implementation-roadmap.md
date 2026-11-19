@@ -14,6 +14,17 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- Minimal restyle (`feat/minimal-restyle`):
+  - **Layout:** a sticky, translucent navbar that marks the current page; a footer that rests at
+    the bottom of short pages; space restored above and below the content.
+  - **Look:** quieter typography and links, hairline cards (a project card clickable as a
+    whole), soft tags, a dot status badge, and one button style.
+  - **Pages:** Experience as a timeline; the home page leads with the headline instead of the
+    name.
+- About photos (`feat/about-photos`): 19 of the owner's photos sit behind the interest cards
+  they belong to (Photography 14, Scar 4, Mountain Biking 1), as prints peeking out from behind
+  each card that open as white-framed prints without captions. Scar's card comes first. Metadata
+  (including GPS on two phone photos) is stripped and colour converted to sRGB; tests enforce it.
 - **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
   - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
     Experience through a new `page` link kind that the web rebuilds from its own list. They
@@ -245,10 +256,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 1. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
-2. Owner content: photos for "Beyond the code" when ready; more projects; then **P5-10**, and
+2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
-**Branch in progress:** `feat/p5-13-profile-knowledge` (P5-13: the chat answers about the owner).
+**Branch in progress:** `feat/minimal-restyle`, on top of `feat/about-photos` (photos on About,
+then the restyle).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.

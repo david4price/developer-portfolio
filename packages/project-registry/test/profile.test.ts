@@ -123,6 +123,59 @@ describe('createProfile', () => {
     );
   });
 
+  it('rejects emoji in an interest name', () => {
+    const personal = (name: string) => ({
+      intro: 'Outside of work.',
+      interests: [
+        { name, description: 'A dog.' },
+        { name: 'Guitar', description: 'Blues, mostly.' },
+      ],
+    });
+    assert.ok(createProfile({ ...validProfile, personal: personal('Scar, My Sidekick') }));
+    assert.throws(
+      () => createProfile({ ...validProfile, personal: personal('Scar 🐾') }),
+      /must not contain emoji/,
+    );
+  });
+
+  it('accepts photos behind a card and rejects bad names, duplicates, and too many', () => {
+    const photo = {
+      file: 'kyoto-tower',
+      alt: 'A tower.',
+      width: 1200,
+      height: 1800,
+    };
+    // Photos sit behind interest cards; the second card can carry its own.
+    const withPhotos = (photos: (typeof photo)[], others: (typeof photo)[] = []) =>
+      createProfile({
+        ...validProfile,
+        personal: {
+          intro: 'Outside of work.',
+          interests: [
+            { name: 'Photography', description: 'Mostly travel.', photos },
+            { name: 'Guitar', description: 'Blues, mostly.', photos: others },
+          ],
+        },
+      });
+    assert.equal(withPhotos([photo]).personal?.interests[0]?.photos?.[0]?.file, 'kyoto-tower');
+    for (const file of ['../etc/passwd', 'Kyoto Tower', 'tower.webp', '-tower', '']) {
+      assert.throws(
+        () => withPhotos([{ ...photo, file }]),
+        /lowercase, hyphenated file name/,
+        file,
+      );
+    }
+    assert.throws(() => withPhotos([photo, photo]), /duplicate photo: kyoto-tower/);
+    assert.throws(
+      () => withPhotos([photo], [photo]),
+      /duplicate photo: kyoto-tower/,
+      'one card each',
+    );
+    const many = Array.from({ length: 21 }, (_, i) => ({ ...photo, file: `photo-${i}` }));
+    assert.throws(() => withPhotos(many), /expected array to have <=20/);
+    assert.throws(() => withPhotos([{ ...photo, alt: 'x'.repeat(201) }]), /<=200/);
+  });
+
   it('rejects non-https links', () => {
     assert.throws(() =>
       createProfile({ ...validProfile, links: [{ label: 'Site', href: 'http://example.com' }] }),

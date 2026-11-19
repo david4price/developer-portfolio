@@ -175,6 +175,19 @@ one-shot jobs also use a read-only root filesystem.
 - Profile, About (including the optional "Beyond the code" interests, `personal`), and Experience:
   `packages/project-registry/src/profile-data.ts` (validated by the same schema checks as
   projects).
+- About's photos sit behind the interest cards they belong to: list each under its interest's
+  `photos` (file name, alt text, and the large file's width and height). A card with photos
+  shows a few prints peeking out from behind it and opens all of them as framed prints, without
+  captions. Put two WebP files in `apps/web/public/photos/`:
+  - `<file>-sm.webp`, at most 900 px on the long edge, shown on the page;
+  - `<file>-lg.webp`, at most 1,800 px, opened on click.
+
+  Strip all metadata (EXIF, XMP, and GPS: phone photos often carry it) and convert to sRGB
+  first; never upscale. Web tests check every listed photo exists in both sizes, matches its
+  listed size, carries no metadata, stays within a size budget, and that no file is unlisted.
+  The photos are public in the repository's history for good, so leave out anything that shows
+  where you live.
+
 - Architecture notes for the chat assistant: `packages/project-registry/src/docs-data.ts`. Keep each
   note short (400 characters at most), current, and free of private details; `source` must be a
   file or folder in this repository (folders end with `/`), and `repositoryUrl`/`branch` point the
