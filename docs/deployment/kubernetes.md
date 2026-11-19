@@ -484,7 +484,9 @@ and permits API egress to Argo CD server pods in the `argocd` namespace on TCP 8
   into the same Secret, publish/apply the SealedSecret, and validate after the 12 s cache expires.
   Revoke the previous token only after that succeeds; retain its ID/issued-at outside Git until
   revocation. Do not keep the same token past expiry. Argo CD supports revocation with
-  `argocd proj role delete-token portfolio explorer <token-id-or-issued-at>`.
+  `argocd proj role delete-token portfolio explorer <token-id-or-issued-at>`. Last, set the new
+  expiry date in any external reminder (such as the watcher above), or it keeps reminding and,
+  after the old date, reports the token as expired.
 - **Rollback:** disable `api.infrastructure.argocd.enabled` through GitOps and wait for the API
   rollout, then revoke the token and remove its SealedSecret. Remove the now-unused `explorer`
   role last. The workload reader remains enabled. If access must be revoked immediately, revoke
