@@ -134,19 +134,17 @@ the switch disabled and opens on the simulation.
   lists the models the runtime has without running one (no GPU time, no prompt). Only the
   outcome reaches the snapshot:
   - the configured model listed under exactly the name chat sends (`AI_MODEL`), or a llama.cpp
-    server (entries `owned_by: "llamacpp"`; it serves its loaded model whatever a request names)
-    → healthy;
-  - listed, but this API process's latest chat reply (within 10 min) was an error status or a
-    body chat couldn't use → down (`not-ready`): the model is there but not answering, e.g. it
-    failed to load on the GPU. A good reply clears it; overload (`429`/`503`), timeouts, and
-    visitors hanging up don't count;
+    server listing a single model (`owned_by: "llamacpp"`; it serves that model whatever a
+    request names) → healthy;
   - `429`, or a `503` that is the runtime's own JSON error → degraded ("at capacity or still
-    loading");
+    loading", the same overload rule chat uses);
   - a list without it, an empty one included → down (`not-ready`);
   - no answer, another error status (a proxy's non-JSON `503` included), a redirect, or a bad
     body → down (`unreachable`).
-- Chat replies are seen per API process, so with several replicas one may show the model
-  failing before the others; each recovers on its own next good reply or after 10 min. Chat and
+- Limit: a listed model isn't proven to answer (one that fails to load on the GPU still shows
+  healthy). Judging it from chat replies was tried and dropped: it needs state shared across API
+  replicas, and a visitor's own bad request could mark the model down for everyone. A probe
+  completion would cost GPU time; chat failures belong in P7-01's error metrics instead. Chat and
   the status check share one request helper (redirects refused, bounded timeout and body, error
   bodies discarded unread). The model's name, the runtime's address, and its reply never leave
   the API. The probe has its own 1.5 s deadline inside the snapshot's 5 s one, shares the 12 s

@@ -33,11 +33,11 @@ export interface AiProvider {
 /**
  * What the runtime said about the configured model:
  * - `ready`: the runtime lists it (listing doesn't prove it loads, only that it's there);
- * - `failing`: listed, but the latest chat reply was an error or a broken body;
- * - `busy`: at capacity or still loading (`429`, or the runtime's own `503`);
+ * - `busy`: at capacity or still loading (`429`, or the runtime's own JSON `503`), the same
+ *   overload chat reports;
  * - `missing`: the runtime answered without it (an empty list included).
  */
-export type AiStatus = 'ready' | 'failing' | 'busy' | 'missing';
+export type AiStatus = 'ready' | 'busy' | 'missing';
 
 export class AiDisabledError extends Error {
   constructor() {

@@ -17,17 +17,18 @@ export interface OpenAiCompatibleOptions {
   readonly timeoutMs?: number;
   /** Upper bound on the response body; larger replies are treated as malformed. */
   readonly maxResponseBytes?: number;
-  readonly now?: () => number;
 }
 
 export const DEFAULT_AI_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_MODEL_LIST_BYTES = 64 * 1024;
-/** How long a failed chat reply keeps the status check at `failing` (unless one succeeds). */
-export const CHAT_FAILURE_WINDOW_MS = 10 * 60_000;
 
-/** Statuses that mean "busy, try later" rather than "broken". */
-const overloadStatuses = new Set([429, 503]);
+/**
+ * "Busy, try later" rather than "broken": a `429`, or a `503` that is the runtime's own JSON
+ * error. A non-JSON `503` is a proxy's page in front of a runtime that's gone.
+ */
+const isOverload = (reply: { readonly status: number; readonly json: boolean }) =>
+  reply.status === 429 || (reply.status === 503 && reply.json);
 
 /**
  * How llama.cpp's server tags its model list; it answers with its loaded model whatever a request
@@ -59,9 +60,6 @@ export class OpenAiCompatibleProvider implements AiProvider {
   private readonly modelsEndpoint: string;
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
-  private readonly now: () => number;
-  /** This process's last broken chat reply (error status, bad body); null after a good one. */
-  private lastChatFailureAt: number | null = null;
 
   constructor(private readonly options: OpenAiCompatibleOptions) {
     const base = new URL(options.baseUrl);
@@ -73,7 +71,6 @@ export class OpenAiCompatibleProvider implements AiProvider {
     this.modelsEndpoint = `${root}/models`;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_AI_TIMEOUT_MS;
     this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
-    this.now = options.now ?? Date.now;
   }
 
   async complete(request: AiCompletionRequest, signal: AbortSignal): Promise<AiCompletion> {
@@ -100,16 +97,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.maxResponseBytes,
     );
     if (!reply.ok) {
-      if (overloadStatuses.has(reply.status)) throw new AiOverloadedError(reply.status);
-      this.lastChatFailureAt = this.now();
+      if (isOverload(reply)) throw new AiOverloadedError(reply.status);
       throw new AiUnavailableError('upstream_status', reply.status);
     }
     const parsed = completionSchema.safeParse(reply.body);
-    if (!parsed.success) {
-      this.lastChatFailureAt = this.now();
-      throw new AiUnavailableError('invalid_response');
-    }
-    this.lastChatFailureAt = null;
+    if (!parsed.success) throw new AiUnavailableError('invalid_response');
     const [choice] = parsed.data.choices;
     return {
       content: choice?.message.content ?? '',
@@ -120,11 +112,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
   /**
    * `GET /models`: what the runtime has, without running anything. The configured model must be
    * listed under exactly the name chat sends (vLLM, LM Studio, and Docker Model Runner match it
-   * exactly); llama.cpp's server, which serves its loaded model whatever the name, counts as
-   * ready when it lists one. A listed model whose last chat reply here (within
-   * `CHAT_FAILURE_WINDOW_MS`) was an error or a broken body reads as `failing`: listed, but not
-   * answering. A `503` counts as busy only when it's the runtime's own JSON error, not a proxy's
-   * page in front of a runtime that's gone.
+   * exactly). A llama.cpp server listing a single model counts too: it serves that model
+   * whatever a request names. Busy follows chat's overload rule.
    */
   async status(signal: AbortSignal): Promise<AiStatus> {
     let reply: Reply;
@@ -136,7 +125,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       throw error;
     }
     if (!reply.ok) {
-      if (reply.status === 429 || (reply.status === 503 && reply.json)) return 'busy';
+      if (isOverload(reply)) return 'busy';
       throw new AiUnavailableError('upstream_status', reply.status);
     }
     const parsed = modelListSchema.safeParse(reply.body);
@@ -144,12 +133,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const models = parsed.data.data;
     const listed =
       models.some(({ id }) => id === this.options.model) ||
-      (models.length > 0 && models.every(({ owned_by }) => owned_by === LLAMA_CPP_OWNER));
-    if (!listed) return 'missing';
-    const failedAt = this.lastChatFailureAt;
-    return failedAt !== null && this.now() - failedAt < CHAT_FAILURE_WINDOW_MS
-      ? 'failing'
-      : 'ready';
+      (models.length === 1 && models[0]?.owned_by === LLAMA_CPP_OWNER);
+    return listed ? 'ready' : 'missing';
   }
 
   /**

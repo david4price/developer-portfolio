@@ -68,7 +68,6 @@ const AI_STATE: Readonly<
 > = {
   ready: { health: 'healthy', failure: null },
   busy: { health: 'degraded', failure: null },
-  failing: { health: 'down', failure: 'not-ready' },
   missing: { health: 'down', failure: 'not-ready' },
   unreachable: { health: 'down', failure: 'unreachable' },
 };
