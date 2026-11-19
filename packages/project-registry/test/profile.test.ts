@@ -74,6 +74,16 @@ describe('createProfile', () => {
         createProfile({ ...validProfile, personal: { ...personal, interests: [first, first] } }),
       /duplicate interest: Surfing/,
     );
+    const many = Array.from({ length: 11 }, (_, i) => ({
+      name: `Interest ${i}`,
+      description: 'x',
+    }));
+    assert.throws(() =>
+      createProfile({ ...validProfile, personal: { ...personal, interests: many } }),
+    );
+    assert.doesNotThrow(() =>
+      createProfile({ ...validProfile, personal: { ...personal, interests: many.slice(0, 10) } }),
+    );
     assert.throws(
       () =>
         createProfile({

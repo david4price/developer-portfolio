@@ -16,8 +16,9 @@ chat) next, then retrieval measurement (P5-10) once there are more projects.
 
 - **P2-12 done** (`feat/p2-12-profile`): the owner's own profile replaces every placeholder on the
   home page, About, and Experience: a backend developer in aviation software, with two roles at
-  one employer. About also gains "Beyond the code": eight interests (mountain biking, surfing,
-  endurance sports, photography, guitar, side projects, coffee, films and games), with room for
+  one employer. About also gains "Beyond the code": nine interests (mountain biking, surfing,
+  endurance sports, photography, guitar, side projects, coffee, films and games, and Scar, the
+  dog behind the site's pixel-art companion), with room for
   a photo gallery later. Drafted by the owner's own agent, with private details left out. The
   chat doesn't index it yet (P5-13).
 - **P7-06 done** (2026-11-19): K3s API audit logging is on, at Metadata level, for 30 days.
@@ -312,7 +313,7 @@ Read-only inventory of the reference host. Findings:
       Done 2026-11-19: the owner's profile (drafted by the owner's own agent with private details
       left out) is in `profile-data.ts`. The static export has no placeholder text, and the new
       content shows on the home page, About, and Experience. About also has an optional
-      "Beyond the code" section (`personal`: an intro and 2–8 interests, same content checks);
+      "Beyond the code" section (`personal`: an intro and 2–10 interests, same content checks);
       photos come later.
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker

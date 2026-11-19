@@ -99,7 +99,7 @@ export const interestSchema = z.object({
 /** The personal side of About: a short introduction and the owner's interests. */
 export const personalSchema = z.object({
   intro: content(500),
-  interests: z.array(interestSchema).min(2).max(8),
+  interests: z.array(interestSchema).min(2).max(10),
 });
 
 export const profileLinkSchema = z.object({

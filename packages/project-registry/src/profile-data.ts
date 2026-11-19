@@ -172,6 +172,15 @@ export const profileData: ProfileInput = {
           'stories that make you think, surprise you, or leave you with something to talk about ' +
           'afterward.',
       },
+      {
+        name: 'Scar, My Four-Legged Sidekick 🐾',
+        description:
+          "Meet Scar, my four-legged best friend and occasional office buddy. He's a big part " +
+          "of my life, whether we're spending time outdoors, relaxing at home, or he's joining " +
+          "me for a day at work. He's also made his way into my developer portfolio as a " +
+          "pixel-art character, so I guess he's officially part of the development team. Still " +
+          'waiting for his first pull request, though.',
+      },
     ],
   },
 };
