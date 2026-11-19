@@ -29,13 +29,6 @@ export default function AboutPage() {
           </ul>
         </section>
       )}
-      <ul>
-        {profile.links.map((link) => (
-          <li key={link.href}>
-            <a href={link.href}>{link.label}</a>
-          </li>
-        ))}
-      </ul>
     </>
   );
 }

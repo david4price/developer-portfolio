@@ -45,7 +45,7 @@ export const profileData: ProfileInput = {
     {
       role: 'Backend Developer',
       organization: 'GO7 (formerly AeroCRS)',
-      period: 'Jan 2025 – Present',
+      period: 'Feb 2025 – Present',
       highlights: [
         'Developed and maintained backend services and REST APIs using Node.js, NestJS, ' +
           'JavaScript, TypeScript, and SQL.',
@@ -68,7 +68,7 @@ export const profileData: ProfileInput = {
     {
       role: 'Technical Support Specialist',
       organization: 'GO7 (formerly AeroCRS)',
-      period: '2022 – Jan 2025',
+      period: '2022 – Feb 2025',
       highlights: [
         'Investigated complex technical issues across aviation reservation systems, websites, ' +
           'APIs, and third-party integrations.',

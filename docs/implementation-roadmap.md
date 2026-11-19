@@ -14,6 +14,13 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- Minimal restyle (`feat/minimal-restyle`):
+  - **Layout:** a sticky, translucent navbar that marks the current page; a footer that rests at
+    the bottom of short pages; space restored above and below the content.
+  - **Look:** quieter typography and links, hairline cards (a project card clickable as a
+    whole), soft tags, a dot status badge, and one button style.
+  - **Pages:** Experience as a timeline; the home page leads with the headline instead of the
+    name.
 - About photos (`feat/about-photos`): 19 of the owner's photos sit behind the interest cards
   they belong to (Photography 14, Scar 4, Mountain Biking 1), as prints peeking out from behind
   each card that open as white-framed prints without captions. Scar's card comes first. Metadata
@@ -252,7 +259,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
-**Branch in progress:** `feat/about-photos` (the owner's photos on About).
+**Branch in progress:** `feat/minimal-restyle`, on top of `feat/about-photos` (photos on About,
+then the restyle).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.

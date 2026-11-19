@@ -9,8 +9,10 @@ export default function HomePage() {
   return (
     <>
       <section aria-labelledby="intro-heading">
-        <h1 id="intro-heading">{profile.name}</h1>
-        <p className="lead">{profile.headline}</p>
+        {/* The name is already in the header; the headline leads the page instead. */}
+        <h1 id="intro-heading" className="home-title">
+          {profile.headline}
+        </h1>
         <p>{profile.intro}</p>
         <p>
           Live status of this site&apos;s self-hosted API: <ApiStatus />
@@ -27,7 +29,9 @@ export default function HomePage() {
           ))}
         </ul>
         <p>
-          <Link href="/projects/">All projects</Link>
+          <Link href="/projects/" className="more-link">
+            All projects <span aria-hidden="true">→</span>
+          </Link>
         </p>
       </section>
     </>
