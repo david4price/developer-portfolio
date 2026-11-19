@@ -145,10 +145,32 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    never the screening internals or private details), each with a `source`: a file or folder in
    this repository. They pass the same control-markup and hidden-text checks as projects, a test
    checks that every source exists, and their text is capped at 400 characters so a note always
-   reaches the prompt whole. The profile (home page, About with its interests, Experience) is in
-   `@portfolio/project-registry` under the same content checks. Its real text is in (P2-12);
-   indexing it for the assistant is **Proposed** (P5-13). A vector database
-   is added only if measured answer quality requires one (P5-10, P5-11).
+   reaches the prompt whole.
+   - **Profile (Confirmed in code, P5-13).** The owner's profile (`profile-data.ts`, same content
+     checks) is indexed too.
+     - **Entries:** the headline and intro, each role, each About paragraph, the personal
+       section, and each interest. Each links the About or Experience page, with its marker on
+       a closing `Page: [[page:<about|experience>]]` line.
+     - **Labels:** the text is the owner's first person, and the model speaks as their dog, so
+       it's labelled "In <first name>'s words ("I" and "my" mean <first name>, not you)".
+       Experience highlights are labelled as highlights.
+     - **Search-only words:** profile entries alone match a few extra words ("job", "employer",
+       "hobbies", "weekends"). A question such as "where does David work?" is left with just
+       the name once stop words go, and these words, plus the entries' order (summary, roles,
+       About, interests), still bring the right part.
+     - **Word forms:** "-ing" interest names also match their plain form ("surf", "bike",
+       "run").
+     - **Ranking:** profile entries come after projects and notes, so questions about the site
+       still get those.
+     - **Fallback link:** as with notes, a reply that clearly drew on a profile entry links its
+       page even without the marker.
+     - **Rules:** the fixed rules allow answers about the owner's interests. The voice rules
+       keep their salary, availability, location, and anything else private beyond the data
+       out of answers.
+     - **Known limits** with the reference 4B model: asked about the dog, it may repeat the
+       owner's "my" instead of speaking as the dog. Short answers may come without a page link.
+       A vector database
+       is added only if measured answer quality requires one (P5-10, P5-11).
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
    voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice
    (Confirmed in code) speaks as the developer's dog, named by `CHAT_ASSISTANT_NAME`: warm,
@@ -183,8 +205,10 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    gets what's left, up to 8 turns or 4,000 characters. With the shipped registry the system message is
    about 900–1,500 characters.
 5. **Navigation (Confirmed, P5-05; doc sources P5-09):** retrieved data names each page with a
-   marker such as `[[project:<slug>]]` or `[[mini-app:<slug>]]`, and each architecture note with a
-   closing `Source: [[doc:<slug>]]` line; the model may suggest them only by copying one. The API
+   marker such as `[[project:<slug>]]` or `[[mini-app:<slug>]]`, each architecture note with a
+   closing `Source: [[doc:<slug>]]` line, and each profile entry with a closing
+   `Page: [[page:about]]` or `[[page:experience]]` line (P5-13: the fixed site pages, in
+   `SITE_PAGES`). The model may suggest them only by copying one. The API
    replaces each valid marker with its title and returns it in `links` (`kind`, `slug`, `title`,
    `path`; at most 3, de-duplicated). A `doc` link's `path` is the source's URL on GitHub, built
    from the registry's repository URL and branch (`blob/` for a file, `tree/` for a folder). The

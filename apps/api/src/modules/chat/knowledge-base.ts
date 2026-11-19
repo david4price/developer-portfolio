@@ -16,9 +16,9 @@ export interface KnowledgeBase {
   search(query: string, limit: number): readonly string[];
 
   /**
-   * The architecture note `reply` draws on: among the notes `search(query, limit)` returned, the
-   * best-ranked one whose words the reply largely repeats; `undefined` if none. Lets the source
-   * be linked even when the model leaves out the note's marker.
+   * The architecture note or profile page `reply` draws on: among the notes and profile entries
+   * `search(query, limit)` returned, the best-ranked one whose words the reply largely repeats;
+   * `undefined` if none. Lets the source be linked even when the model leaves out the marker.
    */
   sourceFor(query: string, limit: number, reply: string): ChatLink | undefined;
 

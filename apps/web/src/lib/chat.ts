@@ -3,6 +3,7 @@ import {
   findDocNote,
   findMiniApp,
   findProject,
+  findSitePage,
   miniAppPath,
   projectPath,
 } from '@portfolio/project-registry';
@@ -85,6 +86,12 @@ function navigationLink(value: unknown): ChatLink | null {
     return note === undefined
       ? null
       : { kind: 'doc', slug: note.slug, title: note.title, path: docNoteUrl(note) };
+  }
+  if (value.kind === 'page') {
+    const page = findSitePage(value.slug);
+    return page === undefined
+      ? null
+      : { kind: 'page', slug: page.slug, title: page.title, path: page.path };
   }
   if (value.kind === 'project' || value.kind === 'mini-app') {
     const page = value.kind === 'project' ? findProject(value.slug) : findMiniApp(value.slug);

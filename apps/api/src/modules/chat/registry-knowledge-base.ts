@@ -3,8 +3,11 @@ import {
   type DocNotes,
   docNoteUrl,
   miniAppPath,
+  type Profile,
   type ProjectRegistry,
   projectPath,
+  SITE_PAGES,
+  type SitePage,
 } from '@portfolio/project-registry';
 import type {
   ChatLink,
@@ -54,7 +57,10 @@ interface Entry {
   readonly fields: readonly Field[];
   readonly snippet: string;
   readonly featured: boolean;
-  /** For architecture notes: the words of the note text, to tell whether a reply drew on it. */
+  /**
+   * For architecture notes and profile entries: the words of their text, to tell whether a reply
+   * drew on it.
+   */
   readonly noteTerms?: ReadonlySet<string>;
 }
 
@@ -98,9 +104,20 @@ class SnippetBuilder {
    * `firstLine` (marker and title) is always kept: the registry schema caps slugs at 64 and
    * titles at 80 characters, so it can never come near the limit on its own.
    */
-  constructor(firstLine: string) {
+  constructor(
+    firstLine: string,
+    /** Room kept free for a closing line added with `close()`, so prose never crowds it out. */
+    private reserved = 0,
+  ) {
     this.parts = [firstLine];
-    this.room = SNIPPET_MAX_CHARS - firstLine.length;
+    this.room = SNIPPET_MAX_CHARS - firstLine.length - reserved;
+  }
+
+  /** The closing line the reserve was kept for. */
+  close(label: string, value: string): this {
+    this.room += this.reserved;
+    this.reserved = 0;
+    return this.whole(label, value);
   }
 
   whole(label: string, value: string): this {
@@ -163,14 +180,148 @@ function docSnippet(note: DocNote): string {
     .toString();
 }
 
+/**
+ * Words visitors use about a person rather than a project, matched only for profile entries:
+ * "Where does David work?" leaves just the name once stop words are dropped ("work" is one), so
+ * these lift the right part of the profile for "job", "hobbies", "weekends", and the like.
+ */
+const PROFILE_WORDS = {
+  about: 'about bio background who person developer skills skill stack experience',
+  work: 'job jobs employer company career role roles position experience worked works',
+  personal:
+    'hobby hobbies interest interests fun free time spare weekend weekends outside personal ' +
+    'passion passions enjoy enjoys like likes',
+} as const;
+
+/**
+ * Plain forms of "-ing" words in an interest's name ("Surfing" → "surf", "Biking" → "bike",
+ * "Running" → "run"), so "Does he surf?" finds it. Search only drops a trailing "s", and
+ * changing that for everything is retrieval tuning (P5-10); this stays with the profile.
+ */
+function interestWordForms(name: string): string {
+  return searchTerms(name)
+    .filter((word) => word.length > 5 && word.endsWith('ing'))
+    .flatMap((word) => {
+      const base = word.slice(0, -3);
+      const undoubled = /([b-df-hj-np-tv-z])\1$/.test(base) ? base.slice(0, -1) : base;
+      return [base, `${base}e`, undoubled];
+    })
+    .join(' ');
+}
+
+const pageLink = (page: SitePage): ChatLink => ({
+  kind: 'page',
+  slug: page.slug,
+  title: page.title,
+  path: page.path,
+});
+
+/**
+ * Profile entries (P5-13), most general first so a question naming only the owner gets the
+ * summary and their roles: the headline and intro, each role, each About paragraph, then the
+ * personal section and each interest. The text is the owner's own first person, so each snippet
+ * says whose words they are and who "I" is.
+ */
+function profileEntries(profile: Profile): Entry[] {
+  const [aboutPage, experiencePage] = SITE_PAGES;
+  const about = pageLink(aboutPage);
+  const experience = pageLink(experiencePage);
+  const firstName = profile.name.split(' ')[0] ?? profile.name;
+  // The model speaks as the owner's dog, so the label says who "I" is in the owner's text.
+  const words = `In ${firstName}'s words ("I" and "my" mean ${firstName}, not you)`;
+  const entry = (
+    link: ChatLink,
+    heading: string,
+    fields: readonly Field[],
+    label: string,
+    text: string,
+  ): Entry => {
+    // The marker closes the snippet, as on architecture notes, where the reference model copies
+    // it far more often than from the header; the prose's words let a reply that drew on it link
+    // the page even without the marker (`sourceFor`).
+    const closing = `\nPage: ${linkMarker('page', link.slug)}`;
+    return {
+      link,
+      fields,
+      snippet: new SnippetBuilder(heading, closing.length)
+        .prose(label, text)
+        .close('Page', linkMarker('page', link.slug))
+        .toString(),
+      featured: false,
+      noteTerms: new Set(searchTerms(text)),
+    };
+  };
+  const personal = profile.personal;
+  return [
+    entry(
+      about,
+      `${profile.name}: ${profile.headline}`,
+      [
+        field(3, profile.name, profile.headline),
+        field(2, PROFILE_WORDS.about),
+        field(1, profile.intro),
+      ],
+      words,
+      profile.intro,
+    ),
+    ...profile.experience.map((role) =>
+      entry(
+        experience,
+        `${profile.name}, ${role.role} at ${role.organization} (${role.period})`,
+        [
+          field(3, role.role, role.organization),
+          field(2, profile.name, PROFILE_WORDS.work),
+          field(1, ...role.highlights),
+        ],
+        'Highlights',
+        role.highlights.join(' '),
+      ),
+    ),
+    ...profile.about.map((paragraph) =>
+      entry(
+        about,
+        `About ${profile.name}`,
+        [field(2, profile.name, PROFILE_WORDS.about), field(1, paragraph)],
+        words,
+        paragraph,
+      ),
+    ),
+    ...(personal === undefined
+      ? []
+      : [
+          entry(
+            about,
+            `${profile.name} outside work`,
+            [field(2, profile.name, PROFILE_WORDS.personal), field(1, personal.intro)],
+            words,
+            personal.intro,
+          ),
+          ...personal.interests.map((interest) =>
+            entry(
+              about,
+              `${profile.name}'s interest: ${interest.name}`,
+              [
+                field(3, interest.name, interestWordForms(interest.name)),
+                field(2, profile.name, PROFILE_WORDS.personal),
+                field(1, interest.description),
+              ],
+              words,
+              interest.description,
+            ),
+          ),
+        ]),
+  ];
+}
+
 /** A reply draws on a note when it repeats at least this many of the note's words… */
 const SOURCE_MIN_SHARED_TERMS = 4;
 /** …and at least this share of them. */
 const SOURCE_MIN_SHARED_RATIO = 0.5;
 
 /**
- * Keyword retrieval over the project registry and the architecture notes, held in memory: both
- * ship with the API, so search needs no I/O and every replica answers identically. Ranking is a
+ * Keyword retrieval over the project registry, the architecture notes, and the owner's profile,
+ * held in memory: all ship with the API, so search needs no I/O and every replica answers
+ * identically. Ranking is a
  * weighted term match (title and slug count most, then technologies, summary, and a note's
  * keywords, then descriptions and note text), scaled by how rare each term is across all entries.
  */
@@ -182,7 +333,7 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
   /** Inverse document frequency per term, computed once: the content never changes at runtime. */
   private readonly rarity: ReadonlyMap<string, number>;
 
-  constructor(registry: ProjectRegistry, docs: DocNotes) {
+  constructor(registry: ProjectRegistry, docs: DocNotes, profile?: Profile) {
     const miniApps = new Map(registry.miniApps.map((app) => [app.slug, app]));
     const projectEntries = registry.projects.map((project): Entry => ({
       link: {
@@ -220,7 +371,12 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
       };
     });
     // Order matters: pages win a name shared across kinds, and earlier entries win score ties.
-    this.entries = [...projectEntries, ...miniAppEntries, ...docEntries];
+    this.entries = [
+      ...projectEntries,
+      ...miniAppEntries,
+      ...docEntries,
+      ...(profile === undefined ? [] : profileEntries(profile)),
+    ];
 
     const byKind = new Map<string, ChatLink>();
     const byName = new Map<string, ChatLink>();

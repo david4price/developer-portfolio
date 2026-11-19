@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { docNotes, registry } from '@portfolio/project-registry';
+import { docNotes, profile, registry } from '@portfolio/project-registry';
 import type { Redis } from 'ioredis';
 import { API_CONFIG, type ApiConfig } from '../../config/api-config.js';
 import { REDIS } from '../../redis/redis.module.js';
@@ -42,7 +42,7 @@ import {
     },
     {
       provide: KNOWLEDGE_BASE,
-      useFactory: () => new RegistryKnowledgeBase(registry, docNotes),
+      useFactory: () => new RegistryKnowledgeBase(registry, docNotes, profile),
     },
     {
       provide: MESSAGE_GUARD,

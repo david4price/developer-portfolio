@@ -9,18 +9,25 @@ _Last updated: 2026-11-19_
 **Current phase:** 6 (Infrastructure Explorer; only P6-05's token rotation, due 2027-02-16, is
 left). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
-Phase 2 is complete with the owner's profile (P2-12); Phase 5 has P5-13 (index the profile for the
-chat) next, then retrieval measurement (P5-10) once there are more projects.
+Phase 2 is complete with the owner's profile (P2-12), and the chat answers about it (P5-13);
+Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- **P2-12 done** (`feat/p2-12-profile`): the owner's own profile replaces every placeholder on the
+- **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
+  - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
+    Experience through a new `page` link kind that the web rebuilds from its own list.
+  - **Prompt:** the fixed rules allow answers about the owner's interests; the voice rules keep
+    anything private beyond the data out of answers.
+  - **Checked against the reference model:** work, hobby, and surfing questions answered
+    correctly, and salary declined.
+  - **Known limit:** asked about Scar, the model may repeat the owner's "my".
+- **P2-12 done** (PR #60, live 2026-11-19): the owner's own profile replaces every placeholder on the
   home page, About, and Experience: a backend developer in aviation software, with two roles at
   one employer. About also gains "Beyond the code": nine interests (mountain biking, surfing,
   endurance sports, photography, guitar, side projects, coffee, films and games, and Scar, the
   dog behind the site's pixel-art companion), with room for
-  a photo gallery later. Drafted by the owner's own agent, with private details left out. The
-  chat doesn't index it yet (P5-13).
+  a photo gallery later. Drafted by the owner's own agent, with private details left out.
 - **P7-06 done** (2026-11-19): K3s API audit logging is on, at Metadata level, for 30 days.
   - Recorded: writes, `exec`, `attach`, `port-forward`, and Secret reads.
   - Verified on the host: a test `exec`, a Secret read, and a server-side dry-run write each
@@ -234,13 +241,11 @@ chat) next, then retrieval measurement (P5-10) once there are more projects.
 
 **Next up, in order**
 
-1. **P5-13:** index the profile (About, Experience) in the chat's knowledge base, so the
-   assistant can answer questions about the owner.
-2. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
-3. Owner content: more projects; then **P5-10**, and **P5-11** only if P5-10 shows keyword search
-   missing paraphrased questions.
+1. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
+2. Owner content: photos for "Beyond the code" when ready; more projects; then **P5-10**, and
+   **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
-**Branch in progress:** `feat/p2-12-profile` (P2-12: the owner's profile replaces the placeholders).
+**Branch in progress:** `feat/p5-13-profile-knowledge` (P5-13: the chat answers about the owner).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -394,7 +399,7 @@ Read-only inventory of the reference host. Findings:
       recovered on its own with data intact
       ([runbook](operations/runbooks.md#offline-drill-p4-04)).
 
-## Phase 5: AI Chatbot (10/13)
+## Phase 5: AI Chatbot (11/13)
 
 - [x] **P5-01** `openai-compatible` adapter with timeout and abort. _Needs:_ P2-08. _Done when:_
       contract tests pass against a fake server. Tests cover timeouts (headers and mid-body), caller
@@ -507,11 +512,17 @@ Read-only inventory of the reference host. Findings:
       and forward hooks; [guide](deployment/kubernetes.md#inference-port-guard-p5-12)). A LAN PC no
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
-- [ ] **P5-13** Index the owner's profile in the chat's knowledge base. _Needs:_ P2-12, P5-03.
+- [x] **P5-13** Index the owner's profile in the chat's knowledge base. _Needs:_ P2-12, P5-03.
       _Done when:_ questions about the owner's role, employer, experience, stack, or interests
-      retrieve the About or Experience content and link to that page; the profile passes the same control-markup
-      and hidden-text checks as projects (already enforced by its schema); grounding tests cover
-      it.
+      retrieve the About or Experience content and link to that page; the profile passes the same
+      control-markup and hidden-text checks as projects (already enforced by its schema);
+      grounding tests cover it.
+      Done 2026-11-19: - **Entries and links:** profile entries in `RegistryKnowledgeBase` link through a new
+      `page` link kind (`SITE_PAGES`: About, Experience), and the web rebuilds the links
+      itself. - **Tests:** grounding tests cover work, hobby, weekend, and "-ing" questions, the closing
+      page line, the fallback link, and page markers. The worst-case prompt still fits
+      history. - **Reference model:** answered correctly. Known limit: about Scar it may repeat the
+      owner's "my", and short answers can lack a link.
 
 ## Phase 6: Infrastructure Explorer (4/5)
 

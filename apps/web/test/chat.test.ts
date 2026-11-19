@@ -81,6 +81,29 @@ describe('chat browser requests', () => {
     );
   });
 
+  it('builds site page links (About, Experience) from this build’s list, never the response', async () => {
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json({
+        reply: 'My human works in aviation software.',
+        links: [
+          { kind: 'page', slug: 'experience', path: 'https://evil.example.com/', title: 'x' },
+          { kind: 'page', slug: 'about', path: '/about/' },
+          { kind: 'page', slug: 'admin', path: '/admin/' },
+          { kind: 'page', slug: 'about', path: '/about/' },
+        ],
+      }),
+    );
+    const response = await sendChatMessage(
+      'https://api.example.com/api/v1/chat/messages',
+      'Where does he work?',
+      signal(),
+    );
+    assert.deepEqual(response.links, [
+      { kind: 'page', slug: 'experience', title: 'Experience', path: '/experience/' },
+      { kind: 'page', slug: 'about', title: 'About', path: '/about/' },
+    ]);
+  });
+
   it('builds doc links from this build’s notes by slug, never from the API’s URL', async () => {
     const note = docNotes.notes[0];
     assert.ok(note);

@@ -9,12 +9,12 @@ export const MAX_REPLY_LINKS = 3;
 
 /**
  * Marker candidates. A closed `[[…]]` is classified by `classify()`. An unclosed `[[` counts only
- * when a `project:`, `mini-app:`, or `doc:` token follows, and the candidate ends with that token, so the
- * prose after it survives. Any other `[[` (code such as `arr[[0]]` or `[[1, 2], [3, 4]]`) is not
- * a marker at all.
+ * when a `project:`, `mini-app:`, `doc:`, or `page:` token follows, and the candidate ends with
+ * that token, so the prose after it survives. Any other `[[` (code such as `arr[[0]]` or
+ * `[[1, 2], [3, 4]]`) is not a marker at all.
  */
 const MARKER =
-  /\[\[(?:([^[\]\n]{0,100})\]\]|[ \t]*((?:project|mini-app|doc)[ \t]*:[ \t]*[a-z0-9-]*)\]?)/gi;
+  /\[\[(?:([^[\]\n]{0,100})\]\]|[ \t]*((?:project|mini-app|doc|page)[ \t]*:[ \t]*[a-z0-9-]*)\]?)/gi;
 /** A `kind:` prefix, including made-up kinds such as `javascript:`. */
 const KIND_PREFIX = /^([a-z][a-z0-9+.-]*)\s*:(.*)$/is;
 /** Hyphenated like a slug (`made-up-project`): a marker attempt even without a kind. */
@@ -32,7 +32,7 @@ const GAP_BEFORE_PUNCTUATION = new RegExp(`[,;]?[ \\t]*${GAPS}[ \\t]*(?=[.,;:!?)
 const GAP_AFTER_SPACE = new RegExp(`(^|[ \\t])${GAPS}[ \\t]*`, 'gm');
 
 const isLinkKind = (value: string): value is ChatLinkKind =>
-  value === 'project' || value === 'mini-app' || value === 'doc';
+  value === 'project' || value === 'mini-app' || value === 'doc' || value === 'page';
 
 export interface ResolvedReply {
   /** The reply with every marker replaced by its page title, or removed if it wasn't valid. */
