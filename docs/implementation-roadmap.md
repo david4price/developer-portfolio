@@ -242,7 +242,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Next up, in order**
 
-1. **P6-05** before 2027-02-16: rotate the Argo CD token (the API warns from 2027-02-02).
+1. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
+   logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
+   rotating.
 2. Owner content: photos for "Beyond the code" when ready; more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 
@@ -588,8 +590,11 @@ Read-only inventory of the reference host. Findings:
       started, so the outage ran ~4 minutes; P7-06 turned on audit logging to trace such writes.
 - [ ] **P6-05** 🔒 Rotate the Argo CD explorer token before it expires on 2027-02-16. _Needs:_
       P6-03. _Done when:_ a new 90-day token is sealed, applied, and validated (sync and release
-      back after the 12 s cache), and the old one is revoked. The API starts warning in its logs
-      on 2027-02-02. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
+      back after the 12 s cache), the old one is revoked, and the homelab watcher's expiry date
+      is updated. The API starts warning in its logs on 2027-02-02. The owner's homelab chat bot
+      sends a daily reminder from the same date, based on an expiry date in its own
+      configuration (it can't see a rotation). Its outage and sync alerts come from the public
+      snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
 ## Phase 7: Hardening (1/6)
 
