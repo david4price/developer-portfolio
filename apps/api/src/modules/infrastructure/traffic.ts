@@ -23,15 +23,25 @@ export const TRAFFIC_COUNTER = Symbol('TRAFFIC_COUNTER');
 export interface TrafficCounter {
   /** Counts one event; never throws and never delays the request. */
   record(source: TrafficSource): void;
-  read(): Promise<TrafficLevels>;
+  /** The current levels, or `null` when nothing is counted here. Rejects on `signal`. */
+  read(signal: AbortSignal): Promise<TrafficLevels | null>;
 }
 
-/** Minutes summed for a level, the current one included. */
+/** With the view off: nothing is written to Redis and the lines carry no sparks. */
+export class NoopTrafficCounter implements TrafficCounter {
+  record(): void {}
+
+  read(): Promise<null> {
+    return Promise.resolve(null);
+  }
+}
+
+/** The window a level covers: a sliding 5 minutes. */
 export const TRAFFIC_WINDOW_MINUTES = 5;
-/** Events in the window from which a source counts as busy (about 12 a minute). */
+/** Events in the window from which a source counts as busy (12 a minute). */
 export const BUSY_EVENTS = 60;
 
-/** No events in the window is idle; up to `BUSY_EVENTS` is low; more is busy. */
+/** No events in the window is idle; fewer than `BUSY_EVENTS` is low; more is busy. */
 export function trafficLevel(events: number): TrafficLevel {
   if (events <= 0) return 'idle';
   return events < BUSY_EVENTS ? 'low' : 'busy';
@@ -41,7 +51,7 @@ export function trafficLevel(events: number): TrafficLevel {
 export interface TrafficStore {
   pipeline(): {
     incr(key: string): unknown;
-    expire(key: string, seconds: number): unknown;
+    expire(key: string, seconds: number, mode: 'NX'): unknown;
     exec(): Promise<unknown>;
   };
   mget(...keys: string[]): Promise<readonly (string | null)[]>;
@@ -50,10 +60,27 @@ export interface TrafficStore {
 const SOURCES: readonly TrafficSource[] = ['api', 'ai'];
 const keyFor = (source: TrafficSource, minute: number) =>
   `portfolio:infrastructure:traffic:${source}:${minute}`;
+/** Long enough for the oldest minute a window reads, then gone: nothing accumulates. */
+const KEY_TTL_SECONDS = (TRAFFIC_WINDOW_MINUTES + 2) * 60;
 
+/** Settles with `promise`, or rejects when `signal` aborts first; leaves no listener behind. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+/**
+ * Per-minute counters in Redis. A level reads a sliding window: the current minute so far, the
+ * four before it, and the part of the fifth one back the window still covers, so a steady rate
+ * gives a steady level whatever the second.
+ */
 export class RedisTrafficCounter implements TrafficCounter {
   private readonly logger = new Logger('TrafficCounter');
-  /** Whether the last write failed, so a Redis outage logs once, not per request. */
+  /** Whether the last write failed, so an outage logs when it starts and when it ends. */
   private failing = false;
 
   constructor(
@@ -65,10 +92,11 @@ export class RedisTrafficCounter implements TrafficCounter {
     const key = keyFor(source, Math.floor(this.now() / 60_000));
     const pipeline = this.store.pipeline();
     pipeline.incr(key);
-    // Kept a minute past the window, then gone: nothing accumulates.
-    pipeline.expire(key, (TRAFFIC_WINDOW_MINUTES + 1) * 60);
+    // Only the first increment of a minute sets the expiry.
+    pipeline.expire(key, KEY_TTL_SECONDS, 'NX');
     pipeline.exec().then(
       () => {
+        if (this.failing) this.logger.log({ message: 'Traffic counter writes resumed' });
         this.failing = false;
       },
       (error: unknown) => {
@@ -83,15 +111,20 @@ export class RedisTrafficCounter implements TrafficCounter {
     );
   }
 
-  async read(): Promise<TrafficLevels> {
-    const minute = Math.floor(this.now() / 60_000);
-    const minutes = Array.from({ length: TRAFFIC_WINDOW_MINUTES }, (_, i) => minute - i);
+  async read(signal: AbortSignal): Promise<TrafficLevels> {
+    const now = this.now();
+    const minute = Math.floor(now / 60_000);
+    const elapsed = (now % 60_000) / 60_000;
+    // Newest first: the current minute, then each full one back to the window's far edge.
+    const minutes = Array.from({ length: TRAFFIC_WINDOW_MINUTES + 1 }, (_, i) => minute - i);
+    const weights = minutes.map((_, i) => (i === TRAFFIC_WINDOW_MINUTES ? 1 - elapsed : 1));
     const keys = SOURCES.flatMap((source) => minutes.map((m) => keyFor(source, m)));
-    const values = await this.store.mget(...keys);
+    const values = await untilAborted(this.store.mget(...keys), signal);
     const total = (index: number) =>
-      values.slice(index * minutes.length, (index + 1) * minutes.length).reduce((sum, value) => {
-        const count = Number(value ?? 0);
-        return sum + (Number.isSafeInteger(count) && count > 0 ? count : 0);
+      minutes.reduce((sum, _, i) => {
+        const count = Number(values[index * minutes.length + i] ?? 0);
+        const valid = Number.isSafeInteger(count) && count > 0 ? count : 0;
+        return sum + valid * (weights[i] ?? 0);
       }, 0);
     return { api: trafficLevel(total(0)), ai: trafficLevel(total(1)) };
   }

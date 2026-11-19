@@ -8,6 +8,7 @@ import {
 } from '../src/modules/infrastructure/infrastructure-snapshot.service.js';
 import {
   BUSY_EVENTS,
+  NoopTrafficCounter,
   RedisTrafficCounter,
   TRAFFIC_WINDOW_MINUTES,
   type TrafficCounter,
@@ -26,6 +27,7 @@ class FakeStore implements TrafficStore {
   readonly values = new Map<string, string>();
   readonly expiries = new Map<string, number>();
   failWrites = false;
+  stallReads = false;
 
   pipeline() {
     const ops: Array<() => void> = [];
@@ -34,8 +36,11 @@ class FakeStore implements TrafficStore {
         ops.push(() => this.values.set(key, String(Number(this.values.get(key) ?? 0) + 1)));
         return pipeline;
       },
-      expire: (key: string, seconds: number) => {
-        ops.push(() => this.expiries.set(key, seconds));
+      expire: (key: string, seconds: number, mode: 'NX') => {
+        assert.equal(mode, 'NX');
+        ops.push(() => {
+          if (!this.expiries.has(key)) this.expiries.set(key, seconds);
+        });
         return pipeline;
       },
       exec: async () => {
@@ -48,6 +53,7 @@ class FakeStore implements TrafficStore {
   }
 
   async mget(...keys: string[]) {
+    if (this.stallReads) return new Promise<never>(() => undefined);
     return keys.map((key) => this.values.get(key) ?? null);
   }
 }
@@ -80,25 +86,61 @@ describe('RedisTrafficCounter', () => {
       'portfolio:infrastructure:traffic:api:101': '1',
     });
     for (const seconds of store.expiries.values()) {
-      assert.equal(seconds, (TRAFFIC_WINDOW_MINUTES + 1) * 60);
+      assert.equal(seconds, (TRAFFIC_WINDOW_MINUTES + 2) * 60);
     }
   });
 
-  it('sums only the window, ignoring older minutes and junk values', async () => {
+  it('reads a sliding window: the partial far minute counts for the share still inside', async () => {
     const store = new FakeStore();
-    const now = 200 * MINUTE;
+    let now = 200 * MINUTE;
     const counter = new RedisTrafficCounter(store, () => now);
-    assert.deepEqual(await counter.read(), { api: 'idle', ai: 'idle' });
-    store.values.set('portfolio:infrastructure:traffic:api:200', String(BUSY_EVENTS - 10));
+    const signal = () => AbortSignal.timeout(1_000);
+    assert.deepEqual(await counter.read(signal()), { api: 'idle', ai: 'idle' });
+    // A steady 12 a minute: 12 in each of the last six minutes, current one included.
+    for (let m = 200 - TRAFFIC_WINDOW_MINUTES; m <= 200; m++) {
+      store.values.set(`portfolio:infrastructure:traffic:api:${m}`, '12');
+    }
+    // At the start of minute 200 the far minute (195) still counts in full: 72 → busy.
+    assert.equal((await counter.read(signal())).api, 'busy');
+    // Most of the way through minute 200 the far minute has slid out; with the current
+    // minute's 12 already in, the window holds just over 60: still busy, no flip.
+    now = 200 * MINUTE + 50_000;
+    assert.equal((await counter.read(signal())).api, 'busy');
+    // Older minutes never count, and junk values count as nothing.
     store.values.set(
-      `portfolio:infrastructure:traffic:api:${200 - TRAFFIC_WINDOW_MINUTES + 1}`,
-      '10',
+      `portfolio:infrastructure:traffic:ai:${200 - TRAFFIC_WINDOW_MINUTES - 1}`,
+      '999',
     );
-    store.values.set(`portfolio:infrastructure:traffic:api:${200 - TRAFFIC_WINDOW_MINUTES}`, '999');
     store.values.set('portfolio:infrastructure:traffic:ai:199', '3');
     store.values.set('portfolio:infrastructure:traffic:ai:198', 'not a number');
     store.values.set('portfolio:infrastructure:traffic:ai:197', '-50');
-    assert.deepEqual(await counter.read(), { api: 'busy', ai: 'low' });
+    assert.equal((await counter.read(signal())).ai, 'low');
+  });
+
+  it('gives up a stalled read when the signal aborts, leaving nothing unhandled', async () => {
+    const store = new FakeStore();
+    store.stallReads = true;
+    const counter = new RedisTrafficCounter(store);
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await assert.rejects(counter.read(AbortSignal.timeout(50)));
+      await assert.rejects(counter.read(AbortSignal.abort(new Error('already'))), /already/);
+      store.stallReads = false;
+      // A read that settles first: the deadline firing later rejects into nothing.
+      await counter.read(AbortSignal.timeout(30));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    assert.deepEqual(unhandled, []);
+  });
+
+  it('counts nothing and reports no levels with the view off', async () => {
+    const counter = new NoopTrafficCounter();
+    counter.record();
+    assert.equal(await counter.read(), null);
   });
 
   it('never throws from record, and logs a Redis outage once', async (t) => {
@@ -112,8 +154,15 @@ describe('RedisTrafficCounter', () => {
     await settle();
     assert.equal(warned.length, 1);
     store.failWrites = false;
+    const logged: unknown[] = [];
+    t.mock.method(
+      (counter as unknown as { logger: { log: (entry: unknown) => void } }).logger,
+      'log',
+      (entry: unknown) => logged.push(entry),
+    );
     counter.record('api');
     await settle();
+    assert.equal(logged.length, 1);
     store.failWrites = true;
     counter.record('api');
     await settle();
@@ -242,31 +291,27 @@ describe('traffic in the snapshot', () => {
     assert.equal(tunnel?.traffic, null);
   });
 
-  it('carries no traffic when the levels fail or stall, and still serves the snapshot', async () => {
+  it('carries no traffic when the levels fail, and still serves the snapshot', async () => {
     const failed = await snapshotWith({
       traffic: async () => {
         throw new Error('redis down');
       },
     });
     assert.equal(failed.api, null);
+    // A stalled read gives up at the refresh's deadline, as the Redis counter does.
     const started = Date.now();
     const stalled = await snapshotWith({
       timeoutMs: 100,
-      traffic: () => new Promise<TrafficLevels>(() => undefined),
+      traffic: (signal) =>
+        new Promise<TrafficLevels>((_resolve, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason)),
+        ),
     });
     assert.ok(Date.now() - started < 2_000);
     assert.equal(stalled.api, null);
-    // A deadline firing after a settled race must not leave an unhandled rejection behind.
-    const unhandled: unknown[] = [];
-    const onUnhandled = (reason: unknown) => unhandled.push(reason);
-    process.on('unhandledRejection', onUnhandled);
-    try {
-      await snapshotWith({ timeoutMs: 50, traffic: async () => levels });
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    } finally {
-      process.off('unhandledRejection', onUnhandled);
-    }
-    assert.deepEqual(unhandled, []);
+    // With the view's counter off there are no levels either.
+    const off = await snapshotWith({ traffic: async () => null });
+    assert.equal(off.api, null);
   });
 
   it('returns only buckets: no counts reach the snapshot', async () => {

@@ -147,10 +147,16 @@ describe('map model', () => {
     assert.equal(recentRelease(snapshotWith([]), NOW), false);
   });
 
-  it('pulses only with traffic data, at the busier end, and never into a down component', () => {
+  it('pulses only with traffic data, at the far end’s rate, and never into a down component', () => {
+    // Into the AI: the chat's rate, not the busier API's.
     assert.equal(
-      conduitTraffic(component({ traffic: 'low' }), component({ traffic: 'busy' })),
-      'busy',
+      conduitTraffic(component({ traffic: 'busy' }), component({ traffic: 'idle' })),
+      'idle',
+    );
+    // Into an unmeasured store: what leaves the API.
+    assert.equal(
+      conduitTraffic(component({ traffic: 'low' }), component({ traffic: null })),
+      'low',
     );
     assert.equal(conduitTraffic(component({ traffic: null }), component({ traffic: null })), null);
     assert.equal(

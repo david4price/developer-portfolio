@@ -381,20 +381,17 @@ export function recentRelease(snapshot: InfrastructureSnapshot, now: number): bo
 }
 
 /**
- * Pulse speed for a conduit: the busier end sets it. No traffic data means no pulse, because
- * nothing animates without a data source; a conduit to a down component carries none either.
+ * Pulse speed for a conduit: what arrives at its far end (`to`) when that is measured, so the
+ * line into the AI model runs at the chat's rate, not the whole API's; otherwise what leaves
+ * its near end. No traffic data means no pulse, because nothing animates without a data
+ * source; a conduit to a down component carries none either.
  */
 export function conduitTraffic(
   from: InfrastructureComponent,
   to: InfrastructureComponent,
 ): TrafficLevel | null {
   if (from.health === 'down' || to.health === 'down') return null;
-  const levels: readonly TrafficLevel[] = ['idle', 'low', 'busy'];
-  const known = [from.traffic, to.traffic].filter((level) => level !== null);
-  if (known.length === 0) return null;
-  return known.reduce((busiest, level) =>
-    levels.indexOf(level) > levels.indexOf(busiest) ? level : busiest,
-  );
+  return to.traffic ?? from.traffic;
 }
 
 export const SYNC_LABELS: Readonly<Record<InfrastructureSnapshot['sync'], string>> = {

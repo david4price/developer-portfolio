@@ -140,9 +140,9 @@ The public surface is a static site and a small REST API. The main risks:
     name, the runtime's address, and the reply itself are never returned or logged. The check
     sends no prompt, refuses redirects, and reads at most 64 KiB
   - a bucketed request rate for the API, its tunnel, and the AI model (`idle`, `low`, `busy`;
-    P6-04): Redis counters per source per minute, summed over 5 minutes. Never raw counts,
-    routes, or anything per client; health probes and the explorer's own polling aren't
-    counted
+    P6-04): Redis counters per source per minute, over a sliding 5-minute window. Never raw
+    counts, routes, or anything per client; health probes and the explorer's own polling
+    aren't counted
 - Results are cached for 12 s, concurrent requests share one read, and a failed read is not
   retried for 12 s; visitors never trigger live Kubernetes API calls directly. The endpoint is off
   unless `INFRASTRUCTURE_SOURCE=kubernetes`.

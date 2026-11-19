@@ -22,7 +22,7 @@ describe('RedisTrafficCounter', { skip: !redisUrl && 'REDIS_URL is not set' }, (
 
   after(async () => {
     const keys = ['api', 'ai'].flatMap((source) =>
-      Array.from({ length: TRAFFIC_WINDOW_MINUTES }, (_, i) => key(source, minute - i)),
+      Array.from({ length: TRAFFIC_WINDOW_MINUTES + 1 }, (_, i) => key(source, minute - i)),
     );
     await redis.del(...keys);
     redis.disconnect();
@@ -38,8 +38,9 @@ describe('RedisTrafficCounter', { skip: !redisUrl && 'REDIS_URL is not set' }, (
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     assert.equal(await redis.get(key('api', minute)), String(BUSY_EVENTS));
+    // EXPIRE NX: set once by the first increment, never pushed out by later ones.
     const ttl = await redis.ttl(key('api', minute));
-    assert.ok(ttl > 0 && ttl <= (TRAFFIC_WINDOW_MINUTES + 1) * 60, `unexpected TTL ${ttl}`);
-    assert.deepEqual(await counter.read(), { api: 'busy', ai: 'low' });
+    assert.ok(ttl > 0 && ttl <= (TRAFFIC_WINDOW_MINUTES + 2) * 60, `unexpected TTL ${ttl}`);
+    assert.deepEqual(await counter.read(AbortSignal.timeout(2_000)), { api: 'busy', ai: 'low' });
   });
 });

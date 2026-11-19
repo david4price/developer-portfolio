@@ -1,4 +1,4 @@
-import { Module, type NestInterceptor } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import type { Redis } from 'ioredis';
 import { API_CONFIG, type ApiConfig, type InfrastructureConfig } from '../../config/api-config.js';
@@ -14,6 +14,7 @@ import { KubernetesClusterReader } from './kubernetes-cluster.reader.js';
 import { ArgoCdApplicationReader } from './argocd-application.reader.js';
 import { REDIS } from '../../redis/redis.module.js';
 import {
+  NoopTrafficCounter,
   RedisTrafficCounter,
   TRAFFIC_COUNTER,
   type TrafficCounter,
@@ -27,7 +28,7 @@ import {
 export function createSnapshotSource(
   config: InfrastructureConfig,
   ai: AiProvider,
-  traffic: TrafficCounter | null = null,
+  traffic: TrafficCounter,
 ): SnapshotSource {
   if (!config.enabled) return new DisabledSnapshotSource();
   const reader = new KubernetesClusterReader({
@@ -38,7 +39,7 @@ export function createSnapshotSource(
   return new InfrastructureSnapshotService(reader, {
     namespace: config.namespace,
     ...(aiStatus === undefined ? {} : { aiStatus }),
-    ...(traffic === null ? {} : { traffic: () => traffic.read() }),
+    traffic: (signal: AbortSignal) => traffic.read(signal),
     ...(config.argocd === undefined
       ? {}
       : {
@@ -46,8 +47,6 @@ export function createSnapshotSource(
         }),
   });
 }
-
-const passThrough: NestInterceptor['intercept'] = (_context, next) => next.handle();
 
 /**
  * The Infrastructure Explorer's API (Phase 6). With `INFRASTRUCTURE_SOURCE=disabled` (the
@@ -60,20 +59,19 @@ const passThrough: NestInterceptor['intercept'] = (_context, next) => next.handl
       // Counting only runs while the view is on; with it off nothing is written to Redis.
       provide: TRAFFIC_COUNTER,
       inject: [API_CONFIG, REDIS],
-      useFactory: (config: ApiConfig, redis: Redis): TrafficCounter | null =>
-        config.infrastructure.enabled ? new RedisTrafficCounter(redis) : null,
+      useFactory: (config: ApiConfig, redis: Redis): TrafficCounter =>
+        config.infrastructure.enabled ? new RedisTrafficCounter(redis) : new NoopTrafficCounter(),
     },
     {
       provide: INFRASTRUCTURE_SNAPSHOTS,
       inject: [API_CONFIG, AI_PROVIDER, TRAFFIC_COUNTER],
-      useFactory: (config: ApiConfig, ai: AiProvider, traffic: TrafficCounter | null) =>
+      useFactory: (config: ApiConfig, ai: AiProvider, traffic: TrafficCounter) =>
         createSnapshotSource(config.infrastructure, ai, traffic),
     },
     {
       provide: APP_INTERCEPTOR,
       inject: [TRAFFIC_COUNTER],
-      useFactory: (traffic: TrafficCounter | null) =>
-        traffic === null ? { intercept: passThrough } : new TrafficInterceptor(traffic),
+      useFactory: (traffic: TrafficCounter) => new TrafficInterceptor(traffic),
     },
   ],
 })

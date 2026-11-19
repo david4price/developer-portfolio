@@ -55,8 +55,8 @@ export interface SnapshotServiceOptions {
   readonly aiStatus?: (signal: AbortSignal) => Promise<AiStatus>;
   /** The AI check's own deadline; `AI_STATUS_TIMEOUT_MS` by default. */
   readonly aiTimeoutMs?: number;
-  /** Bucketed request rates; without them no line carries sparks. */
-  readonly traffic?: () => Promise<TrafficLevels>;
+  /** Bucketed request rates; without them (or with `null`) no line carries sparks. */
+  readonly traffic?: (signal: AbortSignal) => Promise<TrafficLevels | null>;
 }
 
 /**
@@ -107,7 +107,7 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private inflight: Promise<InfrastructureSnapshot> | null = null;
   /** The last AI probe failure (reason and status), so an outage logs when it changes only. */
   private aiFailure: string | null = null;
-  /** Whether the last traffic read failed, so a Redis outage logs once. */
+  /** Whether the last traffic read failed, so a Redis outage logs once each way. */
   private trafficFailing = false;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
@@ -219,17 +219,15 @@ export class InfrastructureSnapshotService implements SnapshotSource {
     }
   }
 
-  /** Never fails the snapshot: without levels the lines simply carry no sparks. */
+  /**
+   * Never fails the snapshot: without levels the lines simply carry no sparks. A failure logs
+   * when it starts and when it ends.
+   */
   private async readTraffic(signal: AbortSignal): Promise<TrafficLevels | null> {
     if (this.options.traffic === undefined) return null;
-    let onAbort: (() => void) | undefined;
     try {
-      signal.throwIfAborted();
-      const aborted = new Promise<never>((_resolve, reject) => {
-        onAbort = () => reject(signal.reason);
-        signal.addEventListener('abort', onAbort, { once: true });
-      });
-      const levels = await Promise.race([this.options.traffic(), aborted]);
+      const levels = await this.options.traffic(signal);
+      if (this.trafficFailing) this.logger.log({ message: 'Traffic levels readable again' });
       this.trafficFailing = false;
       return levels;
     } catch (error) {
@@ -241,9 +239,6 @@ export class InfrastructureSnapshotService implements SnapshotSource {
       }
       this.trafficFailing = true;
       return null;
-    } finally {
-      // The race is settled: the deadline firing later must not reject into nothing.
-      if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
     }
   }
 
