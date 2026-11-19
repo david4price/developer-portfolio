@@ -47,28 +47,25 @@ export default function AboutPage() {
           {personal.photos !== undefined && personal.photos.length > 0 && (
             <>
               <h3 id="photos-heading">Photos</h3>
-              {/* Files are in public/photos: -sm for the gallery, -lg (full size) to open. */}
+              {/* Prints, no captions: files are in public/photos (-sm shown, -lg opened). */}
               <ul className="photo-grid" aria-labelledby="photos-heading">
                 {personal.photos.map((photo) => (
                   <li key={photo.file}>
-                    <figure className="photo">
-                      <a href={`/photos/${photo.file}-lg.webp`}>
-                        {/* A plain img on purpose: next/image adds an inline style, which this
-                            site's CSP (style-src 'self') blocks, and the files are already
-                            resized WebP (images are unoptimized in the static export). */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/photos/${photo.file}-sm.webp`}
-                          alt={photo.alt}
-                          width={photo.width}
-                          height={photo.height}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <span className="visually-hidden">(opens the full-size photo)</span>
-                      </a>
-                      <figcaption>{photo.title}</figcaption>
-                    </figure>
+                    <a className="photo-print" href={`/photos/${photo.file}-lg.webp`}>
+                      {/* A plain img on purpose: next/image adds an inline style, which this
+                          site's CSP (style-src 'self') blocks, and the files are already
+                          resized WebP (images are unoptimized in the static export). */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/photos/${photo.file}-sm.webp`}
+                        alt={photo.alt}
+                        width={photo.width}
+                        height={photo.height}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="visually-hidden">(opens the full-size photo)</span>
+                    </a>
                   </li>
                 ))}
               </ul>

@@ -175,8 +175,8 @@ one-shot jobs also use a read-only root filesystem.
 - Profile, About (including the optional "Beyond the code" interests, `personal`), and Experience:
   `packages/project-registry/src/profile-data.ts` (validated by the same schema checks as
   projects).
-- About's photos: list each in `personal.photos` (file name, title, alt text, and the large
-  file's width and height), and put two WebP files in `apps/web/public/photos/`:
+- About's photos: list each in `personal.photos` (file name, alt text, and the large file's
+  width and height; the site shows them as framed prints, without captions), and put two WebP files in `apps/web/public/photos/`:
   - `<file>-sm.webp`, at most 900 px on the long edge, shown in the gallery;
   - `<file>-lg.webp`, at most 1,800 px, opened on click.
 

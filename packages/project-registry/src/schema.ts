@@ -106,8 +106,7 @@ export const photoSchema = z.object({
     .string()
     .max(40)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'must be a lowercase, hyphenated file name'),
-  title: content(60),
-  /** What the image shows, for screen readers. */
+  /** What the image shows, for screen readers (the site shows no captions). */
   alt: content(200),
   width: z.number().int().min(1).max(4_000),
   height: z.number().int().min(1).max(4_000),

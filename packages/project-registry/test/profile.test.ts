@@ -133,7 +133,6 @@ describe('createProfile', () => {
     };
     const photo = {
       file: 'kyoto-tower',
-      title: 'Kyoto Tower',
       alt: 'A tower.',
       width: 1200,
       height: 1800,

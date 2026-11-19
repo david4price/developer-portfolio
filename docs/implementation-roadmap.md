@@ -14,8 +14,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- About photos (`feat/about-photos`): eight of the owner's photos in a gallery under "Beyond the
-  code", from Tokyo, Kyoto, Cape Town, the Alps, and the night sky. Metadata is stripped, colour
+- About photos (`feat/about-photos`): eight of the owner's photos as white-framed prints, no
+  captions, under "Beyond the code", from Tokyo, Kyoto, Cape Town, the Alps, and the night sky. Metadata is stripped, colour
   is converted to sRGB, and each comes as 900 px and 1,800 px WebP; a test enforces all three.
 - **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
   - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
