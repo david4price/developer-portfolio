@@ -299,10 +299,11 @@ export const NARROW_LAYOUT: MapLayout = {
       { x: 290, y: 690 },
       { x: 290, y: 770 },
     ],
+    // Down the right margin, midway between the buildings (edge at 391) and the frame (440).
     'worker-postgres': [
       { x: 325, y: 590 },
-      { x: 434, y: 590 },
-      { x: 434, y: 950 },
+      { x: 416, y: 590 },
+      { x: 416, y: 950 },
       { x: 325, y: 950 },
     ],
   },
