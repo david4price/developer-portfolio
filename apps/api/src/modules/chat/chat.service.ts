@@ -294,7 +294,9 @@ export class ChatService {
       return [...links];
     }
     const source = this.knowledge.sourceFor(query, RETRIEVAL_LIMIT, reply);
-    return source === undefined ? [...links] : [...links, source];
+    // The reply may already link that page by its marker: links stay de-duplicated.
+    const known = links.some((link) => link.kind === source?.kind && link.slug === source.slug);
+    return source === undefined || known ? [...links] : [...links, source];
   }
 
   /**

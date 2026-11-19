@@ -154,28 +154,35 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
      - **Labels:** the text is the owner's first person, and the model speaks as their dog, so
        it's labelled "In <first name>'s words ("I" and "my" mean <first name>, not you)".
        Experience highlights are labelled as highlights.
-     - **Search-only words:** profile entries alone match a few extra words ("job", "employer",
-       "hobbies", "weekends"). A question such as "where does David work?" is left with just
-       the name once stop words go, and these words, plus the entries' order (summary, roles,
-       About, interests), still bring the right part.
+     - **Only for questions about a person:** profile entries compete only when the question
+       names the owner, says "who", uses a pronoun ("he", "his", "she"), says "the developer",
+       or names a clearly personal topic ("hobbies", "weekend", "employer", "career"). Otherwise
+       questions about the site get exactly what they got without the profile; a test checks
+       this with the shipped content.
+     - **Search-only words:** profile entries also match a few extra words ("company", "role",
+       "hobbies", "weekends"). A question such as "where does David work?" is left with just the
+       name once stop words go, and these words, plus the entries' order (summary, roles, About,
+       interests), still bring the right part.
      - **Word forms:** "-ing" interest names also match their plain form ("surf", "bike",
        "run").
-     - **Ranking:** profile entries come after projects and notes, so questions about the site
-       still get those.
      - **Fallback link:** as with notes, a reply that clearly drew on a profile entry links its
-       page even without the marker.
+       page even without the marker. The reply is compared with the part of the entry the model
+       saw, since long entries are cut to fit, and a page the reply already links isn't added
+       twice.
      - **Rules:** the fixed rules allow answers about the owner's interests. The voice rules
-       keep their salary, availability, location, and anything else private beyond the data
-       out of answers.
+       keep their salary, availability, location, and anything else private beyond the data out
+       of answers.
      - **Known limits** with the reference 4B model: asked about the dog, it may repeat the
        owner's "my" instead of speaking as the dog. Short answers may come without a page link.
-       A vector database
-       is added only if measured answer quality requires one (P5-10, P5-11).
+
+   A vector database is added only if measured answer quality requires one (P5-10, P5-11).
+
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
    voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice
    (Confirmed in code) speaks as the developer's dog, named by `CHAT_ASSISTANT_NAME`: warm,
    facts first, at most one small dog remark per reply, no roleplay actions, no humor that
-   changes a fact or link, kind to visitors, no personal topics about the developer, and a plain
+   changes a fact or link, kind to visitors, nothing private about the developer beyond the
+   portfolio data (P5-13), and a plain
    admission of being an AI when asked. The portfolio is the developer's ("my human"), never the
    dog's. Replies are in English only: the reference model mirrors the visitor's language despite
    the voice rules (and its Hebrew is poor), so a short reminder follows the visitor's question in

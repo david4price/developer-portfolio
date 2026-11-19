@@ -251,7 +251,7 @@ describe('architecture notes', () => {
   });
 
   it('answer deployment and CI questions with the release note', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     for (const question of ['How is this site deployed?', 'Which GitHub Actions run?']) {
       const retrieved = shipped.search(question, 3);
       assert.ok(
@@ -268,7 +268,7 @@ describe('architecture notes', () => {
   });
 
   it('find notes by the word forms visitors use', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     const firstNote: readonly [string, string][] = [
       ['Where is it hosted?', 'static-site'],
       ['How is it installed?', 'local-development'],
@@ -292,7 +292,7 @@ describe('architecture notes', () => {
   });
 
   it('ship whole: no shipped note is cut to fit its snippet', () => {
-    const shipped = new RegistryKnowledgeBase(registry, docNotes);
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
     for (const note of docNotes.notes) {
       const marker = `[[doc:${note.slug}]]`;
       const snippet = shipped.search(note.title, 20).find((text) => text.endsWith(marker));
@@ -375,7 +375,7 @@ describe('profile entries (P5-13)', () => {
       summary ?? '',
       /\nIn Alex's words \("I" and "my" mean Alex, not you\): I write APIs and dashboards for logistics companies\.\nPage: \[\[page:about\]\]$/,
     );
-    for (const query of ['Alex', 'hobbies', 'job', 'surf']) {
+    for (const query of ['Alex', 'his hobbies', 'his employer', 'does he surf']) {
       for (const snippet of withProfile.search(query, 10)) {
         assert.ok(snippet.length <= SNIPPET_MAX_CHARS);
       }
@@ -393,7 +393,10 @@ describe('profile entries (P5-13)', () => {
         ],
       },
     });
-    const [snippet] = new RegistryKnowledgeBase(testRegistry, testDocNotes, long).search('surf', 1);
+    const [snippet] = new RegistryKnowledgeBase(testRegistry, testDocNotes, long).search(
+      'Does he surf?',
+      1,
+    );
     assert.ok((snippet ?? '').length <= SNIPPET_MAX_CHARS);
     assert.match(snippet ?? '', /…\nPage: \[\[page:about\]\]$/);
   });
@@ -434,6 +437,58 @@ describe('profile entries (P5-13)', () => {
         ['page', 'experience', '/experience/'],
         ['page', 'about', '/about/'],
       ],
+    );
+  });
+
+  it('compete only when a question is about a person, so site questions keep their answers', () => {
+    // "role", "company", "background", "stack", and "time" are profile search words too.
+    for (const question of [
+      'What role does the API play?',
+      'Which company hosts it?',
+      'What runs in the background?',
+      'What is the tech stack?',
+      'What is the background job queue?',
+    ]) {
+      assert.deepEqual(withProfile.search(question, 3), knowledge.search(question, 3), question);
+    }
+    assert.ok(headers('Who is the developer?', 1)[0]?.startsWith('Page: [[page:about]]'));
+    assert.ok(headers('What does she like?', 1)[0]?.startsWith('Page: [[page:about]]'));
+  });
+
+  it('leave the shipped site questions exactly as they were without a profile', () => {
+    const shipped = new RegistryKnowledgeBase(registry, docNotes, profile);
+    const siteOnly = new RegistryKnowledgeBase(registry, docNotes);
+    for (const question of [
+      'What role does Redis play?',
+      'What is the background job queue?',
+      'Which projects are free to use?',
+      'Is there a personal project?',
+      'What company built this?',
+      'What is this site built with?',
+      'How is this site deployed?',
+      'What is the tech stack?',
+    ]) {
+      assert.deepEqual(shipped.search(question, 3), siteOnly.search(question, 3), question);
+    }
+  });
+
+  it('compare replies with only the prose the model saw, so long entries still link', () => {
+    const highlights = Array.from(
+      { length: 8 },
+      (_, i) => `Shipped feature number ${i} ${'x'.repeat(200)}.`,
+    );
+    const long = createProfile({
+      ...owner,
+      experience: [{ role: 'Engineer', organization: 'Big Co', period: '2020', highlights }],
+    });
+    const base = new RegistryKnowledgeBase(testRegistry, testDocNotes, long);
+    const [snippet] = base.search('Where does Alex work at Big Co?', 1);
+    assert.ok(snippet?.includes('Big Co'));
+    // A reply repeating the visible start of the highlights links Experience.
+    assert.equal(
+      base.sourceFor('Where does Alex work at Big Co?', 1, `${highlights[0]} ${highlights[1]}`)
+        ?.slug,
+      'experience',
     );
   });
 

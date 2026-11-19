@@ -16,7 +16,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 - **P5-13 done** (`feat/p5-13-profile-knowledge`): the chat answers about the owner.
   - **Indexed:** the profile's intro, roles, About, and interests, linked to About or
-    Experience through a new `page` link kind that the web rebuilds from its own list.
+    Experience through a new `page` link kind that the web rebuilds from its own list. They
+    compete only on questions about a person, so site questions are answered as before.
   - **Prompt:** the fixed rules allow answers about the owner's interests; the voice rules keep
     anything private beyond the data out of answers.
   - **Checked against the reference model:** work, hobby, and surfing questions answered
@@ -517,12 +518,18 @@ Read-only inventory of the reference host. Findings:
       retrieve the About or Experience content and link to that page; the profile passes the same
       control-markup and hidden-text checks as projects (already enforced by its schema);
       grounding tests cover it.
-      Done 2026-11-19: - **Entries and links:** profile entries in `RegistryKnowledgeBase` link through a new
-      `page` link kind (`SITE_PAGES`: About, Experience), and the web rebuilds the links
-      itself. - **Tests:** grounding tests cover work, hobby, weekend, and "-ing" questions, the closing
-      page line, the fallback link, and page markers. The worst-case prompt still fits
-      history. - **Reference model:** answered correctly. Known limit: about Scar it may repeat the
-      owner's "my", and short answers can lack a link.
+      Done 2026-11-19:
+
+      - **Entries and links:** profile entries in `RegistryKnowledgeBase` link through a new
+        `page` link kind (`SITE_PAGES`: About, Experience), and the web rebuilds the links
+        itself.
+      - **Scope:** profile entries compete only on questions about a person, so site questions
+        get the same answers as without the profile (tested with the shipped content).
+      - **Tests:** grounding tests cover work, hobby, weekend, and "-ing" questions, the closing
+        page line, the fallback link (no duplicates), and page markers. The worst-case prompt
+        still fits history.
+      - **Reference model:** answered correctly. Known limit: about Scar it may repeat the
+        owner's "my", and short answers can lack a link.
 
 ## Phase 6: Infrastructure Explorer (4/5)
 
@@ -606,5 +613,9 @@ Read-only inventory of the reference host. Findings:
       Done 2026-11-19. Review found the first version dropped `exec` and Secret reads (both
       arrive as `get`); the revised policy and the `config.yaml.d` drop-in are applied. Verified:
       node, workloads, and Argo CD healthy; no audit errors; `None` counting routine traffic.
-      Each of these was logged with its user and source: - a test `kubectl exec` (as `get` on `pods/exec`, response `101`); - a Secret `get`; - a server-side dry-run `create`, which is never saved.
-      Retention is set to 30 days in the drop-in; it can only be observed over time.
+      Retention is set to 30 days in the drop-in; it can only be observed over time. Each of
+      these was logged with its user and source:
+
+      - a test `kubectl exec` (as `get` on `pods/exec`, response `101`);
+      - a Secret `get`;
+      - a server-side dry-run `create`, which is never saved.

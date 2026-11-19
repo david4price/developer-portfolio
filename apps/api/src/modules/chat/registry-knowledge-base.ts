@@ -47,6 +47,9 @@ export function searchTerms(text: string): string[] {
     .filter((word) => !STOP_WORDS.has(word));
 }
 
+/** Every lowercase word of `text`, stop words included. */
+const rawWords = (text: string) => text.toLowerCase().match(/[a-z]+/g) ?? [];
+
 interface Field {
   readonly weight: number;
   readonly terms: ReadonlySet<string>;
@@ -62,6 +65,8 @@ interface Entry {
    * drew on it.
    */
   readonly noteTerms?: ReadonlySet<string>;
+  /** A profile entry: it competes only when the question is about the owner (`aboutOwner`). */
+  readonly profile?: true;
 }
 
 const field = (weight: number, ...texts: string[]): Field => ({
@@ -209,6 +214,20 @@ function interestWordForms(name: string): string {
     .join(' ');
 }
 
+/**
+ * Words that make a question about a person, read from the raw question since most are stop
+ * words: "who", pronouns, "the developer", and clearly personal topics (not "job", which is also
+ * a queue's). The owner's name counts too.
+ * Without one, profile entries don't compete, so their search-only words ("role", "company",
+ * "stack") can't push site answers aside ("What role does Redis play?").
+ */
+const PERSON_WORDS = new Set(
+  (
+    'who whose he him his himself she her hers herself developer owner author creator hobby ' +
+    'hobbies weekend weekends employer career bio resume cv'
+  ).split(' '),
+);
+
 const pageLink = (page: SitePage): ChatLink => ({
   kind: 'page',
   slug: page.slug,
@@ -240,15 +259,23 @@ function profileEntries(profile: Profile): Entry[] {
     // it far more often than from the header; the prose's words let a reply that drew on it link
     // the page even without the marker (`sourceFor`).
     const closing = `\nPage: ${linkMarker('page', link.slug)}`;
+    const snippet = new SnippetBuilder(heading, closing.length)
+      .prose(label, text)
+      .close('Page', linkMarker('page', link.slug))
+      .toString();
+    // Compared with replies: only the prose the model saw, which a long entry cuts short.
+    const shown = snippet
+      .split('\n')
+      .slice(1, -1)
+      .join(' ')
+      .slice(label.length + 2);
     return {
       link,
       fields,
-      snippet: new SnippetBuilder(heading, closing.length)
-        .prose(label, text)
-        .close('Page', linkMarker('page', link.slug))
-        .toString(),
+      snippet,
       featured: false,
-      noteTerms: new Set(searchTerms(text)),
+      noteTerms: new Set(searchTerms(shown)),
+      profile: true,
     };
   };
   const personal = profile.personal;
@@ -330,6 +357,8 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
   /** Links by name key, per kind and across kinds (projects, then mini-apps, then docs). */
   private readonly byKind: ReadonlyMap<string, ChatLink>;
   private readonly byName: ReadonlyMap<string, ChatLink>;
+  /** The owner's name, as words that make a question about them. */
+  private readonly ownerWords: ReadonlySet<string>;
   /** Inverse document frequency per term, computed once: the content never changes at runtime. */
   private readonly rarity: ReadonlyMap<string, number>;
 
@@ -388,6 +417,7 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
     }
     this.byKind = byKind;
     this.byName = byName;
+    this.ownerWords = new Set(profile === undefined ? [] : rawWords(profile.name));
 
     // A term found in every entry says little about any one of them.
     const containing = new Map<string, number>();
@@ -426,8 +456,15 @@ export class RegistryKnowledgeBase implements KnowledgeBase {
   private retrieve(query: string, limit: number): readonly Entry[] {
     if (limit <= 0) return [];
     const queryTerms = new Set(searchTerms(query));
+    const aboutOwner = rawWords(query).some(
+      (word) => PERSON_WORDS.has(word) || this.ownerWords.has(word),
+    );
     const scored = this.entries
-      .map((entry, index) => ({ entry, index, score: this.score(entry, queryTerms) }))
+      .map((entry, index) => ({
+        entry,
+        index,
+        score: entry.profile === true && !aboutOwner ? 0 : this.score(entry, queryTerms),
+      }))
       .filter(({ score }) => score > 0)
       // Best first; registry order breaks ties so results are deterministic.
       .sort((a, b) => b.score - a.score || a.index - b.index);
