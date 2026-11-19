@@ -16,8 +16,10 @@ chat) next, then retrieval measurement (P5-10) once there are more projects.
 
 - **P2-12 done** (`feat/p2-12-profile`): the owner's own profile replaces every placeholder on the
   home page, About, and Experience: a backend developer in aviation software, with two roles at
-  one employer. Drafted by the owner's own agent, with private details left out. The chat
-  doesn't index it yet (P5-13).
+  one employer. About also gains "Beyond the code": eight interests (mountain biking, surfing,
+  endurance sports, photography, guitar, side projects, coffee, films and games), with room for
+  a photo gallery later. Drafted by the owner's own agent, with private details left out. The
+  chat doesn't index it yet (P5-13).
 - **P7-06 done** (2026-11-19): K3s API audit logging is on, at Metadata level, for 30 days.
   - Recorded: writes, `exec`, `attach`, `port-forward`, and Secret reads.
   - Verified on the host: a test `exec`, a Secret read, and a server-side dry-run write each
@@ -309,7 +311,9 @@ Read-only inventory of the reference host. Findings:
       shared registry package with schema checks (2026-11-17); only the text remains.
       Done 2026-11-19: the owner's profile (drafted by the owner's own agent with private details
       left out) is in `profile-data.ts`. The static export has no placeholder text, and the new
-      content shows on the home page, About, and Experience.
+      content shows on the home page, About, and Experience. About also has an optional
+      "Beyond the code" section (`personal`: an intro and 2–8 interests, same content checks);
+      photos come later.
 - [x] **P2-13** 🔒 Run the full stack once. _Needs:_ P2-09. _Done when:_ `compose.full.yaml` up and
       the site works against the API. Verified 2026-11-11 over HTTP (routes, API, CORS, CSP, worker
       job, outage recovery); browser rendering not yet checked.
@@ -503,8 +507,8 @@ Read-only inventory of the reference host. Findings:
       longer reaches the runtime; the host, the API pod, and the private assistant still do; the
       worker pod is refused; Docker, K3s, Tailscale, and the K3s guard are unaffected.
 - [ ] **P5-13** Index the owner's profile in the chat's knowledge base. _Needs:_ P2-12, P5-03.
-      _Done when:_ questions about the owner's role, employer, experience, or stack retrieve the
-      About or Experience content and link to that page; the profile passes the same control-markup
+      _Done when:_ questions about the owner's role, employer, experience, stack, or interests
+      retrieve the About or Experience content and link to that page; the profile passes the same control-markup
       and hidden-text checks as projects (already enforced by its schema); grounding tests cover
       it.
 

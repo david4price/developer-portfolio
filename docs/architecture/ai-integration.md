@@ -145,9 +145,9 @@ remain **Proposed** (P5-04); see the [setup guide](../deployment/turnstile.md).
    never the screening internals or private details), each with a `source`: a file or folder in
    this repository. They pass the same control-markup and hidden-text checks as projects, a test
    checks that every source exists, and their text is capped at 400 characters so a note always
-   reaches the prompt whole. The profile (home page, About, Experience) is in
-   `@portfolio/project-registry` under the same content checks; indexing it is **Proposed** and
-   waits for the real text (P2-12), so the assistant never repeats placeholders. A vector database
+   reaches the prompt whole. The profile (home page, About with its interests, Experience) is in
+   `@portfolio/project-registry` under the same content checks. Its real text is in (P2-12);
+   indexing it for the assistant is **Proposed** (P5-13). A vector database
    is added only if measured answer quality requires one (P5-10, P5-11).
 4. **Prompt (Confirmed, P5-05):** one system message holding the fixed rules, the assistant's
    voice, and the retrieved snippets inside `<portfolio_data>…</portfolio_data>`. The voice

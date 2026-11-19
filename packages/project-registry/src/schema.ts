@@ -90,6 +90,18 @@ export const experienceEntrySchema = z.object({
   highlights: z.array(content(300)).min(1).max(8),
 });
 
+/** One interest in the About page's personal section. */
+export const interestSchema = z.object({
+  name: content(40),
+  description: content(600),
+});
+
+/** The personal side of About: a short introduction and the owner's interests. */
+export const personalSchema = z.object({
+  intro: content(500),
+  interests: z.array(interestSchema).min(2).max(8),
+});
+
 export const profileLinkSchema = z.object({
   label: content(40),
   href: httpsUrl,
@@ -112,6 +124,8 @@ export const profileSchema = z
     about: z.array(content(1_200)).min(1).max(6),
     links: z.array(profileLinkSchema).max(10),
     experience: z.array(experienceEntrySchema).max(20),
+    /** Optional, so a fork can leave the personal section out. */
+    personal: personalSchema.optional(),
   })
   .superRefine((profile, context) => {
     // The site keys these lists by their text, so each entry must be unique.
@@ -129,6 +143,9 @@ export const profileSchema = z
       if (seen.has(key))
         issue(`duplicate experience entry: ${entry.organization} (${entry.period})`);
       seen.add(key);
+    }
+    for (const duplicate of duplicates(profile.personal?.interests.map(({ name }) => name) ?? [])) {
+      issue(`duplicate interest: ${duplicate}`);
     }
     for (const entry of profile.experience) {
       for (const duplicate of duplicates(entry.highlights)) {
