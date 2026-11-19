@@ -1,5 +1,11 @@
 import { Module } from '@nestjs/common';
-import { API_CONFIG, type ApiConfig, type InfrastructureConfig } from '../../config/api-config.js';
+import {
+  API_CONFIG,
+  type AiConfig,
+  type ApiConfig,
+  type InfrastructureConfig,
+} from '../../config/api-config.js';
+import { type AiStatusReader, ModelListStatusReader } from './ai-status.reader.js';
 import { InfrastructureController } from './infrastructure.controller.js';
 import {
   DisabledSnapshotSource,
@@ -10,15 +16,26 @@ import {
 import { KubernetesClusterReader } from './kubernetes-cluster.reader.js';
 import { ArgoCdApplicationReader } from './argocd-application.reader.js';
 
+/** The model runtime's probe, for the adapters that have a model list; otherwise none. */
+export function createAiStatusReader(ai: AiConfig): AiStatusReader | undefined {
+  if (!ai.enabled || ai.provider !== 'openai-compatible' || ai.baseUrl === null) return undefined;
+  return new ModelListStatusReader({ baseUrl: ai.baseUrl, model: ai.model });
+}
+
 /** The configured snapshot source; with the view off, one that reads nothing. */
-export function createSnapshotSource(config: InfrastructureConfig): SnapshotSource {
+export function createSnapshotSource(
+  config: InfrastructureConfig,
+  ai: AiConfig = { enabled: false },
+): SnapshotSource {
   if (!config.enabled) return new DisabledSnapshotSource();
   const reader = new KubernetesClusterReader({
     apiServerUrl: config.apiServerUrl,
     namespace: config.namespace,
   });
+  const aiStatusReader = createAiStatusReader(ai);
   return new InfrastructureSnapshotService(reader, {
     namespace: config.namespace,
+    ...(aiStatusReader === undefined ? {} : { aiStatusReader }),
     ...(config.argocd === undefined
       ? {}
       : {
@@ -37,7 +54,7 @@ export function createSnapshotSource(config: InfrastructureConfig): SnapshotSour
     {
       provide: INFRASTRUCTURE_SNAPSHOTS,
       inject: [API_CONFIG],
-      useFactory: (config: ApiConfig) => createSnapshotSource(config.infrastructure),
+      useFactory: (config: ApiConfig) => createSnapshotSource(config.infrastructure, config.ai),
     },
   ],
 })

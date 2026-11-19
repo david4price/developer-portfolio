@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-18_
+_Last updated: 2026-11-19_
 
 **Current phase:** 6 (Infrastructure Explorer). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -12,6 +12,9 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Recently done**
 
+- P6-04 AI probe (code, `feat/p6-04-richer-data`): the AI building shows the model runtime's real
+  state from its model list, with no model name or address in the response.
+- P6-04 live view merged and deployed (PR #55, 2026-11-18).
 - P6-04 live view (code): the Infrastructure Explorer reads the real cluster every 12 s, with a
   "Live data" switch for the simulation; every state other than fresh data powers the map down.
 - P6-01 live and validated (2026-11-18): read-only workload access in `portfolio`; secrets,
@@ -205,10 +208,11 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 
 **Next up, in order**
 
-1. **P6-04:** merge the live explorer, then the offline drill on production (the map must say
-   "unavailable", never "healthy"). Then the explorer's richer data: release commits instead of
-   image digests, the AI model's real state, request-rate buckets for sparks (a Redis counter,
-   ahead of P7-01), and a warning before the Argo CD token expires (due 2027-02-16).
+1. **P6-04:** the offline drill on production (the map must say "unavailable", never
+   "healthy"; it briefly stops the API, so it needs approval). The AI model's real state is
+   built; the rest of the richer data follows: release commits instead of image digests,
+   request-rate buckets for sparks (a Redis counter, ahead of P7-01), and a warning before the
+   Argo CD token expires (due 2027-02-16).
 2. Owner content: P2-12's text and more projects; then **P5-10**, and **P5-11** only if P5-10
    shows keyword search missing paraphrased questions.
 
@@ -216,7 +220,7 @@ Phase 2 lacks only the owner's content (P2-12); Phase 5's remaining retrieval wo
 replace the placeholders in `packages/project-registry/src/profile-data.ts` and index the profile in
 the chat's `KnowledgeBase` alongside projects.
 
-**Branch in progress:** `feat/p6-04-live-explorer` (P6-04 live view and simulation switch).
+**Branch in progress:** `feat/p6-04-richer-data` (P6-04 richer data: the AI probe first).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -524,7 +528,10 @@ Read-only inventory of the reference host. Findings:
       "Live data" switch turns it off for the simulation's scenarios (the only view on builds
       without an API). The website building is filled in by the visitor's own page load. Both
       mini-apps are `available` in the registry, and the page no longer hard-codes badge text.
-      Still open: the offline drill on production after the merge.
+      Merged and deployed (PR #55). The AI building now shows the runtime's real state from
+      `GET /models` (healthy, degraded, or down; never the model's name).
+      Still open: the offline drill on production, then release commits, sparks, and the
+      Argo CD token-expiry warning.
 
 ## Phase 7: Hardening (0/5)
 

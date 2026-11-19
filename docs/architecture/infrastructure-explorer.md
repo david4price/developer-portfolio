@@ -127,7 +127,15 @@ the switch disabled and opens on the simulation.
 - The API side exists (P6-02): `GET /api/v1/infrastructure` returns this snapshot from the
   allowlist serializer, cached for 12 s, and is off until `INFRASTRUCTURE_SOURCE=kubernetes`. From
   the cluster it fills health, replicas, image version, and failure for the tunnel, API, worker,
-  PostgreSQL, and Redis; the website and AI model stay "unknown".
+  PostgreSQL, and Redis. The website stays "unknown" on the API (the visitor's page fills it in).
+- **AI model (Confirmed in code, P6-04):** the model runs outside the cluster, so on each refresh
+  the API also asks the runtime for `GET <AI_BASE_URL>/models`, which lists what it can serve
+  without running the model (no GPU time, no prompt). Only the outcome reaches the snapshot:
+  the configured model listed → healthy; `429`/`503` → degraded; listed without it → down
+  (`not-ready`); no answer, an error status, a redirect, or a bad body → down (`unreachable`).
+  The model's name, the runtime's address, and its reply never leave the API. The probe shares
+  the snapshot's 12 s cache and 5 s deadline, and its failure never fails the snapshot. With AI
+  off (or a provider without a model list) there is no probe and the building stays unknown.
 - P6-03 adds an optional Argo CD reader (implemented; token and adapter live-tested, production
   activation pending this change's rollout): `sync` comes from the Application; `release` is its
   last successfully deployed GitOps revision and deployment time, not the API's source commit

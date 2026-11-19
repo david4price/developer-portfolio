@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
-import type { InfrastructureSnapshot } from '@portfolio/shared-types';
+import type { InfrastructureComponent, InfrastructureSnapshot } from '@portfolio/shared-types';
+import { type AiStatus, AiStatusError, type AiStatusReader } from './ai-status.reader.js';
 import { type ClusterReader, ClusterReadError } from './cluster-reader.js';
 import { serializeSnapshot } from './snapshot-serializer.js';
 import {
@@ -49,7 +50,19 @@ export interface SnapshotServiceOptions {
   readonly timeoutMs?: number;
   readonly now?: () => number;
   readonly deploymentReader?: DeploymentReader;
+  /** The model runtime, outside the cluster; without one the AI building stays unknown. */
+  readonly aiStatusReader?: AiStatusReader;
 }
+
+/** The AI building's state from the runtime's answer, or from not getting one. */
+const AI_STATE: Readonly<
+  Record<AiStatus | 'unreachable', Pick<InfrastructureComponent, 'health' | 'failure'>>
+> = {
+  ready: { health: 'healthy', failure: null },
+  busy: { health: 'degraded', failure: null },
+  missing: { health: 'down', failure: 'not-ready' },
+  unreachable: { health: 'down', failure: 'unreachable' },
+};
 
 /**
  * Serves the Infrastructure Explorer's snapshot. Visitors never reach the cluster directly: a
@@ -91,29 +104,27 @@ export class InfrastructureSnapshotService implements SnapshotSource {
   private async refresh(): Promise<InfrastructureSnapshot> {
     try {
       const signal = AbortSignal.timeout(this.timeoutMs);
-      const [objects, deployment] = await Promise.all([
+      const [objects, deployment, ai] = await Promise.all([
         this.reader.read(signal),
         this.readDeployment(signal),
+        this.readAi(signal),
       ]);
       const workloads = serializeSnapshot(objects, {
         namespace: this.options.namespace,
         now: new Date(this.now()),
       });
-      const snapshot =
-        deployment === null
-          ? workloads
-          : {
-              ...workloads,
-              ...deployment,
-              components: workloads.components.map((component) =>
-                component.id === 'argocd'
-                  ? {
-                      ...component,
-                      health: 'healthy' as const,
-                    }
-                  : component,
-              ),
-            };
+      const components = workloads.components.map((component) => {
+        if (component.id === 'argocd' && deployment !== null) {
+          return { ...component, health: 'healthy' as const };
+        }
+        if (component.id === 'ai' && ai !== null) return { ...component, ...AI_STATE[ai] };
+        return component;
+      });
+      const snapshot: InfrastructureSnapshot = {
+        ...workloads,
+        ...(deployment ?? {}),
+        components,
+      };
       this.cached = { snapshot, at: this.now() };
       this.failedAt = null;
       return snapshot;
@@ -138,6 +149,22 @@ export class InfrastructureSnapshotService implements SnapshotSource {
     return this.cached === null
       ? Promise.reject(new InfrastructureUnavailableError())
       : Promise.resolve(this.cached.snapshot);
+  }
+
+  /** Never fails the snapshot: an unreachable runtime is drawn as down, not hidden. */
+  private async readAi(signal: AbortSignal): Promise<AiStatus | 'unreachable' | null> {
+    if (this.options.aiStatusReader === undefined) return null;
+    try {
+      return await this.options.aiStatusReader.read(signal);
+    } catch (error) {
+      const failure = error instanceof AiStatusError ? error : null;
+      this.logger.warn({
+        message: 'AI runtime status refresh failed',
+        reason: failure?.reason ?? 'unexpected',
+        status: failure?.status ?? null,
+      });
+      return 'unreachable';
+    }
   }
 
   private async readDeployment(signal: AbortSignal): Promise<DeploymentStatus | null> {
