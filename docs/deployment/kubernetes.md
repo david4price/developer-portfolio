@@ -402,7 +402,9 @@ Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server 
 
 Each API pod serves Prometheus metrics on `api.metricsPort` (9464), bound to the pod's loopback.
 The port isn't in the Service, the tunnel, or any NetworkPolicy, so no other pod and no visitor
-can reach it (`pnpm helm:check` fails if a manifest exposes it). Operators read one pod at a time
+can reach it. The chart sets `API_METRICS_HOST=127.0.0.1` in the container's `env`, so a value in
+`envSecret` or `envConfigMap` is ignored, and `pnpm helm:check` fails if a render widens the host
+or exposes the port. Operators read one pod at a time
 over the private kubeconfig; no Prometheus runs in the cluster:
 
 ```bash

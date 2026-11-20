@@ -18,7 +18,9 @@ render() {
 
 # env_value <manifests> <name>: the value of a container environment variable in the render.
 env_value() {
-  grep -A1 -E "^ *- name: $2\$" <<<"$1" | awk '$1 == "value:" { gsub(/"/, "", $2); print $2 }'
+  # A missing variable prints nothing (and must not trip `set -e`), so the caller reports it.
+  { grep -A1 -E "^ *- name: $2\$" <<<"$1" || true; } |
+    awk '$1 == "value:" { gsub(/"/, "", $2); print $2 }'
 }
 
 # API metrics stay on the pod's loopback (P7-01): the chart pins API_METRICS_HOST to 127.0.0.1 in

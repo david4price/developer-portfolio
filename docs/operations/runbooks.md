@@ -99,8 +99,9 @@ unaffected.
 ## Inference Overload (Proposed, Phase 5)
 
 - Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. In the metrics,
-  `ai_queue_waiting` (requests queued right now) and `ai_capacity_rejections_total` rise (no free
-  slot), or
+  `ai_capacity_rejections_total` rises, `ai_queue_waiting` (requests acquiring a slot right now)
+  stays above zero, and the upper buckets of `ai_queue_wait_seconds` fill (long waits since the
+  pod started, still visible after a burst drains); or
   `ai_inference_duration_seconds_count` grows for `timeout`, `overloaded`, or `network` (the
   runtime itself is slow or down).
 - The AI path is isolated, so the rest of the API keeps working.
