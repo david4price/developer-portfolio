@@ -4,7 +4,7 @@ import { after, describe, it } from 'node:test';
 import { Global, Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ApiMetrics } from '../src/metrics/api-metrics.js';
-import { startMetricsServer } from '../src/metrics/metrics-server.js';
+import { closeMetricsServer, startMetricsServer } from '../src/metrics/metrics-server.js';
 import {
   type AiCompletion,
   AiOverloadedError,
@@ -108,9 +108,42 @@ describe('metrics server', () => {
         await other.body?.cancel();
       }
     } finally {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await closeMetricsServer(server);
     }
+  });
+
+  it('survives a server error after startup and closes idempotently', async () => {
+    const server = await startMetricsServer(new ApiMetrics(), { host: '127.0.0.1', port: 0 });
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    // With no listener, Node would throw this as an uncaught exception and stop the API.
+    server.emit('error', Object.assign(new Error('accept EMFILE'), { code: 'EMFILE' }));
+    assert.equal((await fetch(`${base}/metrics`)).status, 200);
+
+    await closeMetricsServer(server);
+    await closeMetricsServer(server);
+    assert.equal(server.listening, false);
+  });
+
+  it('fails to start, rather than hang, when its port is taken', async () => {
+    const first = await startMetricsServer(new ApiMetrics(), { host: '127.0.0.1', port: 0 });
+    const port = (first.address() as AddressInfo).port;
+    try {
+      await assert.rejects(
+        startMetricsServer(new ApiMetrics(), { host: '127.0.0.1', port }),
+        /EADDRINUSE/,
+      );
+    } finally {
+      await closeMetricsServer(first);
+    }
+  });
+});
+
+describe('client disconnects', () => {
+  it('are counted apart from errors', async () => {
+    const metrics = new ApiMetrics();
+    metrics.countClientDisconnect();
+    assert.equal(await sample(metrics, 'http_client_disconnects_total'), 1);
+    assert.doesNotMatch(await metrics.render(), /^api_errors_total\{/m);
   });
 });
 

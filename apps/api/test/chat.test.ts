@@ -38,6 +38,7 @@ import {
   type RateLimiter,
 } from '../src/modules/chat/limits.js';
 import { createProfile } from '@portfolio/project-registry';
+import { ApiMetrics } from '../src/metrics/api-metrics.js';
 import { createTestApp } from './support/test-app.js';
 import {
   CHALLENGE_REPLAY_STORE,
@@ -602,9 +603,17 @@ describe('chat sessions and messages', () => {
   it('treats a client disconnect as routine, not as a server error', async () => {
     const cookie = await startSession();
     ai.failWith = new ClientDisconnectedError();
+    const metrics = app.get(ApiMetrics);
+    const errorsBefore = await metrics.render();
     const response = await send(cookie, 'hi');
     assert.equal(response.statusCode, 499);
     assert.equal(response.body, '');
+    assert.match(await metrics.render(), /^http_client_disconnects_total 1$/m);
+    assert.equal(
+      (await metrics.render()).match(/^api_errors_total.*$/gm)?.join('\n'),
+      errorsBefore.match(/^api_errors_total.*$/gm)?.join('\n'),
+      'a disconnect is not counted as an error',
+    );
   });
 
   it('keeps sessions isolated: one visitor never sees another visitor’s history', async () => {

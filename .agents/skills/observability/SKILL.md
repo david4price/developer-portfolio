@@ -37,6 +37,7 @@ the roadmap calls for them.
   loopback and out of the Service, tunnel, and NetworkPolicies (`pnpm helm:check` enforces it).
 - What's measured: `http_request_duration_seconds` (method, route pattern, status class, from
   `configureApp()`), `api_errors_total` (code, from `ApiExceptionFilter`),
+  `http_client_disconnects_total` (abandoned requests, kept out of the error count),
   `readiness_dependency_up`, `ai_inference_duration_seconds` (outcome; `MeteredAiProvider`),
   `ai_queue_waiting`, `ai_queue_wait_seconds`, and `ai_capacity_rejections_total`
   (`MeteredAiConcurrencyLimiter`), plus process and Node.js runtime metrics.

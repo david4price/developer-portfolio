@@ -16,9 +16,6 @@ export type AiInferenceOutcome =
 /** Why a chat request got no AI slot: at once (queue full) or after waiting its turn. */
 export type AiCapacityRejection = 'immediate' | 'waited';
 
-/** An error response's code; a visitor who left before the answer is counted too. */
-export type ErrorLabel = ApiErrorCode | 'client_disconnected';
-
 /** Request durations run from a few milliseconds to a chat reply (AI wait plus generation). */
 const HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];
 const AI_BUCKETS = [0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 45, 60];
@@ -48,6 +45,12 @@ export class ApiMetrics {
     registers: [this.registry],
   });
 
+  private readonly disconnects = new Counter({
+    name: 'http_client_disconnects_total',
+    help: 'Requests the visitor abandoned before the answer (not errors; no response was sent).',
+    registers: [this.registry],
+  });
+
   private readonly readiness = new Gauge({
     name: 'readiness_dependency_up',
     help: '1 when the dependency passed its last readiness check, 0 when it failed.',
@@ -65,13 +68,13 @@ export class ApiMetrics {
 
   private readonly aiWaiting = new Gauge({
     name: 'ai_queue_waiting',
-    help: 'Chat requests in this pod waiting for an AI slot.',
+    help: 'Chat requests in this pod acquiring an AI slot (asking for one, or queued for one).',
     registers: [this.registry],
   });
 
   private readonly aiQueueWait = new Histogram({
     name: 'ai_queue_wait_seconds',
-    help: 'Time a chat request waited before it got an AI slot.',
+    help: 'Time from asking for an AI slot to getting it; near zero when a slot was free.',
     buckets: QUEUE_WAIT_BUCKETS,
     registers: [this.registry],
   });
@@ -95,8 +98,12 @@ export class ApiMetrics {
     );
   }
 
-  countError(code: ErrorLabel): void {
+  countError(code: ApiErrorCode): void {
     this.errors.inc({ code });
+  }
+
+  countClientDisconnect(): void {
+    this.disconnects.inc();
   }
 
   setReadiness(checks: Readonly<Record<string, DependencyState>>): void {

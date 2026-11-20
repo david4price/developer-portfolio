@@ -10,7 +10,8 @@ paths:
   `configureApp()` (`apps/api/src/app.setup.ts`). Tests must go through it.
 - Depend on ports, not implementations: an interface plus a `Symbol` injection token, wired with a
   factory provider (see `projects.repository.ts`, `ai-provider.ts`). Adapters for PostgreSQL,
-  Redis, BullMQ, and AI providers stay behind those tokens.
+  Redis, BullMQ, and AI providers stay behind those tokens. `ApiMetrics` is injected as a class:
+  it is an in-memory registry with no I/O, and tests use the real one.
 - Keep DI-injected classes as value imports; `consistent-type-imports` is disabled here on purpose.
 - Configuration is parsed once by `loadApiConfig()` / `loadWorkerConfig()` using
   `@portfolio/config` helpers. New variables: add to the schema, `.env.example`, and
@@ -19,7 +20,9 @@ paths:
   `ZodValidationPipe`; jobs parse `job.data` before use.
 - Errors: throw `ApiException(status, code, message)`. Add new codes to `ApiErrorCode` in
   `@portfolio/shared-types`. Never return stack traces, SQL, or upstream messages to clients.
-- Routes live under `/api/v1` (global prefix). No admin, debug, or proxy endpoints.
+- Routes live under `/api/v1` (global prefix). No admin, debug, or proxy endpoints. The one
+  exception is `GET /metrics` (P7-01), served by `startMetricsServer()` on its own port (loopback
+  by default) and never routed publicly.
 - Liveness (`/health`) never touches dependencies. A new required dependency exports a
   `ReadinessCheck` token and is added to `HealthModule.forChecks([...])`.
 - Migrations run only via `pnpm db:migrate`, never at startup. Use the `db-migration` skill.

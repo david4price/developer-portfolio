@@ -46,7 +46,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     if (exception instanceof ClientDisconnectedError) {
       // Routine (a visitor closed the tab): not an error, and there's no one to answer.
       this.logger.debug({ message: 'Client disconnected', requestId: request.id });
-      this.metrics.countError('client_disconnected');
+      this.metrics.countClientDisconnect();
       void reply.status(CLIENT_CLOSED_REQUEST).send();
       return;
     }

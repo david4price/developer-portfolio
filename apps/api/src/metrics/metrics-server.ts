@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
+import { Logger } from '@nestjs/common';
 import type { ApiMetrics } from './api-metrics.js';
 
 export interface MetricsServerOptions {
@@ -38,5 +39,18 @@ export async function startMetricsServer(
   });
   server.listen(options.port, options.host);
   await once(server, 'listening');
+  // After startup, a server error (e.g. accept failing with EMFILE) is logged, never thrown: the
+  // metrics port must not be able to take the API down.
+  const logger = new Logger('MetricsServer');
+  server.on('error', (error) =>
+    logger.error({ message: 'metrics server error', error: error.message }),
+  );
   return server;
+}
+
+/** Stops listening and drops open connections. Safe to call more than once. */
+export async function closeMetricsServer(server: Server): Promise<void> {
+  if (!server.listening) return;
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
 }

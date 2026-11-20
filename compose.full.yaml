@@ -46,7 +46,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-log}
       API_HOST: 0.0.0.0
       API_PORT: '3001'
-      # Metrics on their own port (P7-01), published on the host's loopback only.
+      # Metrics on their own port (P7-01), published on the host's loopback only. Inside the
+      # Compose network other containers can reach api:9464; in Kubernetes it stays on loopback.
       API_METRICS_HOST: 0.0.0.0
       API_METRICS_PORT: '9464'
       DATABASE_URL: *database-url

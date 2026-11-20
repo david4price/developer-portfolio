@@ -16,6 +16,16 @@ render() {
   helm template portfolio "$chart" --namespace portfolio "$@"
 }
 
+# API metrics stay on the pod's loopback (P7-01): never bound wider (API_METRICS_HOST), and never a
+# port, containerPort, or targetPort of a container, Service, or NetworkPolicy.
+metrics_port="$(helm show values "$chart" | awk '$1 == "metricsPort:" { print $2 }')"
+[[ "$metrics_port" =~ ^[0-9]+$ ]] || { echo "FAIL: api.metricsPort not found in values" >&2; exit 1; }
+check_metrics_private() {
+  if grep -qiE "API_METRICS_HOST|port: \"?${metrics_port}\"?\$" <<<"$2"; then
+    fail "$1 exposes the API metrics port"
+  fi
+}
+
 for values in "$chart"/ci/*-values.yaml; do
   name="$(basename "$values")"
   echo "== $name"
@@ -28,12 +38,7 @@ for values in "$chart"/ci/*-values.yaml; do
   if grep -qE '^kind: Secret$' <<<"$manifests"; then
     fail "$name renders a Secret"
   fi
-
-  # API metrics stay on the pod's loopback (P7-01): never bound wider, and never a port of a
-  # container, Service, or NetworkPolicy (the default metricsPort is 9464).
-  if grep -qE 'API_METRICS_HOST|port: 9464$' <<<"$manifests"; then
-    fail "$name exposes the API metrics port"
-  fi
+  check_metrics_private "$name" "$manifests"
 done
 
 # Production values on top of CI placeholders; images.yaml exists after the first release.
@@ -44,7 +49,9 @@ if [[ -f "$production/images.yaml" ]]; then
   production_args+=(-f "$production/images.yaml")
 fi
 helm lint --strict "$chart" "${production_args[@]}"
-kubeconform -strict -summary -output text <<<"$(render "${production_args[@]}")"
+production_manifests="$(render "${production_args[@]}")"
+kubeconform -strict -summary -output text <<<"$production_manifests"
+check_metrics_private "environments/production" "$production_manifests"
 
 # expect_failure <expected error text> <render args…>: rendering must fail with that message.
 expect_failure() {

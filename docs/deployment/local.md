@@ -58,7 +58,8 @@ Prometheus text format (`API_METRICS_HOST` and `API_METRICS_PORT`; the port must
 `API_PORT`). The metrics port is never part of `/api/v1`: request durations by route pattern and
 status class, error responses by code, readiness per dependency, AI inference time by outcome, the
 AI wait queue, and process and Node.js runtime metrics. Nothing scrapes them by default; read them
-with `curl`.
+with `curl`. In `compose.full.yaml` the API binds them inside its container, so other containers on
+the Compose network can reach `api:9464` too; in Kubernetes they stay on the pod's loopback.
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
