@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { docNotes, profile, registry } from '@portfolio/project-registry';
 import type { Redis } from 'ioredis';
 import { API_CONFIG, type ApiConfig } from '../../config/api-config.js';
+import { ApiMetrics } from '../../metrics/api-metrics.js';
 import { REDIS } from '../../redis/redis.module.js';
 import { CHAT_SESSION_STORE } from './chat-session.store.js';
 import { ChatController } from './chat.controller.js';
@@ -10,6 +11,7 @@ import { ClassifierMessageGuard } from './classifier-message-guard.js';
 import { HeuristicMessageGuard } from './heuristic-message-guard.js';
 import { KNOWLEDGE_BASE } from './knowledge-base.js';
 import { AI_CONCURRENCY, RATE_LIMITER } from './limits.js';
+import { MeteredAiConcurrencyLimiter } from './metered-ai-concurrency.js';
 import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
 import { OnnxInjectionClassifier } from './onnx-injection-classifier.js';
 import { RedisChatSessionStore } from './redis-chat-session.store.js';
@@ -68,14 +70,17 @@ import {
     },
     {
       provide: AI_CONCURRENCY,
-      inject: [REDIS, API_CONFIG],
-      useFactory: (redis: Redis, config: ApiConfig) =>
-        new RedisAiConcurrencyLimiter(redis, {
-          limit: config.chat.maxConcurrency,
-          queueMax: config.chat.queueMax,
-          queueWaitMs: config.chat.queueWaitMs,
-          leaseMs: AI_LEASE_MS,
-        }),
+      inject: [REDIS, API_CONFIG, ApiMetrics],
+      useFactory: (redis: Redis, config: ApiConfig, metrics: ApiMetrics) =>
+        new MeteredAiConcurrencyLimiter(
+          new RedisAiConcurrencyLimiter(redis, {
+            limit: config.chat.maxConcurrency,
+            queueMax: config.chat.queueMax,
+            queueWaitMs: config.chat.queueWaitMs,
+            leaseMs: AI_LEASE_MS,
+          }),
+          metrics,
+        ),
     },
   ],
 })

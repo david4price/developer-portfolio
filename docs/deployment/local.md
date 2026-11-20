@@ -47,6 +47,13 @@ Useful endpoints:
 | `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                          |
 | `GET /api/v1/infrastructure` | Sanitized deployment snapshot; `503 infrastructure_disabled` by default |
 
+Metrics (P7-01) are served apart from the API, at `http://127.0.0.1:9464/metrics` in the
+Prometheus text format (`API_METRICS_HOST` and `API_METRICS_PORT`; the port must differ from
+`API_PORT`). The metrics port is never part of `/api/v1`: request durations by route pattern and
+status class, error responses by code, readiness per dependency, AI inference time by outcome, the
+AI wait queue, and process and Node.js runtime metrics. Nothing scrapes them by default; read them
+with `curl`.
+
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
 `?cursor=`; it is `null` on the last page. Cursors are opaque, and a malformed `limit` or `cursor`
@@ -163,6 +170,7 @@ seed, the API, the worker, and the static site served by unprivileged nginx.
 ```bash
 docker compose -f compose.full.yaml up -d --build
 # site: http://localhost:8080   api: http://localhost:3001/api/v1/health
+# metrics: http://127.0.0.1:9464/metrics (published on the host's loopback only)
 ```
 
 Containers run with dropped Linux capabilities and `no-new-privileges`. The API, worker, and
@@ -205,10 +213,10 @@ compatibility rules that keep image rollbacks safe.
 
 ## Troubleshooting
 
-| Symptom                                                 | Fix                                                                                           |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `Invalid environment: DATABASE_URL …` at startup        | Copy `.env.example` to `.env`; the message names every missing or invalid variable            |
-| Readiness shows `postgres: down`                        | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                             |
-| `required variable POSTGRES_DB is missing` from Compose | Run Compose from the repository root, where `.env` lives                                      |
-| Port already in use                                     | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, or `PORT` (web) in `.env`                   |
-| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version |
+| Symptom                                                 | Fix                                                                                             |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `Invalid environment: DATABASE_URL …` at startup        | Copy `.env.example` to `.env`; the message names every missing or invalid variable              |
+| Readiness shows `postgres: down`                        | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                               |
+| `required variable POSTGRES_DB is missing` from Compose | Run Compose from the repository root, where `.env` lives                                        |
+| Port already in use                                     | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, `API_METRICS_PORT`, or `PORT` (web) in `.env` |
+| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version   |

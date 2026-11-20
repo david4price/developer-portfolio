@@ -97,6 +97,8 @@ spec:
               value: 0.0.0.0
             - name: API_PORT
               value: {{ .port | quote }}
+            - name: API_METRICS_PORT
+              value: {{ .metricsPort | quote }}
             {{- include "portfolio.databaseEnv" $ | nindent 12 }}
             - name: REDIS_URL
               value: {{ include "portfolio.redisUrl" $ | quote }}

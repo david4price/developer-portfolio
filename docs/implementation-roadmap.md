@@ -4,16 +4,20 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-19_
+_Last updated: 2026-11-20_
 
-**Current phase:** 6 (Infrastructure Explorer; only P6-05's token rotation, due 2027-02-16, is
-left). Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
+**Current phase:** 7 (Hardening). Phase 6 has only P6-05's token rotation left, due 2027-02-16.
+Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
 Phase 2 is complete with the owner's profile (P2-12), and the chat answers about it (P5-13);
 Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **P7-01 done** (`feat/p7-01-metrics`): the API serves Prometheus metrics on a loopback-only
+  port (9464), read with `kubectl port-forward`: request latency and errors, readiness, AI
+  inference time, and the AI wait queue. Nothing scrapes them yet; P7-02's load tests will.
+- Minimal restyle and About photos merged and deployed (PR #64, 2026-11-19).
 - Minimal restyle (`feat/minimal-restyle`):
   - **Layout:** a sticky, translucent navbar that marks the current page; a footer that rests at
     the bottom of short pages; space restored above and below the content.
@@ -258,9 +262,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
+3. Phase 7 at any time: **P7-03** (clean-machine check), **P7-04** (cost review), and **P7-02**
+   (load tests, which read P7-01's metrics; needs approval).
 
-**Branch in progress:** `feat/minimal-restyle`, on top of `feat/about-photos` (photos on About,
-then the restyle).
+**Branch in progress:** `feat/p7-01-metrics` (P7-01), not yet pushed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -608,10 +613,19 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (1/6)
+## Phase 7: Hardening (2/6)
 
-- [ ] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
+- [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
+      Done 2026-11-20 (`feat/p7-01-metrics`): the API serves `GET /metrics` on its own port
+      (9464), on the pod's loopback, outside the Service, tunnel, and NetworkPolicies;
+      `pnpm helm:check` fails if a manifest exposes it. Request latency by route and status
+      class, errors by code, readiness, AI inference time by outcome, the AI wait queue (per pod)
+      and its rejections, and process metrics. Read with `kubectl port-forward`
+      ([guide](deployment/kubernetes.md#api-metrics-p7-01)); no Prometheus server yet. "Queue
+      depth" is the chat's AI wait queue: the worker only runs `noop`, so it gets metrics when it
+      does real work. Still to confirm after release: a port-forward from the reference host
+      reads the live pod.
 - [ ] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
       `maxReplicas` and limits documented.
 - [ ] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone

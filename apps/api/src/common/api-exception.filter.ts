@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { ApiErrorCode, ApiErrorResponse } from '@portfolio/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { ApiMetrics } from '../metrics/api-metrics.js';
 import { ApiException } from './api-exception.js';
 import { ClientDisconnectedError } from './client-disconnected.error.js';
 import { DependencyUnavailableError } from './dependency-unavailable.error.js';
@@ -25,11 +26,13 @@ const codeByStatus: Readonly<Record<number, ApiErrorCode>> = {
 /**
  * Renders every error as an `ApiErrorResponse`. Dependency outages become a retryable
  * `503 not_ready`; unexpected errors are logged with the request id and returned as a generic 500
- * so internal details never reach clients.
+ * so internal details never reach clients. Every error is counted by its code.
  */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('ApiExceptionFilter');
+
+  constructor(private readonly metrics: ApiMetrics) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
@@ -43,6 +46,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     if (exception instanceof ClientDisconnectedError) {
       // Routine (a visitor closed the tab): not an error, and there's no one to answer.
       this.logger.debug({ message: 'Client disconnected', requestId: request.id });
+      this.metrics.countError('client_disconnected');
       void reply.status(CLIENT_CLOSED_REQUEST).send();
       return;
     }
@@ -77,6 +81,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       });
     }
 
+    this.metrics.countError(code);
     const body: ApiErrorResponse = { error: { code, message, requestId: request.id ?? null } };
     void reply.status(status).send(body);
   }

@@ -28,6 +28,12 @@ for values in "$chart"/ci/*-values.yaml; do
   if grep -qE '^kind: Secret$' <<<"$manifests"; then
     fail "$name renders a Secret"
   fi
+
+  # API metrics stay on the pod's loopback (P7-01): never bound wider, and never a port of a
+  # container, Service, or NetworkPolicy (the default metricsPort is 9464).
+  if grep -qE 'API_METRICS_HOST|port: 9464$' <<<"$manifests"; then
+    fail "$name exposes the API metrics port"
+  fi
 done
 
 # Production values on top of CI placeholders; images.yaml exists after the first release.

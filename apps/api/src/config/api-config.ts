@@ -105,6 +105,8 @@ export interface ApiConfig {
     | { readonly enabled: false }
     | { readonly enabled: true; readonly secretKey: string; readonly hostnames: readonly string[] };
   readonly infrastructure: InfrastructureConfig;
+  /** Where `GET /metrics` listens (P7-01): its own port, loopback by default, never public. */
+  readonly metrics: { readonly host: string; readonly port: number };
 }
 
 /** A Kubernetes namespace name (RFC 1123 label). */
@@ -145,6 +147,8 @@ const apiEnvironmentSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     API_HOST: z.string().min(1).default('0.0.0.0'),
     API_PORT: portFromEnv.default(3001),
+    API_METRICS_HOST: z.string().trim().min(1).default('127.0.0.1'),
+    API_METRICS_PORT: portFromEnv.default(9464),
     LOG_LEVEL: logLevel.default('log'),
     DATABASE_URL: connectionUrl('postgres:', 'postgresql:'),
     REDIS_URL: connectionUrl('redis:', 'rediss:'),
@@ -192,6 +196,13 @@ const apiEnvironmentSchema = z
     KUBERNETES_SERVICE_PORT: optionalSetting(portFromEnv),
   })
   .superRefine((environment, context) => {
+    if (environment.API_METRICS_PORT === environment.API_PORT) {
+      context.addIssue({
+        code: 'custom',
+        path: ['API_METRICS_PORT'],
+        message: 'must differ from API_PORT (metrics are never served on the public port)',
+      });
+    }
     if (environment.ARGOCD_ENABLED) {
       if (environment.INFRASTRUCTURE_SOURCE !== 'kubernetes') {
         context.addIssue({
@@ -332,6 +343,7 @@ export function loadApiConfig(
             }),
           }
         : { enabled: false },
+    metrics: { host: parsed.API_METRICS_HOST, port: parsed.API_METRICS_PORT },
   };
 }
 

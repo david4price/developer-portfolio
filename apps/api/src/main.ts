@@ -5,6 +5,8 @@ import { AppModule } from './app.module.js';
 import { configureApp, createFastifyAdapter } from './app.setup.js';
 import { createJsonLogger } from './common/logger.js';
 import { loadApiConfig } from './config/api-config.js';
+import { ApiMetrics } from './metrics/api-metrics.js';
+import { startMetricsServer } from './metrics/metrics-server.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApiConfig();
@@ -17,7 +19,25 @@ async function bootstrap(): Promise<void> {
   configureApp(app, config);
   app.enableShutdownHooks();
 
-  await app.listen(config.port, config.host);
+  try {
+    const metrics = app.get(ApiMetrics);
+    metrics.collectProcessMetrics();
+    const metricsServer = await startMetricsServer(metrics, config.metrics);
+    // Closing the app (shutdown, or a failed start below) closes the metrics port too.
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .addHook('onClose', async () => {
+        metricsServer.closeAllConnections();
+        await new Promise<void>((resolve) => metricsServer.close(() => resolve()));
+      });
+
+    await app.listen(config.port, config.host);
+  } catch (error) {
+    // Release Redis, PostgreSQL, and any open port, so the process can exit with the error.
+    await app.close().catch(() => undefined);
+    throw error;
+  }
 }
 
 bootstrap().catch((error: unknown) => {

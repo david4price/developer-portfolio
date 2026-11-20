@@ -398,6 +398,21 @@ calm). While it's on, the Deployment omits `replicas`, so the HPA alone sets the
 Application additionally ignores `/spec/replicas` on `portfolio-api` (`RespectIgnoreDifferences`).
 Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server ships with K3s.
 
+### API metrics (P7-01)
+
+Each API pod serves Prometheus metrics on `api.metricsPort` (9464), bound to the pod's loopback.
+The port isn't in the Service, the tunnel, or any NetworkPolicy, so no other pod and no visitor
+can reach it (`pnpm helm:check` fails if a manifest exposes it). Operators read one pod at a time
+over the private kubeconfig; no Prometheus runs in the cluster:
+
+```bash
+kubectl -n portfolio port-forward deploy/portfolio-api 9464:9464
+curl -s http://127.0.0.1:9464/metrics | grep -v '^#'
+```
+
+Counters are per pod and start at zero when a pod starts; with the HPA at more than one replica,
+read each pod (`port-forward pod/<name>`) and add them up.
+
 ### Infrastructure Explorer reader (P6-01, approval required)
 
 `api.infrastructure.enabled` (production: on) gives the API its own ServiceAccount with a

@@ -5,9 +5,9 @@ description: Add or review logging, health and readiness checks, metrics, deploy
 
 # Observability
 
-Status: JSON logs, request ids, liveness, and readiness are implemented. Metrics and the
-Infrastructure Explorer are **Proposed** (Phases 6–7). Keep it proportionate: no Prometheus or
-Grafana until the roadmap calls for them.
+Status: JSON logs, request ids, liveness, readiness, API metrics (P7-01), and the Infrastructure
+Explorer (Phase 6) are implemented. Keep it proportionate: no Prometheus server or Grafana until
+the roadmap calls for them.
 
 ## Logging (implemented)
 
@@ -27,12 +27,24 @@ Grafana until the roadmap calls for them.
   per-dependency `up`/`down` when any fails. Add checks via `HealthModule.forChecks`.
 - Worker health endpoint is still to do (Phase 3), so Kubernetes can probe it.
 
-## Metrics (Phase 7)
+## Metrics (implemented, P7-01)
 
-Expose Prometheus-format metrics on a separate, non-public port or path excluded from the tunnel:
-HTTP latency histogram and error rate by route, readiness state, BullMQ queue depth and job
-duration, AI inference duration and rejected requests, process memory/CPU. Use low-cardinality
-labels (route pattern, status class), never user ids or slugs from untrusted input.
+- `ApiMetrics` (`apps/api/src/metrics/`) owns one `@prometheus-io/client` registry, provided by
+  the global `MetricsModule`; `createTestApp()` includes it, and tests read it with
+  `app.get(ApiMetrics)` and `render()`.
+- `main.ts` serves `GET /metrics` on `API_METRICS_HOST:API_METRICS_PORT` (default
+  `127.0.0.1:9464`), apart from the public port. In Kubernetes the port stays on the pod's
+  loopback and out of the Service, tunnel, and NetworkPolicies (`pnpm helm:check` enforces it).
+- What's measured: `http_request_duration_seconds` (method, route pattern, status class, from
+  `configureApp()`), `api_errors_total` (code, from `ApiExceptionFilter`),
+  `readiness_dependency_up`, `ai_inference_duration_seconds` (outcome; `MeteredAiProvider`),
+  `ai_queue_waiting`, `ai_queue_wait_seconds`, and `ai_capacity_rejections_total`
+  (`MeteredAiConcurrencyLimiter`), plus process and Node.js runtime metrics.
+- New metrics go through an intent-named `ApiMetrics` method. Labels are low-cardinality and
+  server-chosen (route pattern, status class, error code, fixed outcome names), never ids, slugs,
+  or anything from the request.
+- The worker has no metrics yet: it runs only the `noop` job. Add queue depth and job duration
+  when it does real work.
 
 ## Infrastructure Explorer (Phase 6)
 

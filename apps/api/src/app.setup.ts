@@ -5,6 +5,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { API_PREFIX } from '@portfolio/shared-types';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
 import type { ApiConfig } from './config/api-config.js';
+import { ApiMetrics } from './metrics/api-metrics.js';
 
 const requestIdPattern = /^[A-Za-z0-9._-]{1,64}$/;
 const BODY_LIMIT_BYTES = 16 * 1024;
@@ -24,13 +25,17 @@ export function createFastifyAdapter(): FastifyAdapter {
   });
 }
 
-/** Applies HTTP behavior shared by `main.ts` and tests: prefix, CORS, headers, errors, logs. */
+/**
+ * Applies HTTP behavior shared by `main.ts` and tests: prefix, CORS, headers, errors, logs, and
+ * request metrics (the app must include `MetricsModule`).
+ */
 export function configureApp(
   app: NestFastifyApplication,
   config: Pick<ApiConfig, 'corsOrigins'>,
 ): void {
   app.setGlobalPrefix(API_PREFIX);
-  app.useGlobalFilters(new ApiExceptionFilter());
+  const metrics = app.get(ApiMetrics);
+  app.useGlobalFilters(new ApiExceptionFilter(metrics));
   app.enableCors({
     origin: [...config.corsOrigins],
     methods: ['GET', 'POST'],
@@ -51,11 +56,13 @@ export function configureApp(
   });
 
   fastify.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url ?? 'unmatched';
+    metrics.observeRequest(request.method, route, reply.statusCode, reply.elapsedTime / 1_000);
     accessLog.log({
       message: 'request completed',
       requestId: request.id,
       method: request.method,
-      route: request.routeOptions.url ?? 'unmatched',
+      route,
       status: reply.statusCode,
       durationMs: Math.round(reply.elapsedTime),
     });
