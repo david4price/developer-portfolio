@@ -14,6 +14,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **P7-04 done** (`chore/p7-03-p7-04`): about $0.90 a month, all of it the domain. Pages' 500
+  builds a month is the limit to watch; **P7-07** (new) stops building release-pin commits.
+- **P7-03 started**: a fresh clone installs, checks, and builds; local.md's pnpm setup fixed.
+  The Compose steps wait for approval.
 - **P7-01 done** (`feat/p7-01-metrics`): the API serves Prometheus metrics on a loopback-only
   port (9464), read with `kubectl port-forward`: request latency and errors, readiness, AI
   inference time, and the AI wait queue. Nothing scrapes them yet; P7-02's load tests will.
@@ -262,10 +266,12 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. Phase 7 at any time: **P7-03** (clean-machine check), **P7-04** (cost review), and **P7-02**
-   (load tests, which read P7-01's metrics; needs approval).
+3. Phase 7 at any time, each needing the owner's approval: finish **P7-03** (the Compose
+   steps), **P7-07** (Pages build watch paths), and **P7-02** (load tests, which read P7-01's
+   metrics).
 
-**Branch in progress:** `feat/p7-01-metrics` (P7-01), not yet pushed.
+**Branches in progress:** `feat/p7-01-metrics` (P7-01) and `chore/p7-03-p7-04` on top of it
+(P7-03 progress, P7-04), neither pushed yet.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -613,7 +619,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (2/6)
+## Phase 7: Hardening (3/7)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -630,14 +636,27 @@ Read-only inventory of the reference host. Findings:
       `maxReplicas` and limits documented.
 - [ ] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
       works from [local.md](deployment/local.md) alone.
-- [ ] **P7-04** Cost review against current Cloudflare and GitHub limits. _Needs:_ Phase 4. _Done
+      Started 2026-11-20: a fresh clone from GitHub, with an empty home directory and pnpm store,
+      installed (293 packages, none cached) and passed `pnpm check` and `pnpm build`. Found and
+      fixed in local.md: the fallback "prefix pnpm commands with `corepack`" fails every root
+      script (`pnpm: not found` from the nested calls), and `corepack enable` needs `sudo` with a
+      system-wide Node.js; the guide now gives a user-directory alternative. Left: the Compose
+      steps (`docker compose up -d`, migrate, seed, `pnpm test:integration`, the `dev:*`
+      scripts, and `compose.full.yaml`), which start containers on the shared host and need the
+      owner's approval (a separate Compose project name and ports, removed afterwards).
+- [x] **P7-04** Cost review against current Cloudflare and GitHub limits. _Needs:_ Phase 4. _Done
       when:_ monthly estimate is within $0–10.
+      Done 2026-11-20: about $0.90 a month, all of it the domain; every service is on a free plan
+      ([cost review](operations/cost-review.md)). The limit to watch is Pages' 500 builds a
+      month: 150 in the first week, 43 of them release-pin commits that don't change the site
+      (P7-07).
 - [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. _Done when:_
       typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
       Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
       attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
       ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
-      hand: check typescript-eslint's peer range from time to time.
+      hand: check typescript-eslint's peer range from time to time. Last checked 2026-11-20:
+      typescript-eslint 8.73.0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
 - [x] **P7-06** 🔒 K3s API audit logging. _Needs:_ Phase 3. _Done when:_ writes, `exec`/`attach`/
       `port-forward`, and Secret reads are recorded at Metadata level (never bodies), routine
       traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log is
@@ -651,3 +670,8 @@ Read-only inventory of the reference host. Findings:
       - a test `kubectl exec` (as `get` on `pods/exec`, response `101`);
       - a Secret `get`;
       - a server-side dry-run `create`, which is never saved.
+
+- [ ] **P7-07** 🔒 Skip Pages builds for commits that can't change the site. _Needs:_ P7-04.
+      _Done when:_ the Pages project's build watch paths exclude `infrastructure/*` and `docs/*`,
+      a release-pin commit on `main` triggers no build, and a change under `apps/web` still
+      does. Why: [cost review](operations/cost-review.md#limit-to-watch-pages-builds).

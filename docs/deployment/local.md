@@ -7,7 +7,7 @@ AI stays disabled unless you configure a provider.
 
 - Node.js 24 (`.node-version`)
 - Corepack, which ships with Node.js 24. pnpm is pinned in `package.json`, so you don't need a
-  global pnpm install.
+  global pnpm install, but `pnpm` must be on your `PATH`: the root scripts call it themselves.
 - Docker with Compose v2.20 or newer (for PostgreSQL and Redis)
 
 ## Setup
@@ -15,13 +15,19 @@ AI stays disabled unless you configure a provider.
 ```bash
 git clone https://github.com/david4price/developer-portfolio.git
 cd developer-portfolio
-corepack enable            # or prefix pnpm commands with `corepack`
+corepack enable            # puts pnpm on PATH (see below if it needs sudo)
 pnpm install
 cp .env.example .env       # then replace every change-me value
 docker compose up -d       # PostgreSQL 17 + Redis 7 on 127.0.0.1
 pnpm db:migrate            # builds, then applies migrations
 pnpm db:seed               # loads the project registry into PostgreSQL (idempotent)
 ```
+
+`corepack enable` writes a `pnpm` link next to `node`. With a system-wide Node.js (for example in
+`/usr/bin`) that needs `sudo`; instead, link it into a directory of your own that is on `PATH`:
+`corepack enable --install-directory ~/.local/bin pnpm`. Running `corepack pnpm <script>` without
+either doesn't work for `pnpm check`, `pnpm build`, `pnpm db:migrate`, or the `dev:*` scripts:
+they call `pnpm` again and fail with `pnpm: not found`.
 
 ## Run
 
