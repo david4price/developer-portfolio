@@ -16,13 +16,25 @@ render() {
   helm template portfolio "$chart" --namespace portfolio "$@"
 }
 
-# API metrics stay on the pod's loopback (P7-01): never bound wider (API_METRICS_HOST), and never a
-# port, containerPort, or targetPort of a container, Service, or NetworkPolicy.
-metrics_port="$(helm show values "$chart" | awk '$1 == "metricsPort:" { print $2 }')"
-[[ "$metrics_port" =~ ^[0-9]+$ ]] || { echo "FAIL: api.metricsPort not found in values" >&2; exit 1; }
+# env_value <manifests> <name>: the value of a container environment variable in the render.
+env_value() {
+  grep -A1 -E "^ *- name: $2\$" <<<"$1" | awk '$1 == "value:" { gsub(/"/, "", $2); print $2 }'
+}
+
+# API metrics stay on the pod's loopback (P7-01): the chart pins API_METRICS_HOST to 127.0.0.1 in
+# `env`, which wins over `envFrom`, and the port (as rendered) is never a port, containerPort, or
+# targetPort of a container, Service, or NetworkPolicy. Not covered: URLs such as a tunnel
+# ingress service, and NetworkPolicy port ranges (`endPort`).
 check_metrics_private() {
-  if grep -qiE "API_METRICS_HOST|port: \"?${metrics_port}\"?\$" <<<"$2"; then
-    fail "$1 exposes the API metrics port"
+  local host port
+  host="$(env_value "$2" API_METRICS_HOST)"
+  port="$(env_value "$2" API_METRICS_PORT)"
+  if [[ "$host" != "127.0.0.1" ]]; then
+    fail "$1 renders API_METRICS_HOST='$host', not 127.0.0.1"
+  elif ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    fail "$1 renders no numeric API_METRICS_PORT"
+  elif grep -qiE "port: \"?${port}\"?\$" <<<"$2"; then
+    fail "$1 exposes the API metrics port ($port)"
   fi
 }
 

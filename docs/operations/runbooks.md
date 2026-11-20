@@ -10,8 +10,8 @@ Procedures marked **Proposed** apply once the corresponding phase is deployed.
 3. Search the structured logs by `requestId`. Every response returns it in the `x-request-id`
    header and in error bodies.
 4. Read the pod's metrics ([API metrics](../deployment/kubernetes.md#api-metrics-p7-01)):
-   `api_errors_total` by code, `http_request_duration_seconds` by route and status class, and
-   `readiness_dependency_up`.
+   `api_errors_total` by code, `http_request_duration_seconds` by route and status class,
+   `http_client_disconnects_total` (visitors who left; not errors), and `readiness_dependency_up`.
 
 ## Rollback
 
@@ -99,8 +99,8 @@ unaffected.
 ## Inference Overload (Proposed, Phase 5)
 
 - Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. In the metrics,
-  `ai_capacity_rejections_total` rises and the upper buckets of `ai_queue_wait_seconds` fill (no
-  free slot), or
+  `ai_queue_waiting` (requests queued right now) and `ai_capacity_rejections_total` rise (no free
+  slot), or
   `ai_inference_duration_seconds_count` grows for `timeout`, `overloaded`, or `network` (the
   runtime itself is slow or down).
 - The AI path is isolated, so the rest of the API keeps working.

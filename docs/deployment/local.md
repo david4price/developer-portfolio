@@ -56,7 +56,8 @@ Useful endpoints:
 Metrics (P7-01) are served apart from the API, at `http://127.0.0.1:9464/metrics` in the
 Prometheus text format (`API_METRICS_HOST` and `API_METRICS_PORT`; the port must differ from
 `API_PORT`). The metrics port is never part of `/api/v1`: request durations by route pattern and
-status class, error responses by code, readiness per dependency, AI inference time by outcome, the
+status class, error responses by code, abandoned requests (`http_client_disconnects_total`, not
+counted as errors), readiness per dependency, AI inference time by outcome, the
 AI wait queue, and process and Node.js runtime metrics. Nothing scrapes them by default; read them
 with `curl`. In `compose.full.yaml` the API binds them inside its container, so other containers on
 the Compose network can reach `api:9464` too; in Kubernetes they stay on the pod's loopback.
