@@ -14,11 +14,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- **P7-04 done** (`chore/p7-03-p7-04`): about $0.90 a month, all of it the domain. Pages' 500
+- **P7-04 done** (`feat/p7-hardening`): about $0.90 a month, all of it the domain. Pages' 500
   builds a month is the limit to watch; **P7-07** (new) stops building release-pin commits.
-- **P7-03 started**: a fresh clone installs, checks, and builds; local.md's pnpm setup fixed.
-  The Compose steps wait for approval.
-- **P7-01 done** (`feat/p7-01-metrics`): the API serves Prometheus metrics on a loopback-only
+- **P7-03 done**: a fresh clone works from local.md alone, through `compose.full.yaml`, after
+  fixing its pnpm setup steps.
+- **P7-01 done** (`feat/p7-hardening`): the API serves Prometheus metrics on a loopback-only
   port (9464), read with `kubectl port-forward`: request latency and errors, readiness, AI
   inference time, and the AI wait queue. Nothing scrapes them yet; P7-02's load tests will.
 - Minimal restyle and About photos merged and deployed (PR #64, 2026-11-19).
@@ -266,12 +266,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. Phase 7 at any time, each needing the owner's approval: finish **P7-03** (the Compose
-   steps), **P7-07** (Pages build watch paths), and **P7-02** (load tests, which read P7-01's
-   metrics).
+3. **P7-07**: confirm the next release-pin commit triggers no Pages build.
+4. **P7-02** (load tests, which read P7-01's metrics) once P7-01 is deployed; needs approval.
 
-**Branches in progress:** `feat/p7-01-metrics` (P7-01) and `chore/p7-03-p7-04` on top of it
-(P7-03 progress, P7-04), neither pushed yet.
+**Branch in progress:** `feat/p7-hardening` (P7-01, P7-03, P7-04).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -619,7 +617,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (3/7)
+## Phase 7: Hardening (4/7)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -634,16 +632,18 @@ Read-only inventory of the reference host. Findings:
       reads the live pod.
 - [ ] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
       `maxReplicas` and limits documented.
-- [ ] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
+- [x] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
       works from [local.md](deployment/local.md) alone.
-      Started 2026-11-20: a fresh clone from GitHub, with an empty home directory and pnpm store,
-      installed (293 packages, none cached) and passed `pnpm check` and `pnpm build`. Found and
-      fixed in local.md: the fallback "prefix pnpm commands with `corepack`" fails every root
-      script (`pnpm: not found` from the nested calls), and `corepack enable` needs `sudo` with a
-      system-wide Node.js; the guide now gives a user-directory alternative. Left: the Compose
-      steps (`docker compose up -d`, migrate, seed, `pnpm test:integration`, the `dev:*`
-      scripts, and `compose.full.yaml`), which start containers on the shared host and need the
-      owner's approval (a separate Compose project name and ports, removed afterwards).
+      Done 2026-11-20: a fresh clone, with an empty home directory and pnpm store, followed
+      local.md step by step: install (293 packages, none cached), `pnpm check`, `pnpm build`,
+      `docker compose up -d`, `pnpm db:migrate`, `pnpm db:seed` (twice, idempotent),
+      `pnpm test:integration` (21 passed, none skipped), the three `dev:*` scripts (ready,
+      projects, `ai_disabled` chat, site, metrics), and `compose.full.yaml` built from scratch
+      (all healthy, CSP served, metrics on loopback only, 404 on the public port). Run under
+      separate Compose project names and ports, then removed with their volumes and images.
+      Fixed in local.md: prefixing pnpm with `corepack` fails every root script (nested calls),
+      and `corepack enable` needs `sudo` with a system-wide Node.js; added a troubleshooting row
+      for a stack left half-started by a failed `up` (its containers had no network).
 - [x] **P7-04** Cost review against current Cloudflare and GitHub limits. _Needs:_ Phase 4. _Done
       when:_ monthly estimate is within $0–10.
       Done 2026-11-20: about $0.90 a month, all of it the domain; every service is on a free plan
@@ -675,3 +675,6 @@ Read-only inventory of the reference host. Findings:
       _Done when:_ the Pages project's build watch paths exclude `infrastructure/*` and `docs/*`,
       a release-pin commit on `main` triggers no build, and a change under `apps/web` still
       does. Why: [cost review](operations/cost-review.md#limit-to-watch-pages-builds).
+      Applied 2026-11-20 with `cf pages projects edit` (the whole source config resent with only
+      `path_excludes` changed; nothing else differed afterwards). Rollback: the same edit with
+      `path_excludes: []`. Left: watch the next release-pin commit and site change.

@@ -48,7 +48,8 @@ built from changes. The web build reads `apps/web`, `packages/*`, the root works
 build watch **exclude paths** `infrastructure/*` and `docs/*` (`*` matches across `/`). A push
 still builds when any changed file falls outside them, and always when it has no file changes,
 3,000 or more changed files, or 20 or more commits. That would have skipped the 43 release-pin
-builds and every docs-only change, about a third of the first week's builds. Tracked as **P7-07**.
+builds and every docs-only change, about a third of the first week's builds. Applied 2026-11-20
+(**P7-07**).
 
 ## Sources
 
