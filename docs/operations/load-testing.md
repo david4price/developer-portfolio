@@ -4,7 +4,8 @@ _Run 2026-11-21 on the reference deployment (single K3s node, shared with other 
 workloads) and on a throwaway local stack. Scripts: [`infrastructure/load-tests/`](../../infrastructure/load-tests/)._
 
 **Result:** the API is far from its limits at any realistic traffic. In the cluster, 200 read
-requests a second had p95 latency under 3 ms and no errors; the node never passed 9% CPU. The
+requests a second had p95 latency of 2.8 ms (under 6 ms at every rate) and no errors; the node
+peaked at 6% CPU then, and at 9% during the local chat stage. The
 measured numbers set the API's resources (below); `maxReplicas` stays at 3. One design gap
 showed up under chat overload (see [Chat overload](#chat-overload-p7-08)).
 
@@ -25,9 +26,26 @@ Three stages, each with stop rules (node CPU over 60%, any other workload unheal
    ([`compose.chat.yaml`](../../infrastructure/load-tests/compose.chat.yaml),
    [`stub-ai.mjs`](../../infrastructure/load-tests/stub-ai.mjs)). Chat can't be load-tested in
    production: sessions need a real Turnstile solve, and the model runs on a shared GPU.
-   Sessions were seeded into Redis (Cloudflare's test secret returns no action, which the API
-   rightly rejects). [`chat.js`](../../infrastructure/load-tests/chat.js) runs N visitors who send
-   their next message as soon as the last one is answered.
+   Sessions are seeded into Redis with [`seed-sessions.sh`](../../infrastructure/load-tests/seed-sessions.sh)
+   (Cloudflare's test secret returns no action, which the API rightly rejects).
+   [`chat.js`](../../infrastructure/load-tests/chat.js) runs N visitors who send their next
+   message as soon as the last one is answered; `LONG=1` sends 944-character messages, the
+   classifier's heaviest input (two 512-token windows).
+
+To rerun stage 3 (from the repository root; `<env>` sets `POSTGRES_*` and free ports, as in
+`.env.example`):
+
+```bash
+export API_IMAGE=ghcr.io/<owner>/portfolio-api@sha256:<released digest>
+export TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA   # Cloudflare's test secret
+stack=(docker compose -p chat-load --env-file <env> -f compose.full.yaml \
+  -f infrastructure/load-tests/compose.chat.yaml)
+"${stack[@]}" up -d --no-build --wait api stub-ai
+infrastructure/load-tests/seed-sessions.sh 8 "${stack[@]}" > sessions
+k6 run -e BASE_URL=http://127.0.0.1:<API_PORT> -e VUS=4 -e LONG=1 -e SESSIONS="$(cat sessions)" \
+  infrastructure/load-tests/chat.js
+"${stack[@]}" down -v
+```
 
 To rerun stage 1:
 
@@ -71,9 +89,19 @@ edge. `cloudflared` peaked at 35m CPU and 27 MiB.
 | 4        | 23       | all answered, queue waits up to ~9 s                       | 12.1 s | 5%           | 379 MiB     |
 | 8        | 6,465    | 23 answered; the rest `ai_overloaded`, at once (p95 37 ms) | —      | 100% (1 CPU) | 422 MiB     |
 
+The same with 944-character messages, under the new 1Gi limit:
+
+| Visitors | Messages | Result                                                       | p95     | API CPU peak | Memory peak |
+| -------- | -------- | ------------------------------------------------------------ | ------- | ------------ | ----------- |
+| 1        | 20       | all answered                                                 | 3.10 s  | 10%          | 571 MiB     |
+| 2        | 21       | all answered, queued behind one AI slot                      | 6.18 s  | 10%          | 454 MiB     |
+| 4        | 23       | all answered, queue waits up to ~9 s                         | 12.36 s | 10%          | 392 MiB     |
+| 8        | 588      | 21 answered; the rest `ai_overloaded` (p50 330 ms: screened) | —       | 100% (1 CPU) | 426 MiB     |
+
 Throughput is set by the one AI slot, as designed: about one reply per model call. Overflow is
-turned away fast, never hung (`ai_capacity_rejections_total`: 6,436 immediate, 6 after waiting),
-and the container was never OOM-killed under production's memory limit.
+turned away without hanging (`ai_capacity_rejections_total`: 6,436 immediate and 6 after waiting
+with short messages; 559 and 8 with long ones), and the container was never OOM-killed: under
+1280Mi for the first run, under the new 1Gi limit for the long one.
 
 ### Peak use per component
 
@@ -88,22 +116,25 @@ and the container was never OOM-killed under production's memory limit.
 ## Decisions
 
 - **API CPU request 250m** (was 100m): at the HPA's 70% target a pod now scales out at about
-  175m, roughly 100 read requests a second, instead of at 25. Pods still scale before latency
+  175m. From the measured cost (about 15m idle plus 1.5–2.2m per read request a second) that is
+  roughly 70–100 read requests a second per pod, instead of 25. Pods still scale before latency
   moves.
 - **API memory 640Mi request, 1Gi limit** (was 896Mi / 1280Mi): measured peak 590 MiB with the
-  classifier loaded; the limit leaves about 1.7× that for GC and bursts.
-- **`maxReplicas` stays 3:** three pods carried 200 requests a second at 6% of the node, and three
+  classifier loaded, long messages included; the limit leaves about 1.7× that for GC and bursts.
+- **`maxReplicas` stays 3:** three pods carried 200 requests a second with the node at 6%, and three
   640Mi requests fit easily beside the node's other workloads. More replicas add memory, not
   capacity anyone needs.
 - **No CPU limits**, as before: the node has spare CPU, and throttling would only add latency.
 - The other components stayed well inside their requests and limits, so they are unchanged.
-- The `rules`-only API profile (`api.resources`) wasn't measured; it's what forks run by default.
+- Not measured, so unchanged and still estimates: the `rules`-only API profile (`api.resources`,
+  what forks run by default), the migration Job, and the backup CronJob.
 
 ## Chat Overload (P7-08)
 
 With 8 visitors who retry at once, the API answered about 107 rejected messages a second and
 used a full CPU doing it. Each message is screened (rules and the CPU classifier) before the AI
-slot is checked, and an immediate rejection is refunded against the visitor's quotas, so a client
+slot is checked (about 330 ms of CPU for a long message), and an immediate rejection is refunded
+against the visitor's quotas, so a client
 hammering an overloaded chat pays nothing for the screening it causes. Only Turnstile (needed per
 session) and the one-message-at-a-time session lock bound it today. The rest of the API kept
 answering, but a determined client could hold one pod's CPU. Tracked as **P7-08**.

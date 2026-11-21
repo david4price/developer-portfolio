@@ -15,7 +15,7 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 **Recently done**
 
 - **P7-02 done** (`feat/p7-02-load-tests`): the API carried 200 requests a second in the cluster
-  with p95 under 3 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
+  with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
   `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
 - **PR #65 live** (2026-11-21): P7-01 metrics confirmed on the live pod over port-forward;
   P7-07 half verified: the release-pin commit's Pages build was skipped; a site change building
@@ -640,10 +640,11 @@ Read-only inventory of the reference host. Findings:
 - [x] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
       `maxReplicas` and limits documented.
       Done 2026-11-21 ([load testing](operations/load-testing.md)): k6 in the cluster read the
-      API at 10–200 requests a second with no errors (p95 under 6 ms; node at most 9% CPU), 10 a
-      second through Cloudflare (p95 182 ms), and chat on a local stack with a stand-in model.
-      The API's classifier profile becomes 250m CPU and 640Mi requested, 1Gi limit (measured
-      peak 590 MiB), so the HPA scales at about 100 requests a second per pod instead of 25;
+      API at 10–200 requests a second with no errors (p95 under 6 ms at every rate, 2.8 ms at
+      200; node at most 6% CPU), 10 a second through Cloudflare (p95 182 ms), and chat on a
+      local stack with a stand-in model, short and 944-character messages. The API's classifier
+      profile becomes 250m CPU and 640Mi requested, 1Gi limit (measured peak 590 MiB), so the
+      HPA scales at roughly 70–100 requests a second per pod instead of 25;
       `maxReplicas` stays 3, and the other components keep their numbers. Found P7-08.
 - [x] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
       works from [local.md](deployment/local.md) alone.

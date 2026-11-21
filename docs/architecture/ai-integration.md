@@ -357,9 +357,10 @@ look-alikes. Wolf's highest score on any legitimate message was 0.006, so its re
 between thresholds of 0.05 and 0.9.
 
 Cost on the reference host's CPU (one thread): p50 9 ms and p95 14 ms per message; a worst-case
-1,000-character message (about 2,000 tokens) about 1 s. Memory: about 650 MiB per API replica for
-the model, its runtime, and the tokenizer; the chart switches the pod to `classifierResources`
-(896 Mi request, 1280 Mi limit) when the classifier is on. The set's remaining misses are two
+1,000-character message (about 2,000 tokens) about 1 s. Memory: the P7-02 load tests measured
+about 590 MiB per API pod in all with the model, its runtime, and the tokenizer loaded; the chart
+switches the pod to `classifierResources` (250m CPU and 640 Mi request, 1 Gi limit) when the
+classifier is on ([load testing](../operations/load-testing.md)). The set's remaining misses are two
 off-topic override requests and a sentence-completion trick; the reply check and the other layers stay in
 force for those. `CHAT_GUARD_MODEL_DIR=<dir> pnpm --filter @portfolio/api test:guard-eval`
 re-measures, with ceilings that fail on any regression.
