@@ -2,7 +2,9 @@
 // docs/operations/load-testing.md). Only against a throwaway stack with a stand-in model: never
 // production, which needs Turnstile and runs the shared GPU.
 //   k6 run -e BASE_URL=http://127.0.0.1:23001 -e VUS=4 -e SESSIONS="$(cat sessions)" chat.js
-// LONG=1 sends messages near the 1,000-character maximum, the classifier's heaviest input.
+// MESSAGES picks the input: `short` questions (default), `prose` (a 941-944-character English
+// question, about 184 tokens: one classifier window), or `dense` (999 characters of rare letters,
+// about 2,550 tokens: five full 512-token windows, the classifier's heaviest input).
 import http from 'k6/http';
 import { check } from 'k6';
 
@@ -18,7 +20,7 @@ const questions = [
   'What is the Infrastructure Explorer?',
 ];
 
-// About 990 characters of an ordinary visitor question, varied by iteration.
+// About 940 characters of an ordinary visitor question, varied by iteration.
 const longQuestion = (iteration) =>
   `I'm comparing portfolio projects for a platform role (visit ${iteration}). ` +
   'Could you walk me through how the API, the worker, and the static site fit together, how ' +
@@ -31,7 +33,18 @@ const longQuestion = (iteration) =>
   'of the repository, and how you measured performance before choosing resource limits. ' +
   'Also, how does the explorer page read live cluster data without exposing anything private, ' +
   'and what would you watch first if the chat became popular and the model fell behind?';
-const LONG = __ENV.LONG === '1';
+// Letters the tokenizer has no merges for, so each takes two or three tokens.
+const denseText = (() => {
+  let text = '';
+  while (text.length + 9 <= 999) text += 'ꙮꝎꞰꟿ⸎⺀㆐ꔀꕢ';
+  return text;
+})();
+const MESSAGES = __ENV.MESSAGES ?? 'short';
+const messageFor = (iteration) => {
+  if (MESSAGES === 'prose') return longQuestion(iteration);
+  if (MESSAGES === 'dense') return denseText;
+  return questions[iteration % questions.length];
+};
 
 export const options = {
   scenarios: {
@@ -44,7 +57,7 @@ export default function () {
   const session = sessions[(__VU - 1) % sessions.length];
   const response = http.post(
     `${BASE_URL}/api/v1/chat/messages`,
-    JSON.stringify({ message: LONG ? longQuestion(__ITER) : questions[__ITER % questions.length] }),
+    JSON.stringify({ message: messageFor(__ITER) }),
     {
       headers: { 'content-type': 'application/json', cookie: `portfolio_chat=${session}` },
       tags: { name: 'chat message' },
@@ -61,6 +74,8 @@ export default function () {
     }
   }
   check(response, {
-    'answered or turned away cleanly': () => ['ok', 'ai_overloaded', 'chat_busy'].includes(code),
+    // message_rejected is the screening's own verdict: handled, and the classifier still ran.
+    'answered or turned away cleanly': () =>
+      ['ok', 'ai_overloaded', 'chat_busy', 'message_rejected'].includes(code),
   });
 }

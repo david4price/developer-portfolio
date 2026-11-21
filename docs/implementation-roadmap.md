@@ -641,8 +641,9 @@ Read-only inventory of the reference host. Findings:
       `maxReplicas` and limits documented.
       Done 2026-11-21 ([load testing](operations/load-testing.md)): k6 in the cluster read the
       API at 10–200 requests a second with no errors (p95 under 6 ms at every rate, 2.8 ms at
-      200; node at most 6% CPU), 10 a second through Cloudflare (p95 182 ms), and chat on a
-      local stack with a stand-in model, short and 944-character messages. The API's classifier
+      200; node at most 6% CPU in the cluster stage, 9% during the local chat stage), 10 a second
+      through Cloudflare (p95 182 ms), and chat on a local stack with a stand-in model: short,
+      prose, and dense (five-window) messages, the last two under the new 1Gi limit. The API's classifier
       profile becomes 250m CPU and 640Mi requested, 1Gi limit (measured peak 590 MiB), so the
       HPA scales at roughly 70–100 requests a second per pod instead of 25;
       `maxReplicas` stays 3, and the other components keep their numbers. Found P7-08.
@@ -694,9 +695,11 @@ Read-only inventory of the reference host. Findings:
       `path_excludes: []`. Verified 2026-11-21: PR #65's merge commit built and deployed; the
       release-pin commit after it was skipped (`is_skipped: true`, no build ran). PR #65 changed
       nothing under `apps/web`, so left: see the next site change build.
-- [ ] **P7-08** Make chat overload cost the client, not the API. _Needs:_ P7-02. _Done when:_ a
-      client that retries an overloaded chat at once can't hold an API pod's CPU: e.g. check for
-      a free AI slot (or a full queue) before screening, or stop refunding immediate
-      rejections past a small allowance; a unit test covers it, and the stage-3 chat load test
-      ([load testing](operations/load-testing.md#chat-overload-p7-08)) shows the API's CPU stay
-      low with 8 visitors.
+- [ ] **P7-08** Make chat overload cost the client, not the API, and keep screening meaningful
+      under load. _Needs:_ P7-02. _Done when:_ a client that retries an overloaded chat at once
+      can't hold an API pod's CPU (e.g. check for a free AI slot, or a full queue, before
+      screening; or stop refunding immediate rejections past a small allowance), and a decision
+      is recorded for messages that pass the 2 s classifier timeout unscored (a dense
+      1,000-character message takes about 1.5–2 s to score); unit tests cover it, and the stage-3
+      chat load test ([load testing](operations/load-testing.md#chat-overload-p7-08)) shows the
+      API's CPU stay low with 8 visitors.

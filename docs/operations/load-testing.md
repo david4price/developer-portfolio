@@ -29,8 +29,10 @@ Three stages, each with stop rules (node CPU over 60%, any other workload unheal
    Sessions are seeded into Redis with [`seed-sessions.sh`](../../infrastructure/load-tests/seed-sessions.sh)
    (Cloudflare's test secret returns no action, which the API rightly rejects).
    [`chat.js`](../../infrastructure/load-tests/chat.js) runs N visitors who send their next
-   message as soon as the last one is answered; `LONG=1` sends 944-character messages, the
-   classifier's heaviest input (two 512-token windows).
+   message as soon as the last one is answered. `MESSAGES=prose` sends a 941–944-character
+   English question (about 184 tokens, one classifier window); `MESSAGES=dense` sends 999
+   characters of rare letters (about 2,550 tokens, five full 512-token windows), the classifier's
+   heaviest input. Token counts are from the classifier's own tokenizer.
 
 To rerun stage 3 (from the repository root; `<env>` sets `POSTGRES_*` and free ports, as in
 `.env.example`):
@@ -41,8 +43,9 @@ export TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA   # Cloudflare's
 stack=(docker compose -p chat-load --env-file <env> -f compose.full.yaml \
   -f infrastructure/load-tests/compose.chat.yaml)
 "${stack[@]}" up -d --no-build --wait api stub-ai
-infrastructure/load-tests/seed-sessions.sh 8 "${stack[@]}" > sessions
-k6 run -e BASE_URL=http://127.0.0.1:<API_PORT> -e VUS=4 -e LONG=1 -e SESSIONS="$(cat sessions)" \
+sessions="$(mktemp)"   # holds valid session IDs: keep it out of the repository
+infrastructure/load-tests/seed-sessions.sh 8 "${stack[@]}" > "$sessions"
+k6 run -e BASE_URL=http://127.0.0.1:<API_PORT> -e VUS=4 -e MESSAGES=dense -e SESSIONS="$(cat "$sessions")" \
   infrastructure/load-tests/chat.js
 "${stack[@]}" down -v
 ```
@@ -89,7 +92,7 @@ edge. `cloudflared` peaked at 35m CPU and 27 MiB.
 | 4        | 23       | all answered, queue waits up to ~9 s                       | 12.1 s | 5%           | 379 MiB     |
 | 8        | 6,465    | 23 answered; the rest `ai_overloaded`, at once (p95 37 ms) | —      | 100% (1 CPU) | 422 MiB     |
 
-The same with 944-character messages, under the new 1Gi limit:
+The same with `prose` messages (944 characters, one window), under the new 1Gi limit:
 
 | Visitors | Messages | Result                                                       | p95     | API CPU peak | Memory peak |
 | -------- | -------- | ------------------------------------------------------------ | ------- | ------------ | ----------- |
@@ -98,10 +101,27 @@ The same with 944-character messages, under the new 1Gi limit:
 | 4        | 23       | all answered, queue waits up to ~9 s                         | 12.36 s | 10%          | 392 MiB     |
 | 8        | 588      | 21 answered; the rest `ai_overloaded` (p50 330 ms: screened) | —       | 100% (1 CPU) | 426 MiB     |
 
+And with `dense` messages (five full windows), also under 1Gi:
+
+| Visitors | Messages | Result                                                                | p95     | API CPU peak | Memory peak |
+| -------- | -------- | --------------------------------------------------------------------- | ------- | ------------ | ----------- |
+| 1        | 18       | rejected by the classifier, or passed on after its 2 s timeout        | 5.57 s  | 100% (1 CPU) | 452 MiB     |
+| 2        | 19       | as above, queued behind one classifier                                | 8.55 s  | 80%          | 452 MiB     |
+| 4        | 22       | as above                                                              | 15.95 s | 100% (1 CPU) | 405 MiB     |
+| 8        | 54       | 19 rejected by the classifier in all four runs; the rest timed out it | 18.19 s | 82%          | 408 MiB     |
+
 Throughput is set by the one AI slot, as designed: about one reply per model call. Overflow is
 turned away without hanging (`ai_capacity_rejections_total`: 6,436 immediate and 6 after waiting
-with short messages; 559 and 8 with long ones), and the container was never OOM-killed: under
-1280Mi for the first run, under the new 1Gi limit for the long one.
+with short messages; 559 and 8 with prose), and the container was never OOM-killed: under
+1280Mi for the first run, under the new 1Gi limit for the prose and dense ones. Memory doesn't
+grow with message size: scoring five windows peaked lower (452 MiB) than the first short run
+(580 MiB), which includes loading the model.
+
+**Dense messages and the classifier's timeout.** Scoring a dense message takes about 1.5–2 s of
+one CPU (a single one was rejected after 1.55 s), close to the 2 s `CHAT_GUARD_TIMEOUT_MS`. Past
+the timeout the rules' verdict stands alone, by design, so most dense messages here went on to
+the (stand-in) model unscored: 19 of 113 were rejected. Under load, any queued message can time
+out the same way. The rules and the reply check still apply. Part of **P7-08**.
 
 ### Peak use per component
 
@@ -120,7 +140,7 @@ with short messages; 559 and 8 with long ones), and the container was never OOM-
   roughly 70–100 read requests a second per pod, instead of 25. Pods still scale before latency
   moves.
 - **API memory 640Mi request, 1Gi limit** (was 896Mi / 1280Mi): measured peak 590 MiB with the
-  classifier loaded, long messages included; the limit leaves about 1.7× that for GC and bursts.
+  classifier loaded; prose and dense (five-window) messages stayed under it; the limit leaves about 1.7× that for GC and bursts.
 - **`maxReplicas` stays 3:** three pods carried 200 requests a second with the node at 6%, and three
   640Mi requests fit easily beside the node's other workloads. More replicas add memory, not
   capacity anyone needs.
@@ -133,8 +153,11 @@ with short messages; 559 and 8 with long ones), and the container was never OOM-
 
 With 8 visitors who retry at once, the API answered about 107 rejected messages a second and
 used a full CPU doing it. Each message is screened (rules and the CPU classifier) before the AI
-slot is checked (about 330 ms of CPU for a long message), and an immediate rejection is refunded
-against the visitor's quotas, so a client
+slot is checked (about 100 ms of CPU for a prose message: 60 CPU-seconds over 588 messages; the
+330 ms p50 includes waiting for the classifier), and an immediate rejection is refunded against
+the visitor's quotas, so a client
 hammering an overloaded chat pays nothing for the screening it causes. Only Turnstile (needed per
 session) and the one-message-at-a-time session lock bound it today. The rest of the API kept
-answering, but a determined client could hold one pod's CPU. Tracked as **P7-08**.
+answering, but a determined client could hold one pod's CPU, and while it does, other visitors'
+messages queue for the classifier and can pass its timeout unscored (see dense messages above).
+Tracked as **P7-08**.
