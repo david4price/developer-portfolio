@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-20_
+_Last updated: 2026-11-21_
 
 **Current phase:** 7 (Hardening). Phase 6 has only P6-05's token rotation left, due 2027-02-16.
 Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
@@ -14,6 +14,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **PR #65 live** (2026-11-21): P7-01 metrics confirmed on the live pod over port-forward;
+  **P7-07 done**, the release-pin commit's Pages build was skipped.
 - **P7-04 done** (`feat/p7-hardening`): about $0.90 a month, all of it the domain. Pages' 500
   builds a month is the limit to watch; **P7-07** (new) stops building release-pin commits.
 - **P7-03 done**: a fresh clone works from local.md alone, through `compose.full.yaml`, after
@@ -266,10 +268,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-07**: confirm the next release-pin commit triggers no Pages build.
-4. **P7-02** (load tests, which read P7-01's metrics) once P7-01 is deployed; needs approval.
+3. **P7-02** (load tests, which read P7-01's metrics) once P7-01 is deployed; needs approval.
 
-**Branch in progress:** `feat/p7-hardening` (P7-01, P7-03, P7-04).
+**Branch in progress:** none (PR #65 merged and deployed 2026-11-21).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -617,7 +618,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (4/7)
+## Phase 7: Hardening (5/7)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -628,8 +629,9 @@ Read-only inventory of the reference host. Findings:
       and its rejections, and process metrics. Read with `kubectl port-forward`
       ([guide](deployment/kubernetes.md#api-metrics-p7-01)); no Prometheus server yet. "Queue
       depth" is the chat's AI wait queue: the worker only runs `noop`, so it gets metrics when it
-      does real work. Still to confirm after release: a port-forward from the reference host
-      reads the live pod.
+      does real work. Live since PR #65 (2026-11-21): a port-forward from the reference host read
+      227 series from the new pod (readiness 1/1, route-pattern labels); `/metrics` on the public
+      API host returns 404, and the Service exposes only the API port.
 - [ ] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
       `maxReplicas` and limits documented.
 - [x] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
@@ -671,10 +673,11 @@ Read-only inventory of the reference host. Findings:
       - a Secret `get`;
       - a server-side dry-run `create`, which is never saved.
 
-- [ ] **P7-07** 🔒 Skip Pages builds for commits that can't change the site. _Needs:_ P7-04.
+- [x] **P7-07** 🔒 Skip Pages builds for commits that can't change the site. _Needs:_ P7-04.
       _Done when:_ the Pages project's build watch paths exclude `infrastructure/*` and `docs/*`,
       a release-pin commit on `main` triggers no build, and a change under `apps/web` still
       does. Why: [cost review](operations/cost-review.md#limit-to-watch-pages-builds).
       Applied 2026-11-20 with `cf pages projects edit` (the whole source config resent with only
       `path_excludes` changed; nothing else differed afterwards). Rollback: the same edit with
-      `path_excludes: []`. Left: watch the next release-pin commit and site change.
+      `path_excludes: []`. Verified 2026-11-21: PR #65's merge commit built and deployed; the
+      release-pin commit after it was skipped (`is_skipped: true`, no build ran).
