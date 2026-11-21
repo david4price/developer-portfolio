@@ -111,6 +111,19 @@ describe('ClassifierMessageGuard', () => {
     }
   });
 
+  it('gives scoring its own budget, so a long wait in the queue never counts against it', async () => {
+    const { guard } = guardWith(async (_text, start) => {
+      await new Promise((resolve) => setTimeout(resolve, options.timeoutMs * 0.8)); // queued
+      start();
+      await new Promise((resolve) => setTimeout(resolve, options.timeoutMs * 0.6)); // scoring
+      return 0.1;
+    });
+    assert.deepEqual(await guard.screenMessage('Which projects use Go?'), {
+      allowed: true,
+      message: 'Which projects use Go?',
+    });
+  });
+
   it('refuses a message whose score arrives after the timeout', async () => {
     const { guard } = guardWith(
       () => new Promise((resolve) => setTimeout(() => resolve(0), options.timeoutMs * 3)),

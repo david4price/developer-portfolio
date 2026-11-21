@@ -140,6 +140,7 @@ describe('chat browser requests', () => {
     'chat_session_required',
     'chat_busy',
     'message_rejected',
+    'message_too_long',
     'rate_limited',
     'ai_overloaded',
     'internal_error',

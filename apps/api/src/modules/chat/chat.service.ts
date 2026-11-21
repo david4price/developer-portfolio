@@ -93,7 +93,7 @@ const messageRejected = () =>
 const tooLongToCheck = () =>
   new ApiException(
     HttpStatus.UNPROCESSABLE_ENTITY,
-    'message_rejected',
+    'message_too_long',
     'That message is too long to check. Try a shorter question.',
   );
 
@@ -155,7 +155,9 @@ export class ChatService {
     private readonly metrics: ApiMetrics,
   ) {
     this.limits = config.chat;
-    const screeningMs = config.chat.guard.kind === 'classifier' ? config.chat.guard.timeoutMs : 0;
+    // Screening has two budgets: waiting for the classifier, then scoring (P7-08).
+    const screeningMs =
+      config.chat.guard.kind === 'classifier' ? 2 * config.chat.guard.timeoutMs : 0;
     this.lockTtlMs = screeningMs + config.chat.queueWaitMs + AI_LEASE_MS;
     this.retryAfterSeconds = Math.ceil(config.chat.queueWaitMs / 1_000) || 1;
   }
@@ -322,13 +324,10 @@ export class ChatService {
 
   /**
    * Screens a message. Without a complete screening it never reaches the model (P7-08, ADR
-   * 0003), and what the visitor hears depends on whether the classifier started on it:
-   * - not started (its queue was full, or the time ran out while waiting in it): `503
-   *   ai_overloaded`, quota refunded, since only other people's messages were in the way;
-   * - timed out while being scored: `422`, shorten the message. Retrying the same text would
-   *   only time out again, so it isn't offered, and the CPU spent counts against the quota;
-   * - failed while being scored: `503`, quota charged, so input that breaks the model can't be
-   *   resent for free.
+   * 0003). Scoring itself ran out of its own budget: `422 message_too_long`, charged, since
+   * retrying the same text would time out again and the CPU was spent. Anything else (the
+   * classifier's queue was full, the wait in it ran out, or the model failed) is `503
+   * ai_overloaded`, refunded: other people's messages or a server fault were in the way.
    */
   private async screen(
     message: string,
@@ -349,11 +348,9 @@ export class ChatService {
       if (reason === 'error') this.logger.error(log);
       else this.logger.warn(log);
       this.metrics.countScreeningRefusal(reason, started);
-      if (!started) {
-        await this.refund(quota);
-        throw aiBusy(this.retryAfterSeconds);
-      }
-      throw reason === 'timeout' ? tooLongToCheck() : aiBusy(this.retryAfterSeconds);
+      if (reason === 'timeout' && started) throw tooLongToCheck();
+      await this.refund(quota);
+      throw aiBusy(this.retryAfterSeconds);
     }
   }
 

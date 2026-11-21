@@ -29,17 +29,17 @@ lags under a flood or crafted input, and then refusing costs little.
    place. A full queue answers `503 ai_overloaded` with `Retry-After` at once: no quota is
    charged and nothing is screened. It's advisory; acquiring the slot stays authoritative.
 2. **A budget that fits.** `CHAT_GUARD_TIMEOUT_MS` defaults to 5 s (was 2 s), about 2.5× the
-   heaviest message on the reference CPU. Ordinary messages are unaffected.
-3. **Fail closed.** A message without a score is never passed on the rules alone. What the
-   visitor hears depends on whether the classifier had started on it (it reports when it does):
-   - **not started** (its queue was full, or the time ran out while waiting in it): `503`
-     `ai_overloaded` with `Retry-After`, quota refunded, since only other messages were in the
-     way;
-   - **timed out while being scored**: `422` `message_rejected`, "too long to check, try a
+   heaviest message on the reference CPU, and applies twice: to waiting in the classifier's queue,
+   then, from the moment the model starts on the message (it reports when), to scoring it. A long
+   wait therefore never makes a short message look too heavy. Ordinary messages are unaffected.
+3. **Fail closed.** A message without a score is never passed on the rules alone:
+   - **scoring itself ran out of its budget**: `422 message_too_long`, "too long to check, try a
      shorter question". Retrying the same text would time out again, so no retry is offered,
      and the CPU spent counts against the quota;
-   - **failed while being scored** (an error, or a nonsensical score): `503`, quota charged, so
-     input that breaks the model can't be resent for free.
+   - **anything else** (the classifier's queue was full, the wait in it ran out, or the model
+     failed): `503 ai_overloaded` with `Retry-After`, quota refunded. Other people's messages or
+     a server fault were in the way, not the visitor; a model that breaks at runtime mustn't
+     drain everyone's quota.
 
    Every refusal is logged with its request ID (errors at error level) and counted in
    `chat_screening_refusals_total{reason, started}`.
@@ -56,6 +56,13 @@ lags under a flood or crafted input, and then refusing costs little.
   than `429` (retry much later): the capacity check comes first, to stay cheap, and they learn
   about the quota once capacity frees up. Accepted: overload is short, and a read-only quota
   check on every message would cost more than it saves.
+- Refunding a wait that ran out lets a client hold classifier queue places for free behind one
+  heavy (charged) message. Accepted: each place needs its own Turnstile-verified session (one
+  message in flight each), the queue holds 8, and the alternative charges visitors stuck behind
+  an attacker.
+- A model error is refunded even after scoring began, so input that reliably breaks the model
+  could be resent for free. Accepted: no such input is known, model failures seen so far are
+  systemic, and charging them would drain every visitor's quota during an outage.
 - Chat availability now depends on the classifier: a model that fails at runtime refuses every
   message until it's fixed (a model that doesn't load already stopped the API at startup).
 - Rejected alternatives: holding the AI slot while screening (wastes model time on messages that

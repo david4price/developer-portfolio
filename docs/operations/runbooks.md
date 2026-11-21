@@ -102,7 +102,8 @@ unaffected.
   message the classifier couldn't score, logged with its request ID as
   `Message refused: classifier gave no score` and counted in `chat_screening_refusals_total`
   (ADR 0003). Refusals with `reason="error"` mean the model is failing: every message is refused
-  until it's fixed. In the metrics,
+  until it's fixed. A `422 message_too_long` is a message too heavy to score in time
+  (`reason="timeout",started="true"`). In the metrics,
   `ai_capacity_rejections_total` rises, `ai_queue_waiting` (requests acquiring a slot right now)
   stays above zero, and the upper buckets of `ai_queue_wait_seconds` fill (long waits since the
   pod started, still visible after a burst drains); or

@@ -67,9 +67,10 @@ hung request.
 - Per-session and per-IP quotas, max input length (1,000 chars), and logging of rejected requests
   (reason only, without message content). A full AI queue is refused before the quotas
   (`hasCapacity()`), so it costs nothing. Refund the quota only when a request certainly used no
-  capacity (the queue filled after that check, AI off, or the classifier never started on the
-  message); waiting out the queue, anything that reached the provider (even "busy"), work the
-  classifier started, and rejected messages all count.
+  capacity (the queue filled after that check, AI off, or the classifier gave no score for a
+  reason that isn't the message's); waiting out the AI queue, anything that reached the provider
+  (even "busy"), a message that ran out of its own scoring budget (`422 message_too_long`), and
+  rejected messages all count.
 
 ## Tests to Require
 

@@ -11,7 +11,10 @@ import {
 export interface ClassifierGuardOptions {
   /** Scores at or above this reject the message. */
   readonly threshold: number;
-  /** Longest a message waits for its score; past it, the message is refused for now. */
+  /**
+   * Two budgets of this length: for waiting in the classifier's queue, then, from the moment the
+   * model starts on the message, for scoring it. Past either, the message is refused.
+   */
   readonly timeoutMs: number;
 }
 
@@ -62,18 +65,27 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
   ): Promise<{ score: number | ScreeningUnavailableReason; started: boolean }> {
     // Aborting on timeout frees the message's place in the classifier's queue and stops its
     // remaining windows, so a burst doesn't leave the queue full of work nobody is waiting for.
+    // The clock restarts when scoring starts, so a long wait in the queue never makes a short
+    // message look too heavy to score.
     const abandon = new AbortController();
+    let started = false;
     let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<ScreeningUnavailableReason>((resolve) => {
+    let expire: (reason: 'timeout') => void = () => undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      expire = resolve;
+    });
+    const arm = () => {
+      clearTimeout(timer);
       timer = setTimeout(() => {
         abandon.abort();
-        resolve('timeout');
+        expire('timeout');
       }, this.options.timeoutMs);
-    });
-    let started = false;
+    };
     const markStarted = () => {
       started = true;
+      arm();
     };
+    arm();
     try {
       const score = await Promise.race([
         this.classifier.score(text, abandon.signal, markStarted),

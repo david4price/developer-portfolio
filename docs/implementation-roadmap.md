@@ -709,9 +709,10 @@ Read-only inventory of the reference host. Findings:
       meet (the same flood on `/health` does it); that limit moved to P7-09.
       Done 2026-11-21 (`feat/p7-08-chat-overload`, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
       a full AI queue is refused before quotas and screening; the classifier budget is 5 s; a
-      message without a score is refused as `503 ai_overloaded`, never passed on the rules
-      alone. On the stage-3 stack a rejection costs about 0.5 ms of CPU (was 10–100 ms; `/health`
-      about 0.1 ms), and no dense message reached the model unscored
+      message without a score is never passed on the rules alone (`422 message_too_long` when
+      scoring itself ran out of time, otherwise a refunded `503 ai_overloaded`). On the stage-3
+      stack a rejection costs about 0.5 ms of CPU (was 10–100 ms; `/health` about 0.1 ms), and no
+      dense message reached the model unscored
       ([load testing](operations/load-testing.md#chat-overload-p7-08)).
 - [ ] **P7-09** 🔒 Rate-limit the public API at the edge. _Needs:_ P7-08. _Done when:_ a
       Cloudflare rate-limiting rule on the API hostname blocks a single client that floods it

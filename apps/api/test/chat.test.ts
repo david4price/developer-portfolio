@@ -1004,8 +1004,8 @@ describe('chat quotas and capacity', () => {
       ['busy', false, 503, 'ai_overloaded', false],
       ['timeout', false, 503, 'ai_overloaded', false], // only waited behind other messages
       ['error', false, 503, 'ai_overloaded', false],
-      ['timeout', true, 422, 'message_rejected', true], // too heavy to score: don't invite a retry
-      ['error', true, 503, 'ai_overloaded', true], // spent CPU: not free to resend
+      ['error', true, 503, 'ai_overloaded', false], // a server fault: never the visitor's cost
+      ['timeout', true, 422, 'message_too_long', true], // too heavy to score: don't invite a retry
     ] as const) {
       const label = `${reason}, started=${started}`;
       const guard = new ScriptedGuard();

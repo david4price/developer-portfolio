@@ -149,7 +149,9 @@ deployment time. The comparison target is never reported as already deployed. Se
 [token provisioning and rotation](kubernetes.md#argo-cd-explorer-token-p6-03).
 
 Messages are screened before they reach the model: an injection attempt gets
-`422 message_rejected` and is not stored
+`422 message_rejected` and is not stored. A message too heavy for the classifier to score within
+`CHAT_GUARD_TIMEOUT_MS` gets `422 message_too_long`; when the classifier is busy or failing, the
+chat answers `503 ai_overloaded` (try again)
 ([Message Screening](../architecture/ai-integration.md#message-screening-confirmed-p5-07)).
 
 Errors use the `ApiErrorResponse` shape (`error.code`, `error.message`, `error.requestId`). When
