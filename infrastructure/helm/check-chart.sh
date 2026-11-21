@@ -16,6 +16,30 @@ render() {
   helm template portfolio "$chart" --namespace portfolio "$@"
 }
 
+# env_value <manifests> <name>: the value of a container environment variable in the render.
+env_value() {
+  # A missing variable prints nothing (and must not trip `set -e`), so the caller reports it.
+  { grep -A1 -E "^ *- name: $2\$" <<<"$1" || true; } |
+    awk '$1 == "value:" { gsub(/"/, "", $2); print $2 }'
+}
+
+# API metrics stay on the pod's loopback (P7-01): the chart pins API_METRICS_HOST to 127.0.0.1 in
+# `env`, which wins over `envFrom`, and the port (as rendered) is never a port, containerPort, or
+# targetPort of a container, Service, or NetworkPolicy. Not covered: URLs such as a tunnel
+# ingress service, and NetworkPolicy port ranges (`endPort`).
+check_metrics_private() {
+  local host port
+  host="$(env_value "$2" API_METRICS_HOST)"
+  port="$(env_value "$2" API_METRICS_PORT)"
+  if [[ "$host" != "127.0.0.1" ]]; then
+    fail "$1 renders API_METRICS_HOST='$host', not 127.0.0.1"
+  elif ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    fail "$1 renders no numeric API_METRICS_PORT"
+  elif grep -qiE "port: \"?${port}\"?\$" <<<"$2"; then
+    fail "$1 exposes the API metrics port ($port)"
+  fi
+}
+
 for values in "$chart"/ci/*-values.yaml; do
   name="$(basename "$values")"
   echo "== $name"
@@ -28,6 +52,7 @@ for values in "$chart"/ci/*-values.yaml; do
   if grep -qE '^kind: Secret$' <<<"$manifests"; then
     fail "$name renders a Secret"
   fi
+  check_metrics_private "$name" "$manifests"
 done
 
 # Production values on top of CI placeholders; images.yaml exists after the first release.
@@ -38,7 +63,9 @@ if [[ -f "$production/images.yaml" ]]; then
   production_args+=(-f "$production/images.yaml")
 fi
 helm lint --strict "$chart" "${production_args[@]}"
-kubeconform -strict -summary -output text <<<"$(render "${production_args[@]}")"
+production_manifests="$(render "${production_args[@]}")"
+kubeconform -strict -summary -output text <<<"$production_manifests"
+check_metrics_private "environments/production" "$production_manifests"
 
 # expect_failure <expected error text> <render args…>: rendering must fail with that message.
 expect_failure() {

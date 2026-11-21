@@ -27,6 +27,7 @@
     "@portfolio/config": "workspace:*",
     "@portfolio/project-registry": "workspace:*",
     "@portfolio/shared-types": "workspace:*",
+    "@prometheus-io/client": "^0.16.1",
     "drizzle-orm": "^0.45.4",
     "fastify": "5.12.8",
     "ioredis": "^6.0.0",

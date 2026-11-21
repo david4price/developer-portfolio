@@ -6,6 +6,7 @@ import { ChatModule } from './modules/chat/chat.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { InfrastructureModule } from './modules/infrastructure/infrastructure.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
+import { MetricsModule } from './metrics/metrics.module.js';
 import { REDIS_READINESS, RedisModule } from './redis/redis.module.js';
 
 @Global()
@@ -27,6 +28,7 @@ export class AppModule {
       module: AppModule,
       imports: [
         ConfigModule.register(config),
+        MetricsModule,
         DatabaseModule,
         RedisModule,
         AiModule,

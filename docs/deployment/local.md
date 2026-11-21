@@ -7,7 +7,7 @@ AI stays disabled unless you configure a provider.
 
 - Node.js 24 (`.node-version`)
 - Corepack, which ships with Node.js 24. pnpm is pinned in `package.json`, so you don't need a
-  global pnpm install.
+  global pnpm install, but `pnpm` must be on your `PATH`: the root scripts call it themselves.
 - Docker with Compose v2.20 or newer (for PostgreSQL and Redis)
 
 ## Setup
@@ -15,13 +15,19 @@ AI stays disabled unless you configure a provider.
 ```bash
 git clone https://github.com/david4price/developer-portfolio.git
 cd developer-portfolio
-corepack enable            # or prefix pnpm commands with `corepack`
+corepack enable            # puts pnpm on PATH (see below if it needs sudo)
 pnpm install
 cp .env.example .env       # then replace every change-me value
 docker compose up -d       # PostgreSQL 17 + Redis 7 on 127.0.0.1
 pnpm db:migrate            # builds, then applies migrations
 pnpm db:seed               # loads the project registry into PostgreSQL (idempotent)
 ```
+
+`corepack enable` writes a `pnpm` link next to `node`. With a system-wide Node.js (for example in
+`/usr/bin`) that needs `sudo`; instead, link it into a directory of your own that is on `PATH`:
+`corepack enable --install-directory ~/.local/bin pnpm`. Running `corepack pnpm <script>` without
+either doesn't work for `pnpm check`, `pnpm build`, `pnpm db:migrate`, or the `dev:*` scripts:
+they call `pnpm` again and fail with `pnpm: not found`.
 
 ## Run
 
@@ -46,6 +52,15 @@ Useful endpoints:
 | `POST /api/v1/chat/sessions` | `{ turnstileToken }` → session cookie; `503 ai_disabled` while AI off   |
 | `POST /api/v1/chat/messages` | `{ message }` → `{ reply, links }` (see below)                          |
 | `GET /api/v1/infrastructure` | Sanitized deployment snapshot; `503 infrastructure_disabled` by default |
+
+Metrics (P7-01) are served apart from the API, at `http://127.0.0.1:9464/metrics` in the
+Prometheus text format (`API_METRICS_HOST` and `API_METRICS_PORT`; the port must differ from
+`API_PORT`). The metrics port is never part of `/api/v1`: request durations by route pattern and
+status class, error responses by code, abandoned requests (`http_client_disconnects_total`, not
+counted as errors), readiness per dependency, AI inference time by outcome, the
+AI wait queue, and process and Node.js runtime metrics. Nothing scrapes them by default; read them
+with `curl`. In `compose.full.yaml` the API binds them inside its container, so other containers on
+the Compose network can reach `api:9464` too; in Kubernetes they stay on the pod's loopback.
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as
@@ -163,6 +178,7 @@ seed, the API, the worker, and the static site served by unprivileged nginx.
 ```bash
 docker compose -f compose.full.yaml up -d --build
 # site: http://localhost:8080   api: http://localhost:3001/api/v1/health
+# metrics: http://127.0.0.1:9464/metrics (published on the host's loopback only)
 ```
 
 Containers run with dropped Linux capabilities and `no-new-privileges`. The API, worker, and
@@ -205,10 +221,11 @@ compatibility rules that keep image rollbacks safe.
 
 ## Troubleshooting
 
-| Symptom                                                 | Fix                                                                                           |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `Invalid environment: DATABASE_URL …` at startup        | Copy `.env.example` to `.env`; the message names every missing or invalid variable            |
-| Readiness shows `postgres: down`                        | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                             |
-| `required variable POSTGRES_DB is missing` from Compose | Run Compose from the repository root, where `.env` lives                                      |
-| Port already in use                                     | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, or `PORT` (web) in `.env`                   |
-| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version |
+| Symptom                                                 | Fix                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Invalid environment: DATABASE_URL …` at startup        | Copy `.env.example` to `.env`; the message names every missing or invalid variable                                                         |
+| Readiness shows `postgres: down`                        | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                                                                          |
+| `required variable POSTGRES_DB is missing` from Compose | Run Compose from the repository root, where `.env` lives                                                                                   |
+| Port already in use                                     | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, `API_METRICS_PORT`, or `PORT` (web) in `.env`                                            |
+| `ENOTFOUND postgres` from `migrate` after a failed `up` | A half-started stack (e.g. a port clash) can leave containers off the network: `docker compose -f compose.full.yaml down`, then `up` again |
+| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version                                              |

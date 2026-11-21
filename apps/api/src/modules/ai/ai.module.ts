@@ -1,7 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { API_CONFIG, type AiConfig, type ApiConfig } from '../../config/api-config.js';
+import { ApiMetrics } from '../../metrics/api-metrics.js';
 import { AI_PROVIDER, type AiProvider } from './ai-provider.js';
 import { DisabledAiProvider } from './disabled-ai.provider.js';
+import { MeteredAiProvider } from './metered-ai.provider.js';
 import { OpenAiCompatibleProvider } from './openai-compatible.provider.js';
 
 /** Builds the configured adapter. Unknown or unimplemented providers fail startup loudly. */
@@ -25,8 +27,9 @@ export function createAiProvider(config: AiConfig): AiProvider {
   providers: [
     {
       provide: AI_PROVIDER,
-      inject: [API_CONFIG],
-      useFactory: (config: ApiConfig) => createAiProvider(config.ai),
+      inject: [API_CONFIG, ApiMetrics],
+      useFactory: (config: ApiConfig, metrics: ApiMetrics) =>
+        new MeteredAiProvider(createAiProvider(config.ai), metrics),
     },
   ],
   exports: [AI_PROVIDER],

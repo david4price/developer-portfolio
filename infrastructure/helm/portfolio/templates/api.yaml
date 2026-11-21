@@ -97,6 +97,11 @@ spec:
               value: 0.0.0.0
             - name: API_PORT
               value: {{ .port | quote }}
+            # Loopback only, set here so an envFrom source can't widen it (env wins over envFrom).
+            - name: API_METRICS_HOST
+              value: 127.0.0.1
+            - name: API_METRICS_PORT
+              value: {{ .metricsPort | quote }}
             {{- include "portfolio.databaseEnv" $ | nindent 12 }}
             - name: REDIS_URL
               value: {{ include "portfolio.redisUrl" $ | quote }}

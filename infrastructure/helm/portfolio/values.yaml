@@ -28,6 +28,9 @@ api:
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
   port: 3001
+  # Prometheus metrics (P7-01) listen on this port on the pod's loopback only: not in the
+  # Service, the tunnel, or any NetworkPolicy. Read them with `kubectl port-forward`.
+  metricsPort: 9464
   logLevel: log
   # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com. Leave
   # empty to supply CORS_ORIGINS through `envConfigMap` instead.

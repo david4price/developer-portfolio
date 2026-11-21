@@ -15,6 +15,14 @@ describe('loadApiConfig', () => {
     assert.equal(config.environment, 'development');
     assert.deepEqual(config.corsOrigins, []);
     assert.deepEqual(config.ai, { enabled: false });
+    assert.deepEqual(config.metrics, { host: '127.0.0.1', port: 9464 });
+  });
+
+  it('never serves metrics on the public API port', () => {
+    assert.throws(
+      () => loadApiConfig({ ...required, API_PORT: '9000', API_METRICS_PORT: '9000' }),
+      /API_METRICS_PORT/,
+    );
   });
 
   it('rejects a missing database URL without echoing other values', () => {
