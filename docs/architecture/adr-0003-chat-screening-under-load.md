@@ -30,10 +30,19 @@ lags under a flood or crafted input, and then refusing costs little.
    charged and nothing is screened. It's advisory; acquiring the slot stays authoritative.
 2. **A budget that fits.** `CHAT_GUARD_TIMEOUT_MS` defaults to 5 s (was 2 s), about 2.5× the
    heaviest message on the reference CPU. Ordinary messages are unaffected.
-3. **Fail closed.** A message without a score is refused as `503 ai_overloaded` (retryable),
-   never passed on the rules alone. The quota is refunded when the classifier did no work (its
-   queue was full, or it failed) and charged after a timeout, which spent real CPU. Errors are
-   logged at error level: a broken model now stops the chat instead of weakening it.
+3. **Fail closed.** A message without a score is never passed on the rules alone. What the
+   visitor hears depends on whether the classifier had started on it (it reports when it does):
+   - **not started** (its queue was full, or the time ran out while waiting in it): `503`
+     `ai_overloaded` with `Retry-After`, quota refunded, since only other messages were in the
+     way;
+   - **timed out while being scored**: `422` `message_rejected`, "too long to check, try a
+     shorter question". Retrying the same text would time out again, so no retry is offered,
+     and the CPU spent counts against the quota;
+   - **failed while being scored** (an error, or a nonsensical score): `503`, quota charged, so
+     input that breaks the model can't be resent for free.
+
+   Every refusal is logged with its request ID (errors at error level) and counted in
+   `chat_screening_refusals_total{reason, started}`.
 
 ## Consequences
 
@@ -43,6 +52,10 @@ lags under a flood or crafted input, and then refusing costs little.
 - A client that resends without pause still keeps a CPU busy, as it would on any endpoint
   (`/health` under the same flood: 13,400 requests a second at 129% CPU). That limit belongs at
   the edge, before the tunnel, not in the API.
+- While the AI queue is full, a visitor who is also over quota hears `503` (retry shortly) rather
+  than `429` (retry much later): the capacity check comes first, to stay cheap, and they learn
+  about the quota once capacity frees up. Accepted: overload is short, and a read-only quota
+  check on every message would cost more than it saves.
 - Chat availability now depends on the classifier: a model that fails at runtime refuses every
   message until it's fixed (a model that doesn't load already stopped the API at startup).
 - Rejected alternatives: holding the AI slot while screening (wastes model time on messages that

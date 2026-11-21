@@ -54,6 +54,13 @@ export class ApiMetrics {
     registers: [this.registry],
   });
 
+  private readonly screeningRefusals = new Counter({
+    name: 'chat_screening_refusals_total',
+    help: 'Chat messages refused because the classifier gave no score, by reason and by whether it had started scoring them (P7-08).',
+    labelNames: ['reason', 'started'] as const,
+    registers: [this.registry],
+  });
+
   private readonly readiness = new Gauge({
     name: 'readiness_dependency_up',
     help: '1 when the dependency passed its last readiness check, 0 when it failed.',
@@ -103,6 +110,10 @@ export class ApiMetrics {
 
   countError(code: ApiErrorCode): void {
     this.errors.inc({ code });
+  }
+
+  countScreeningRefusal(reason: 'busy' | 'timeout' | 'error', started: boolean): void {
+    this.screeningRefusals.inc({ reason, started: String(started) });
   }
 
   countClientDisconnect(): void {

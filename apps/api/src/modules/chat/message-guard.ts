@@ -41,11 +41,15 @@ export interface MessageGuard {
 export type ScreeningUnavailableReason = 'busy' | 'timeout' | 'error';
 
 /**
- * Screening couldn't finish (P7-08: fail closed). The chat answers `503 ai_overloaded`, so the
- * visitor retries, instead of passing a message the classifier never scored.
+ * Screening couldn't finish (P7-08: fail closed), so the message must not reach the model.
+ * `started` says whether the classifier spent CPU on it, or only queued it: the chat refunds the
+ * quota only for the latter, and tells a message that timed out while being scored to be shorter.
  */
 export class ScreeningUnavailableError extends Error {
-  constructor(readonly reason: ScreeningUnavailableReason) {
+  constructor(
+    readonly reason: ScreeningUnavailableReason,
+    readonly started: boolean,
+  ) {
     super('Message screening is unavailable');
     this.name = 'ScreeningUnavailableError';
   }

@@ -40,7 +40,9 @@ the roadmap calls for them.
   `http_client_disconnects_total` (abandoned requests, kept out of the error count),
   `readiness_dependency_up`, `ai_inference_duration_seconds` (outcome; `MeteredAiProvider`),
   `ai_queue_waiting`, `ai_queue_wait_seconds`, and `ai_capacity_rejections_total`
-  (`MeteredAiConcurrencyLimiter`), plus process and Node.js runtime metrics.
+  (`MeteredAiConcurrencyLimiter`; `precheck` is a full queue found before screening),
+  `chat_screening_refusals_total` (reason, started; `ChatService`), plus process and Node.js
+  runtime metrics.
 - New metrics go through an intent-named `ApiMetrics` method. Labels are low-cardinality and
   server-chosen (route pattern, status class, error code, fixed outcome names), never ids, slugs,
   or anything from the request.

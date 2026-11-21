@@ -103,7 +103,7 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
     );
   }
 
-  score(text: string, signal?: AbortSignal): Promise<number> {
+  score(text: string, signal?: AbortSignal, onStart?: () => void): Promise<number> {
     if (this.disposal) return Promise.reject(new Error('injection classifier is disposed'));
     if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.queued > this.maxQueued) return Promise.reject(new InjectionClassifierBusyError());
@@ -116,7 +116,7 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
       holding = false;
     };
     signal?.addEventListener('abort', leave, { once: true });
-    const run = this.tail.then(() => this.scoreNow(text, signal));
+    const run = this.tail.then(() => this.scoreNow(text, signal, onStart));
     this.tail = run.catch(() => undefined);
     return run.finally(() => {
       signal?.removeEventListener('abort', leave);
@@ -135,8 +135,13 @@ export class OnnxInjectionClassifier implements InjectionClassifier {
    * quarter (127 tokens by default), so a phrase up to that long that spans a boundary is whole in
    * one of them. Stops between windows once the caller gives up.
    */
-  private async scoreNow(text: string, signal?: AbortSignal): Promise<number> {
+  private async scoreNow(
+    text: string,
+    signal?: AbortSignal,
+    onStart?: () => void,
+  ): Promise<number> {
     signal?.throwIfAborted();
+    onStart?.();
     const content = this.tokenizer.encode(text).ids.slice(1, -1);
     const size = this.windowTokens - 2;
     const stride = size - Math.floor(size / 4);

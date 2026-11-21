@@ -964,7 +964,10 @@ describe('chat quotas and capacity', () => {
     const target = await boot({ sessionMessageLimit: 1, ipMessagesPerHour: 1 }, concurrency);
     const { cookie } = await session(target);
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      assert.equal((await message(target, cookie)).statusCode, 503, 'never 429 while overloaded');
+      const response = await message(target, cookie);
+      assert.equal(response.statusCode, 503, 'never 429 while overloaded');
+      assert.equal(response.json<ApiErrorResponse>().error.code, 'ai_overloaded');
+      assert.equal(response.headers['retry-after'], '10', "the limiter's own Retry-After");
     }
     concurrency.limit = 1_000;
     concurrency.reportsCapacity = undefined;
@@ -996,23 +999,35 @@ describe('chat quotas and capacity', () => {
     assert.equal((await message(target, cookie)).statusCode, 429);
   });
 
-  it('refuses a message the classifier could not score, refunding only when it did no work', async () => {
-    for (const [reason, charged] of [
-      ['busy', false],
-      ['error', false],
-      ['timeout', true],
+  it('refuses a message the classifier could not score, by whether it had started on it', async () => {
+    for (const [reason, started, status, code, charged] of [
+      ['busy', false, 503, 'ai_overloaded', false],
+      ['timeout', false, 503, 'ai_overloaded', false], // only waited behind other messages
+      ['error', false, 503, 'ai_overloaded', false],
+      ['timeout', true, 422, 'message_rejected', true], // too heavy to score: don't invite a retry
+      ['error', true, 503, 'ai_overloaded', true], // spent CPU: not free to resend
     ] as const) {
+      const label = `${reason}, started=${started}`;
       const guard = new ScriptedGuard();
-      guard.failWith = new ScreeningUnavailableError(reason);
+      guard.failWith = new ScreeningUnavailableError(reason, started);
       const ai = new FakeAi();
       const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai, guard);
       const { cookie } = await session(target);
       const refused = await message(target, cookie);
-      assert.equal(refused.statusCode, 503, reason);
-      assert.equal(refused.json<ApiErrorResponse>().error.code, 'ai_overloaded');
-      assert.equal(ai.requests.length, 0, `${reason}: an unscored message never reaches the model`);
+      assert.equal(refused.statusCode, status, label);
+      assert.equal(refused.json<ApiErrorResponse>().error.code, code, label);
+      assert.equal(refused.headers['retry-after'] !== undefined, status === 503, label);
+      assert.equal(ai.requests.length, 0, `${label}: an unscored message never reaches the model`);
+      assert.match(
+        await target.get(ApiMetrics).render(),
+        new RegExp(
+          `^chat_screening_refusals_total\\{reason="${reason}",started="${started}"\\} 1$`,
+          'm',
+        ),
+        label,
+      );
       guard.failWith = undefined;
-      assert.equal((await message(target, cookie)).statusCode, charged ? 429 : 200, reason);
+      assert.equal((await message(target, cookie)).statusCode, charged ? 429 : 200, label);
     }
   });
 

@@ -1,4 +1,4 @@
-import { Logger, type OnApplicationShutdown } from '@nestjs/common';
+import type { OnApplicationShutdown } from '@nestjs/common';
 import { InjectionClassifierBusyError, type InjectionClassifier } from './injection-classifier.js';
 import {
   type MessageGuard,
@@ -29,8 +29,6 @@ export interface ClassifierGuardOptions {
  * ordinary message in milliseconds, so it lags only under a flood or crafted input.
  */
 export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdown {
-  private readonly logger = new Logger('MessageGuard');
-
   constructor(
     private readonly rules: MessageGuard,
     private readonly classifier: InjectionClassifier,
@@ -41,13 +39,9 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
     const screened = await this.rules.screenMessage(message);
     if (!screened.allowed) return screened;
 
-    const score = await this.scoreWithin(screened.message);
-    if (typeof score === 'string') {
-      const log = { message: 'Message refused: classifier gave no score', reason: score };
-      if (score === 'error') this.logger.error(log);
-      else this.logger.warn(log);
-      throw new ScreeningUnavailableError(score);
-    }
+    // Logged by the caller, which has the request ID.
+    const { score, started } = await this.scoreWithin(screened.message);
+    if (typeof score === 'string') throw new ScreeningUnavailableError(score, started);
     return score >= this.options.threshold
       ? { allowed: false, reason: 'classified_injection' }
       : screened;
@@ -63,7 +57,9 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
     return this.rules.screenReply(reply);
   }
 
-  private async scoreWithin(text: string): Promise<number | ScreeningUnavailableReason> {
+  private async scoreWithin(
+    text: string,
+  ): Promise<{ score: number | ScreeningUnavailableReason; started: boolean }> {
     // Aborting on timeout frees the message's place in the classifier's queue and stops its
     // remaining windows, so a burst doesn't leave the queue full of work nobody is waiting for.
     const abandon = new AbortController();
@@ -74,11 +70,21 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
         resolve('timeout');
       }, this.options.timeoutMs);
     });
+    let started = false;
+    const markStarted = () => {
+      started = true;
+    };
     try {
-      const score = await Promise.race([this.classifier.score(text, abandon.signal), timeout]);
-      return typeof score === 'number' && !Number.isFinite(score) ? 'error' : score;
+      const score = await Promise.race([
+        this.classifier.score(text, abandon.signal, markStarted),
+        timeout,
+      ]);
+      return {
+        score: typeof score === 'number' && !Number.isFinite(score) ? 'error' : score,
+        started,
+      };
     } catch (error) {
-      return error instanceof InjectionClassifierBusyError ? 'busy' : 'error';
+      return { score: error instanceof InjectionClassifierBusyError ? 'busy' : 'error', started };
     } finally {
       clearTimeout(timer);
     }

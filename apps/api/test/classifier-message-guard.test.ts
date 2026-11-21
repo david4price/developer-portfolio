@@ -18,11 +18,11 @@ class FakeClassifier implements InjectionClassifier {
   readonly seen: string[] = [];
   readonly signals: (AbortSignal | undefined)[] = [];
   disposed = false;
-  constructor(private readonly answer: (text: string) => Promise<number>) {}
-  score(text: string, signal?: AbortSignal): Promise<number> {
+  constructor(private readonly answer: (text: string, start: () => void) => Promise<number>) {}
+  score(text: string, signal?: AbortSignal, onStart?: () => void): Promise<number> {
     this.seen.push(text);
     this.signals.push(signal);
-    return this.answer(text);
+    return this.answer(text, onStart ?? (() => undefined));
   }
   async dispose(): Promise<void> {
     this.disposed = true;
@@ -30,7 +30,7 @@ class FakeClassifier implements InjectionClassifier {
 }
 
 const options = { threshold: 0.5, timeoutMs: 50 };
-const guardWith = (answer: (text: string) => Promise<number>) => {
+const guardWith = (answer: (text: string, start: () => void) => Promise<number>) => {
   const classifier = new FakeClassifier(answer);
   return {
     classifier,
@@ -83,6 +83,31 @@ describe('ClassifierMessageGuard', () => {
         allowed: false,
         reason: 'instruction_override',
       });
+    }
+  });
+
+  it('says whether the classifier had started on a message it gave no score for', async () => {
+    const never = new Promise<number>(() => undefined);
+    for (const [answer, reason, started] of [
+      [() => Promise.reject(new InjectionClassifierBusyError()), 'busy', false],
+      [() => never, 'timeout', false], // still waiting in the queue
+      [(_: string, start: () => void) => (start(), never), 'timeout', true],
+      [
+        (_: string, start: () => void) => (start(), Promise.reject(new Error('trap'))),
+        'error',
+        true,
+      ],
+      [async (_: string, start: () => void) => (start(), Number.NaN), 'error', true],
+    ] as const) {
+      const { guard } = guardWith(answer);
+      await assert.rejects(
+        guard.screenMessage('Which projects use Go?'),
+        (error: unknown) =>
+          error instanceof ScreeningUnavailableError &&
+          error.reason === reason &&
+          error.started === started,
+        `${reason}, started=${started}`,
+      );
     }
   });
 

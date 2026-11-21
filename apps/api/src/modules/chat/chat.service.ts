@@ -3,6 +3,7 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import type { ChatLink, ChatMessageResponse } from '@portfolio/shared-types';
 import { ApiException } from '../../common/api-exception.js';
 import { API_CONFIG, type ApiConfig, type ChatConfig } from '../../config/api-config.js';
+import { ApiMetrics } from '../../metrics/api-metrics.js';
 import {
   AI_PROVIDER,
   AiDisabledError,
@@ -89,6 +90,13 @@ const messageRejected = () =>
     "The assistant can't answer that message. Ask about the developer's projects, skills, or experience.",
   );
 
+const tooLongToCheck = () =>
+  new ApiException(
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    'message_rejected',
+    'That message is too long to check. Try a shorter question.',
+  );
+
 const aiDisabled = () =>
   new ApiException(
     HttpStatus.SERVICE_UNAVAILABLE,
@@ -144,6 +152,7 @@ export class ChatService {
     @Inject(SESSION_CHALLENGE) private readonly challenge: SessionChallenge,
     @Inject(CHALLENGE_REPLAY_STORE) private readonly challengeReplay: ChallengeReplayStore,
     @Inject(API_CONFIG) config: ApiConfig,
+    private readonly metrics: ApiMetrics,
   ) {
     this.limits = config.chat;
     const screeningMs = config.chat.guard.kind === 'classifier' ? config.chat.guard.timeoutMs : 0;
@@ -248,7 +257,7 @@ export class ChatService {
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
-      const screened = await this.screen(message, quota);
+      const screened = await this.screen(message, quota, requestId);
       if (!screened.allowed) {
         this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();
@@ -312,17 +321,39 @@ export class ChatService {
   }
 
   /**
-   * Screens a message. Without a complete screening the message is refused as `503
-   * ai_overloaded` (P7-08, fail closed). The quota is refunded only when the classifier did no
-   * work (its queue was full or it failed at once); a timeout spent real CPU, so it counts.
+   * Screens a message. Without a complete screening it never reaches the model (P7-08, ADR
+   * 0003), and what the visitor hears depends on whether the classifier started on it:
+   * - not started (its queue was full, or the time ran out while waiting in it): `503
+   *   ai_overloaded`, quota refunded, since only other people's messages were in the way;
+   * - timed out while being scored: `422`, shorten the message. Retrying the same text would
+   *   only time out again, so it isn't offered, and the CPU spent counts against the quota;
+   * - failed while being scored: `503`, quota charged, so input that breaks the model can't be
+   *   resent for free.
    */
-  private async screen(message: string, quota: readonly QuotaHit[]): Promise<ScreenedMessage> {
+  private async screen(
+    message: string,
+    quota: readonly QuotaHit[],
+    requestId: string,
+  ): Promise<ScreenedMessage> {
     try {
       return await this.guard.screenMessage(message);
     } catch (error) {
       if (!(error instanceof ScreeningUnavailableError)) throw error;
-      if (error.reason !== 'timeout') await this.refund(quota);
-      throw aiBusy(this.retryAfterSeconds);
+      const { reason, started } = error;
+      const log = {
+        message: 'Message refused: classifier gave no score',
+        reason,
+        started,
+        requestId,
+      };
+      if (reason === 'error') this.logger.error(log);
+      else this.logger.warn(log);
+      this.metrics.countScreeningRefusal(reason, started);
+      if (!started) {
+        await this.refund(quota);
+        throw aiBusy(this.retryAfterSeconds);
+      }
+      throw reason === 'timeout' ? tooLongToCheck() : aiBusy(this.retryAfterSeconds);
     }
   }
 
