@@ -6,8 +6,10 @@ export interface InjectionClassifier {
   /**
    * Probability in [0, 1] that `text` is an injection attempt. Rejects when it can't answer.
    * Once `signal` aborts, the work frees its queue place at once and is skipped or stopped.
+   * `onStart` runs when the model starts on this text (after any wait in the queue), so a caller
+   * can tell time spent waiting from time spent scoring.
    */
-  score(text: string, signal?: AbortSignal): Promise<number>;
+  score(text: string, signal?: AbortSignal, onStart?: () => void): Promise<number>;
   /** Refuses new work, waits for queued work to settle, then frees the model. */
   dispose?(): Promise<void>;
 }

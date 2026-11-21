@@ -75,8 +75,13 @@ environment (`CHAT_*`); the defaults below apply when unset.
 | Bot challenge                | Turnstile verified server-side on session creation (Confirmed in code) | Hostname/action bound; Redis prevents token reuse across replicas; live widget pending (P5-04)                                                  |
 
 Quotas count only messages that would reach the model: a `409 chat_busy` or `401` costs nothing.
-A `503` is refunded only when the request certainly used no capacity: the queue was already full,
-or AI is off. Anything that waited out the queue or reached the provider counts, including a
+A full AI queue is refused before the quotas are counted at all (P7-08), so it costs nothing
+either. A `503` is refunded only when the request certainly used no capacity: the queue filled
+just after that check, AI is off, or the classifier gave no score for a reason that isn't the
+message's (its queue was full, the wait in it ran out, or the model failed). Only a message that
+ran out of its own scoring budget counts: it answers `422 message_too_long`, since retrying the
+same text would time out again ([ADR 0003](adr-0003-chat-screening-under-load.md)).
+Anything that waited out the queue or reached the provider counts, including a
 provider "busy" (it may follow a long generation, and refunding even quick ones would let a client
 hammer an overloaded upstream for free), so neither becomes free GPU time or free queue
 occupancy. A message rejected by screening also counts, so the screen can't be probed for free.
@@ -315,10 +320,14 @@ still checked by the rules.
   are Debian slim instead of Alpine. No GPU, and no call to the inference runtime.
 - **Failure:** a model that doesn't load stops the API at startup. With AI off no message is
   screened, so the guard stays `rules` and no model is loaded. At runtime, a full queue, an
-  error, or no score within `CHAT_GUARD_TIMEOUT_MS` (2 s) leaves the rules' verdict standing and
-  logs `Message screened by rules only` with the cause. Refusing every message whenever the
-  classifier lags would let a burst of traffic take the chat down, and screening is one layer
-  of several.
+  error, or no score within `CHAT_GUARD_TIMEOUT_MS` (5 s) refuses the message, logged with the
+  cause and the request ID as `Message refused: classifier gave no score`. The answer is
+  `503 ai_overloaded` (retry), unless scoring the message itself ran out of its budget (which
+  restarts when scoring starts): that's `422 message_too_long`. `chat_screening_refusals_total`
+  counts refusals. Until P7-08
+  the rules' verdict stood alone instead, which let padded or flooded messages skip the
+  classifier ([ADR 0003](adr-0003-chat-screening-under-load.md)). A full AI queue is refused
+  before any of this, so overload costs no screening.
 - **Why the rules keep their rejections:** letting a confident "benign" score overrule a rule
   would have cleared the rules' three false positives, but the classifier scores some plain
   attacks near zero ("From now on, you are a pirate.", "Enable developer mode."), so it would have

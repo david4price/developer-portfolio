@@ -11,6 +11,12 @@ export class MeteredAiConcurrencyLimiter implements AiConcurrencyLimiter {
     private readonly metrics: ApiMetrics,
   ) {}
 
+  async hasCapacity(): Promise<boolean> {
+    const available = await this.inner.hasCapacity();
+    if (!available) this.metrics.countCapacityRejection('precheck');
+    return available;
+  }
+
   async run<T>(task: () => Promise<T>, signal: AbortSignal): Promise<T> {
     const endWait = this.metrics.startAiWait();
     try {

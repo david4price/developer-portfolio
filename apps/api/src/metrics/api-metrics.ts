@@ -13,8 +13,11 @@ export type AiInferenceOutcome =
   | 'aborted'
   | 'error';
 
-/** Why a chat request got no AI slot: at once (queue full) or after waiting its turn. */
-export type AiCapacityRejection = 'immediate' | 'waited';
+/**
+ * Why a chat request got no AI slot: turned away before quotas and screening (`precheck`, P7-08),
+ * at once when asking for one (`immediate`), or after waiting its turn (`waited`).
+ */
+export type AiCapacityRejection = 'precheck' | 'immediate' | 'waited';
 
 /** Request durations run from a few milliseconds to a chat reply (AI wait plus generation). */
 const HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];
@@ -51,6 +54,13 @@ export class ApiMetrics {
     registers: [this.registry],
   });
 
+  private readonly screeningRefusals = new Counter({
+    name: 'chat_screening_refusals_total',
+    help: 'Chat messages refused because the classifier gave no score, by reason and by whether it had started scoring them (P7-08).',
+    labelNames: ['reason', 'started'] as const,
+    registers: [this.registry],
+  });
+
   private readonly readiness = new Gauge({
     name: 'readiness_dependency_up',
     help: '1 when the dependency passed its last readiness check, 0 when it failed.',
@@ -81,7 +91,7 @@ export class ApiMetrics {
 
   private readonly aiRejections = new Counter({
     name: 'ai_capacity_rejections_total',
-    help: 'Chat requests turned away for lack of AI capacity: immediately, or after waiting.',
+    help: 'Chat requests turned away for lack of AI capacity: before screening (precheck), when asking for a slot (immediate), or after waiting.',
     labelNames: ['reason'] as const,
     registers: [this.registry],
   });
@@ -100,6 +110,10 @@ export class ApiMetrics {
 
   countError(code: ApiErrorCode): void {
     this.errors.inc({ code });
+  }
+
+  countScreeningRefusal(reason: 'busy' | 'timeout' | 'error', started: boolean): void {
+    this.screeningRefusals.inc({ reason, started: String(started) });
   }
 
   countClientDisconnect(): void {

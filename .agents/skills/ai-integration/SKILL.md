@@ -60,13 +60,17 @@ hung request.
   pass, in `test/message-guard.test.ts`.
 - `CHAT_GUARD=classifier` (P5-08) runs the rules, then a CPU injection classifier
   (`onnxruntime-node`, model pinned by SHA-256 in `scripts/fetch-injection-classifier.mjs`). The
-  classifier only adds rejections, and its failures fall back to the rules. Add every real miss to
+  classifier only adds rejections. Without a score (queue full, timeout, error) the message is
+  refused, never passed on the rules alone (P7-08, ADR 0003). Add every real miss to
   `test/fixtures/screening-cases.ts` with its opposite-label look-alike, and re-measure with
   `test:guard-eval` before changing the model, runtime, threshold, or normalization.
 - Per-session and per-IP quotas, max input length (1,000 chars), and logging of rejected requests
-  (reason only, without message content). Refund the quota only when a request certainly used no capacity (immediate queue-full
-  rejection, AI off); waiting out the queue, anything that reached the provider (even "busy"),
-  and rejected messages all count.
+  (reason only, without message content). A full AI queue is refused before the quotas
+  (`hasCapacity()`), so it costs nothing. Refund the quota only when a request certainly used no
+  capacity (the queue filled after that check, AI off, or the classifier gave no score for a
+  reason that isn't the message's); waiting out the AI queue, anything that reached the provider
+  (even "busy"), a message that ran out of its own scoring budget (`422 message_too_long`), and
+  rejected messages all count.
 
 ## Tests to Require
 

@@ -228,6 +228,7 @@ describe('MeteredAiConcurrencyLimiter', () => {
       grant = resolve;
     });
     const inner: AiConcurrencyLimiter = {
+      hasCapacity: async () => true,
       run: async (task) => {
         await slot;
         return task();
@@ -247,11 +248,27 @@ describe('MeteredAiConcurrencyLimiter', () => {
     assert.equal(await sample(metrics, 'ai_queue_wait_seconds_count'), 1);
   });
 
+  it('counts a full queue found by the precheck, and passes the answer through', async () => {
+    const metrics = new ApiMetrics();
+    let open = false;
+    const limiter = new MeteredAiConcurrencyLimiter(
+      { hasCapacity: async () => open, run: (task) => task() },
+      metrics,
+    );
+    assert.equal(await limiter.hasCapacity(), false);
+    open = true;
+    assert.equal(await limiter.hasCapacity(), true);
+    assert.equal(await sample(metrics, 'ai_capacity_rejections_total{reason="precheck"}'), 1);
+  });
+
   it('counts rejections by whether the request waited, without timing them as waits', async () => {
     const metrics = new ApiMetrics();
     const rejections = [new AiCapacityError(10), new AiCapacityError(10, true)];
     const limiter = new MeteredAiConcurrencyLimiter(
-      { run: () => Promise.reject(rejections.shift() ?? new Error('Redis down')) },
+      {
+        hasCapacity: async () => true,
+        run: () => Promise.reject(rejections.shift() ?? new Error('Redis down')),
+      },
       metrics,
     );
     const task = () => Promise.resolve('unused');

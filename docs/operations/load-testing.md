@@ -119,7 +119,7 @@ grow with message size: scoring five windows peaked lower (452 MiB) than the fir
 
 **Dense messages and the classifier's timeout.** Scoring a dense message takes about 1.5–2 s of
 one CPU (a single one was rejected after 1.55 s), close to the 2 s `CHAT_GUARD_TIMEOUT_MS`. Past
-the timeout the rules' verdict stands alone, by design, so most dense messages here went on to
+the timeout the rules' verdict stood alone (the design before P7-08), so most dense messages here went on to
 the (stand-in) model unscored: 19 of 113 were rejected. Under load, any queued message can time
 out the same way. The rules and the reply check still apply. Part of **P7-08**.
 
@@ -161,3 +161,17 @@ session) and the one-message-at-a-time session lock bound it today. The rest of 
 answering, but a determined client could hold one pod's CPU, and while it does, other visitors'
 messages queue for the classifier and can pass its timeout unscored (see dense messages above).
 Tracked as **P7-08**.
+
+**After P7-08** ([ADR 0003](../architecture/adr-0003-chat-screening-under-load.md)), on the same
+stack built from the change:
+
+| Run                  | Requests | Result                                                         | p50    | API CPU peak |
+| -------------------- | -------- | -------------------------------------------------------------- | ------ | ------------ |
+| 8 visitors, short    | 124,871  | 23 answered; the rest refused before screening (`precheck`)    | 1.3 ms | 96%          |
+| 1 visitor, dense     | 24       | all scored and rejected within the 5 s budget; 0 reached model | 2.64 s | 100% (1 CPU) |
+| 8 visitors, dense    | 65       | scored and rejected, or refused as busy; 0 reached the model   | 8.29 s | 80%          |
+| 8 clients, `/health` | 402,050  | for comparison: the same no-pause flood on a trivial endpoint  | 0.5 ms | 129%         |
+
+A rejected message now costs about 0.5 ms of CPU, against 10–100 ms before, and nothing
+unscored reaches the model. A client that resends without pause still keeps a CPU busy, but so it
+would on any endpoint: that limit belongs at the edge (Cloudflare, before the tunnel), **P7-09**.

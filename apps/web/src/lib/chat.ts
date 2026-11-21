@@ -23,6 +23,7 @@ const messages: Readonly<Record<string, string>> = {
   challenge_failed: 'Verification was not accepted. Please complete a fresh check.',
   challenge_unavailable: 'Verification is unavailable. Please try again shortly.',
   message_rejected: 'Please ask a question about the portfolio or its projects.',
+  message_too_long: 'That message is too long to check. Please try a shorter question.',
   rate_limited: 'You have reached the chat limit. Please try again later.',
 };
 

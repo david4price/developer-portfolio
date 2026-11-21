@@ -69,6 +69,8 @@ export type ApiErrorCode =
   | 'chat_session_required'
   | 'chat_busy'
   | 'message_rejected'
+  /** The classifier ran out of time scoring the message itself (P7-08): shorten it. */
+  | 'message_too_long'
   | 'challenge_failed'
   | 'challenge_unavailable'
   | 'infrastructure_disabled'

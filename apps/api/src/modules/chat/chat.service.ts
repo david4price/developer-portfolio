@@ -3,6 +3,7 @@ import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import type { ChatLink, ChatMessageResponse } from '@portfolio/shared-types';
 import { ApiException } from '../../common/api-exception.js';
 import { API_CONFIG, type ApiConfig, type ChatConfig } from '../../config/api-config.js';
+import { ApiMetrics } from '../../metrics/api-metrics.js';
 import {
   AI_PROVIDER,
   AiDisabledError,
@@ -28,7 +29,12 @@ import {
   RATE_LIMITER,
   type RateLimiter,
 } from './limits.js';
-import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
+import {
+  MESSAGE_GUARD,
+  type MessageGuard,
+  type ScreenedMessage,
+  ScreeningUnavailableError,
+} from './message-guard.js';
 import { MAX_REPLY_LINKS, resolveNavigationLinks } from './navigation-links.js';
 import { withoutEmoji } from './reply-emoji.js';
 import {
@@ -84,6 +90,13 @@ const messageRejected = () =>
     "The assistant can't answer that message. Ask about the developer's projects, skills, or experience.",
   );
 
+const tooLongToCheck = () =>
+  new ApiException(
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    'message_too_long',
+    'That message is too long to check. Try a shorter question.',
+  );
+
 const aiDisabled = () =>
   new ApiException(
     HttpStatus.SERVICE_UNAVAILABLE,
@@ -126,6 +139,8 @@ export class ChatService {
   private readonly limits: ChatConfig;
   /** The session lock must outlast screening, queueing for a slot, and the AI call itself. */
   private readonly lockTtlMs: number;
+  /** `Retry-After` for a full queue or unfinished screening: about one queue wait. */
+  private readonly retryAfterSeconds: number;
 
   constructor(
     @Inject(CHAT_SESSION_STORE) private readonly store: ChatSessionStore,
@@ -137,10 +152,14 @@ export class ChatService {
     @Inject(SESSION_CHALLENGE) private readonly challenge: SessionChallenge,
     @Inject(CHALLENGE_REPLAY_STORE) private readonly challengeReplay: ChallengeReplayStore,
     @Inject(API_CONFIG) config: ApiConfig,
+    private readonly metrics: ApiMetrics,
   ) {
     this.limits = config.chat;
-    const screeningMs = config.chat.guard.kind === 'classifier' ? config.chat.guard.timeoutMs : 0;
+    // Screening has two budgets: waiting for the classifier, then scoring (P7-08).
+    const screeningMs =
+      config.chat.guard.kind === 'classifier' ? 2 * config.chat.guard.timeoutMs : 0;
     this.lockTtlMs = screeningMs + config.chat.queueWaitMs + AI_LEASE_MS;
+    this.retryAfterSeconds = Math.ceil(config.chat.queueWaitMs / 1_000) || 1;
   }
 
   /**
@@ -219,8 +238,12 @@ export class ChatService {
       const session = await this.store.load(sessionId);
       if (session === undefined) throw sessionRequired();
 
-      // Quotas count messages that would reach the model (not 409s or 401s); `generate()` says
-      // which 503s are refunded.
+      // A full AI queue turns the message away first, so overload costs neither quota nor
+      // screening (P7-08). Advisory: `generate()` still takes the slot for real.
+      if (!(await this.concurrency.hasCapacity())) throw aiBusy(this.retryAfterSeconds);
+
+      // Quotas count messages that would reach the model (not 409s or 401s); `generate()` and
+      // `screen()` say which 503s are refunded.
       const quota = [
         await this.enforce(
           `ip:${clientBucket}:messages`,
@@ -236,7 +259,7 @@ export class ChatService {
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
-      const screened = await this.guard.screenMessage(message);
+      const screened = await this.screen(message, quota, requestId);
       if (!screened.allowed) {
         this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();
@@ -300,6 +323,42 @@ export class ChatService {
   }
 
   /**
+   * Screens a message. Without a complete screening it never reaches the model (P7-08, ADR
+   * 0003). Scoring itself ran out of its own budget: `422 message_too_long`, charged, since
+   * retrying the same text would time out again and the CPU was spent. Anything else (the
+   * classifier's queue was full, the wait in it ran out, or the model failed) is `503
+   * ai_overloaded`, refunded: other people's messages or a server fault were in the way.
+   */
+  private async screen(
+    message: string,
+    quota: readonly QuotaHit[],
+    requestId: string,
+  ): Promise<ScreenedMessage> {
+    try {
+      return await this.guard.screenMessage(message);
+    } catch (error) {
+      if (!(error instanceof ScreeningUnavailableError)) throw error;
+      const { reason, started } = error;
+      const log = {
+        message: 'Message refused: classifier gave no score',
+        reason,
+        started,
+        requestId,
+      };
+      if (reason === 'error') this.logger.error(log);
+      else this.logger.warn(log);
+      this.metrics.countScreeningRefusal(reason, started);
+      if (reason === 'timeout' && started) throw tooLongToCheck();
+      await this.refund(quota);
+      throw aiBusy(this.retryAfterSeconds);
+    }
+  }
+
+  private async refund(quota: readonly QuotaHit[]): Promise<void> {
+    await Promise.allSettled(quota.map(({ key, window }) => this.rateLimiter.refund(key, window)));
+  }
+
+  /**
    * One completion within global capacity. Overload becomes `503 ai_overloaded`, never a hang;
    * typed provider errors become client-safe codes without upstream text. The quota is refunded
    * only when the request certainly used no capacity: an immediate queue-full rejection, or AI
@@ -320,9 +379,7 @@ export class ChatService {
       return completion.content;
     } catch (error) {
       if ((error instanceof AiCapacityError && !error.waited) || error instanceof AiDisabledError) {
-        await Promise.allSettled(
-          quota.map(({ key, window }) => this.rateLimiter.refund(key, window)),
-        );
+        await this.refund(quota);
       }
       throw toApiError(error);
     }

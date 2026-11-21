@@ -25,7 +25,12 @@ import { ClientDisconnectedError } from '../src/common/client-disconnected.error
 import { DependencyUnavailableError } from '../src/common/dependency-unavailable.error.js';
 import { HeuristicMessageGuard } from '../src/modules/chat/heuristic-message-guard.js';
 import { KNOWLEDGE_BASE } from '../src/modules/chat/knowledge-base.js';
-import { MESSAGE_GUARD } from '../src/modules/chat/message-guard.js';
+import {
+  MESSAGE_GUARD,
+  type MessageGuard,
+  type ScreenedMessage,
+  ScreeningUnavailableError,
+} from '../src/modules/chat/message-guard.js';
 import { RegistryKnowledgeBase } from '../src/modules/chat/registry-knowledge-base.js';
 import { testDocNotes, testRegistry } from './support/test-registry.js';
 import { API_CONFIG, type ApiConfig, type ChatConfig } from '../src/config/api-config.js';
@@ -70,7 +75,12 @@ class InMemoryRateLimiter implements RateLimiter {
 /** No queue: rejects once `limit` tasks are running (queueing is covered against real Redis). */
 class InMemoryConcurrency implements AiConcurrencyLimiter {
   active = 0;
+  /** Overrides what `hasCapacity` reports, e.g. to stage a race past the precheck. */
+  reportsCapacity: boolean | undefined;
   constructor(public limit = 1_000) {}
+  async hasCapacity(): Promise<boolean> {
+    return this.reportsCapacity ?? this.active < this.limit;
+  }
   async run<T>(task: () => Promise<T>): Promise<T> {
     if (this.active >= this.limit) throw new AiCapacityError(10);
     this.active += 1;
@@ -79,6 +89,20 @@ class InMemoryConcurrency implements AiConcurrencyLimiter {
     } finally {
       this.active -= 1;
     }
+  }
+}
+
+/** Allows every message, or fails screening with `failWith`; counts the calls. */
+class ScriptedGuard implements MessageGuard {
+  calls = 0;
+  failWith: ScreeningUnavailableError | undefined;
+  async screenMessage(message: string): Promise<ScreenedMessage> {
+    this.calls += 1;
+    if (this.failWith !== undefined) throw this.failWith;
+    return { allowed: true, message };
+  }
+  screenReply(): undefined {
+    return undefined;
   }
 }
 
@@ -102,6 +126,7 @@ function chatProviders(
   rateLimiter: RateLimiter = new InMemoryRateLimiter(),
   challenge: SessionChallenge = new FakeSessionChallenge(),
   replay: ChallengeReplayStore = new InMemoryChallengeReplayStore(),
+  guard: MessageGuard = new HeuristicMessageGuard(),
 ) {
   return [
     ChatService,
@@ -112,7 +137,7 @@ function chatProviders(
     { provide: RATE_LIMITER, useValue: rateLimiter },
     { provide: AI_CONCURRENCY, useValue: concurrency },
     { provide: KNOWLEDGE_BASE, useValue: new RegistryKnowledgeBase(testRegistry, testDocNotes) },
-    { provide: MESSAGE_GUARD, useValue: new HeuristicMessageGuard() },
+    { provide: MESSAGE_GUARD, useValue: guard },
     { provide: API_CONFIG, useValue: { chat: limits } as unknown as ApiConfig },
   ];
 }
@@ -777,6 +802,7 @@ describe('chat quotas and capacity', () => {
     limits: Partial<ChatConfig>,
     concurrency: AiConcurrencyLimiter = new InMemoryConcurrency(),
     ai: AiProvider = new FakeAi(),
+    guard: MessageGuard = new HeuristicMessageGuard(),
   ) {
     await app?.close();
     app = await createTestApp({
@@ -786,6 +812,10 @@ describe('chat quotas and capacity', () => {
         ai,
         { ...generousLimits, ...limits },
         concurrency,
+        new InMemoryRateLimiter(),
+        new FakeSessionChallenge(),
+        new InMemoryChallengeReplayStore(),
+        guard,
       ),
     });
     return app;
@@ -875,7 +905,8 @@ describe('chat quotas and capacity', () => {
   });
 
   it('answers 503 ai_overloaded with Retry-After when no AI slot is free', async () => {
-    const target = await boot({}, new InMemoryConcurrency(0));
+    // The precheck turns it away; Retry-After is about one queue wait, as in the Redis limiter.
+    const target = await boot({ queueWaitMs: 10_000 }, new InMemoryConcurrency(0));
     const { cookie } = await session(target);
     const response = await message(target, cookie);
     assert.equal(response.statusCode, 503);
@@ -916,6 +947,7 @@ describe('chat quotas and capacity', () => {
 
   it('charges the quota when the request waited out the queue', async () => {
     const waited: AiConcurrencyLimiter = {
+      hasCapacity: async () => true,
       run: async () => {
         throw new AiCapacityError(10, true);
       },
@@ -926,16 +958,77 @@ describe('chat quotas and capacity', () => {
     assert.equal((await message(target, cookie)).statusCode, 429, 'holding a queue place costs');
   });
 
-  it('refunds the quota when a full queue rejected the message at once (503)', async () => {
+  it('refunds the quota when the queue filled after the precheck (503 at once)', async () => {
     const concurrency = new InMemoryConcurrency(0);
+    concurrency.reportsCapacity = true; // the queue looked open, then filled before `run`
     const target = await boot({ sessionMessageLimit: 1, ipMessagesPerHour: 1 }, concurrency);
     const { cookie } = await session(target);
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      assert.equal((await message(target, cookie)).statusCode, 503, 'never 429 while overloaded');
+      const response = await message(target, cookie);
+      assert.equal(response.statusCode, 503, 'never 429 while overloaded');
+      assert.equal(response.json<ApiErrorResponse>().error.code, 'ai_overloaded');
+      assert.equal(response.headers['retry-after'], '10', "the limiter's own Retry-After");
     }
     concurrency.limit = 1_000;
+    concurrency.reportsCapacity = undefined;
     assert.equal((await message(target, cookie)).statusCode, 200);
     assert.equal((await message(target, cookie)).statusCode, 429, 'answered messages still count');
+  });
+
+  it('turns a full queue away before quotas and screening (P7-08)', async () => {
+    const guard = new ScriptedGuard();
+    const concurrency = new InMemoryConcurrency(0);
+    const ai = new FakeAi();
+    const target = await boot(
+      { sessionMessageLimit: 1, queueWaitMs: 4_000 },
+      concurrency,
+      ai,
+      guard,
+    );
+    const { cookie } = await session(target);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await message(target, cookie);
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.json<ApiErrorResponse>().error.code, 'ai_overloaded');
+      assert.equal(response.headers['retry-after'], '4');
+    }
+    assert.equal(guard.calls, 0, 'a message that cannot be answered is never screened');
+    assert.equal(ai.requests.length, 0);
+    concurrency.limit = 1_000;
+    assert.equal((await message(target, cookie)).statusCode, 200, 'the quota was never charged');
+    assert.equal((await message(target, cookie)).statusCode, 429);
+  });
+
+  it('refuses a message the classifier could not score, by whether it had started on it', async () => {
+    for (const [reason, started, status, code, charged] of [
+      ['busy', false, 503, 'ai_overloaded', false],
+      ['timeout', false, 503, 'ai_overloaded', false], // only waited behind other messages
+      ['error', false, 503, 'ai_overloaded', false],
+      ['error', true, 503, 'ai_overloaded', false], // a server fault: never the visitor's cost
+      ['timeout', true, 422, 'message_too_long', true], // too heavy to score: don't invite a retry
+    ] as const) {
+      const label = `${reason}, started=${started}`;
+      const guard = new ScriptedGuard();
+      guard.failWith = new ScreeningUnavailableError(reason, started);
+      const ai = new FakeAi();
+      const target = await boot({ sessionMessageLimit: 1 }, new InMemoryConcurrency(), ai, guard);
+      const { cookie } = await session(target);
+      const refused = await message(target, cookie);
+      assert.equal(refused.statusCode, status, label);
+      assert.equal(refused.json<ApiErrorResponse>().error.code, code, label);
+      assert.equal(refused.headers['retry-after'] !== undefined, status === 503, label);
+      assert.equal(ai.requests.length, 0, `${label}: an unscored message never reaches the model`);
+      assert.match(
+        await target.get(ApiMetrics).render(),
+        new RegExp(
+          `^chat_screening_refusals_total\\{reason="${reason}",started="${started}"\\} 1$`,
+          'm',
+        ),
+        label,
+      );
+      guard.failWith = undefined;
+      assert.equal((await message(target, cookie)).statusCode, charged ? 429 : 200, label);
+    }
   });
 
   it('charges quota for rejected messages, so the screen cannot be probed for free', async () => {

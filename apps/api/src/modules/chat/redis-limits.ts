@@ -96,6 +96,18 @@ redis.call('ZADD', KEYS[1], now, ARGV[2])
 redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[3]))
 return 1`;
 
+/**
+ * ARGV: limit, queueMax, waiterStaleMs. Read-only: 1 if a newcomer would get a slot now (as in
+ * ACQUIRE) or a queue place (as in ENQUEUE), counting only live entries, as both scripts do.
+ */
+const HAS_CAPACITY = `local t = redis.call('TIME')
+local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
+local free = tonumber(ARGV[1]) - redis.call('ZCOUNT', KEYS[1], '(' .. now, '+inf')
+local waiting = redis.call('ZCOUNT', KEYS[2], '(' .. (now - tonumber(ARGV[3])), '+inf')
+if free > 0 and waiting < free then return 1 end
+if waiting < tonumber(ARGV[2]) then return 1 end
+return 0`;
+
 export interface RedisAiConcurrencyOptions {
   readonly limit: number;
   readonly queueMax: number;
@@ -128,6 +140,23 @@ export class RedisAiConcurrencyLimiter implements AiConcurrencyLimiter {
       // task's result (or its real error).
       await this.redis.zrem(HOLDERS_KEY, token).catch(() => undefined);
     }
+  }
+
+  hasCapacity(): Promise<boolean> {
+    // No wait configured means no queue: only a free slot counts, as in `acquire`.
+    const queueMax = this.options.queueWaitMs > 0 ? this.options.queueMax : 0;
+    return withRedis(
+      async () =>
+        (await this.redis.eval(
+          HAS_CAPACITY,
+          2,
+          HOLDERS_KEY,
+          WAITERS_KEY,
+          this.options.limit,
+          queueMax,
+          this.waiterStaleMs,
+        )) === 1,
+    );
   }
 
   private tryAcquire(token: string): Promise<boolean> {

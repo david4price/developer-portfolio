@@ -89,6 +89,27 @@ describe('chat capacity (Redis)', { skip: !redisUrl && 'REDIS_URL is not set' },
     assert.equal(await replicas[0]?.claim(token), false);
   });
 
+  it('reports capacity as acquire and enqueue would, without changing anything (P7-08)', async () => {
+    const holders = 'portfolio:chat:ai:holders';
+    const waiters = 'portfolio:chat:ai:waiters';
+    const now = Date.now();
+    const queued = limiter({}); // limit 1, queueMax 2, waiters go stale after 6 s
+    assert.equal(await queued.hasCapacity(), true, 'empty');
+
+    await redis.zadd(holders, now + 60_000, 'live-holder');
+    assert.equal(await queued.hasCapacity(), true, 'slot taken, the queue has room');
+    await redis.zadd(waiters, now, 'w1', now + 1, 'w2');
+    assert.equal(await queued.hasCapacity(), false, 'slot taken and the queue full');
+    assert.equal(await limiter({ queueWaitMs: 0 }).hasCapacity(), false, 'no queue: slot only');
+
+    // Expired leases and stale waiters don't count, and checking never removes them.
+    await redis.zadd(holders, now - 1_000, 'live-holder');
+    await redis.zadd(waiters, now - 60_000, 'w1', now - 60_000, 'w2');
+    assert.equal(await queued.hasCapacity(), true, 'only dead entries left');
+    assert.equal(await redis.zcard(holders), 1);
+    assert.equal(await redis.zcard(waiters), 2);
+  });
+
   it('counts fixed windows and reports the time left', async () => {
     const rate = new RedisRateLimiter(redis);
     const results = [];

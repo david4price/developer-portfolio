@@ -39,4 +39,10 @@ export class AiCapacityError extends Error {
  */
 export interface AiConcurrencyLimiter {
   run<T>(task: () => Promise<T>, signal: AbortSignal): Promise<T>;
+  /**
+   * Whether `run` could start or queue a newcomer right now (P7-08). Advisory and read-only: the
+   * state can change before `run`, which stays authoritative. Lets a full queue turn a request
+   * away before it costs quota or screening.
+   */
+  hasCapacity(): Promise<boolean>;
 }

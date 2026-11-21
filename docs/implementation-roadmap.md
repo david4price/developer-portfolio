@@ -14,7 +14,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- **P7-02 done** (`feat/p7-02-load-tests`): the API carried 200 requests a second in the cluster
+- **P7-08 done** (`feat/p7-08-chat-overload`): a full AI queue is refused before quotas and
+  screening, and unscored messages are refused instead of passed on the rules alone (ADR 0003).
+  New **P7-09**: an edge rate limit for no-pause floods.
+- **P7-02 done** (PR #67, deployed 2026-11-21): the API carried 200 requests a second in the cluster
   with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
   `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
 - **PR #65 live** (2026-11-21): P7-01 metrics confirmed on the live pod over port-forward;
@@ -273,9 +276,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 3. **P7-07**: confirm the next change under `apps/web` still triggers a Pages build.
-4. **P7-08**: stop chat overload rejections from costing the API a CPU (found by P7-02).
+4. **P7-09**: a Cloudflare rate-limiting rule on the API hostname for floods no API code can
+   absorb (needs approval).
 
-**Branch in progress:** `feat/p7-02-load-tests` (P7-02).
+**Branch in progress:** `feat/p7-08-chat-overload` (P7-08, not pushed). PR #67 (P7-02) is
+merged and deployed: the API runs with 250m CPU and 640Mi requested, 1Gi limit.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -623,7 +628,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (5/8)
+## Phase 7: Hardening (6/9)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -695,11 +700,24 @@ Read-only inventory of the reference host. Findings:
       `path_excludes: []`. Verified 2026-11-21: PR #65's merge commit built and deployed; the
       release-pin commit after it was skipped (`is_skipped: true`, no build ran). PR #65 changed
       nothing under `apps/web`, so left: see the next site change build.
-- [ ] **P7-08** Make chat overload cost the client, not the API, and keep screening meaningful
-      under load. _Needs:_ P7-02. _Done when:_ a client that retries an overloaded chat at once
-      can't hold an API pod's CPU (e.g. check for a free AI slot, or a full queue, before
-      screening; or stop refunding immediate rejections past a small allowance), and a decision
-      is recorded for messages that pass the 2 s classifier timeout unscored (a dense
-      1,000-character message takes about 1.5–2 s to score); unit tests cover it, and the stage-3
-      chat load test ([load testing](operations/load-testing.md#chat-overload-p7-08)) shows the
-      API's CPU stay low with 8 visitors.
+- [x] **P7-08** Make chat overload cost the client, not the API, and keep screening meaningful
+      under load. _Needs:_ P7-02. _Done when:_ a chat message the API can't answer costs about as
+      much as a trivial request (no quota, no screening), no message reaches the model without
+      a classifier score, a decision is recorded for messages that pass the classifier's time
+      budget, and unit tests cover it. Narrowed 2026-11-21 by the owner: the first version also
+      asked that a client resending at once "can't hold an API pod's CPU", which no API code can
+      meet (the same flood on `/health` does it); that limit moved to P7-09.
+      Done 2026-11-21 (`feat/p7-08-chat-overload`, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
+      a full AI queue is refused before quotas and screening; the classifier budget is 5 s; a
+      message without a score is never passed on the rules alone (`422 message_too_long` when
+      scoring itself ran out of time, otherwise a refunded `503 ai_overloaded`). On the stage-3
+      stack a rejection costs about 0.5 ms of CPU (was 10–100 ms; `/health` about 0.1 ms), and no
+      dense message reached the model unscored
+      ([load testing](operations/load-testing.md#chat-overload-p7-08)).
+- [ ] **P7-09** 🔒 Rate-limit the public API at the edge. _Needs:_ P7-08. _Done when:_ a
+      Cloudflare rate-limiting rule on the API hostname blocks a single client that floods it
+      before the requests reach the tunnel, without affecting normal visitors (the site's own
+      calls and a chat session), and a short flood from one address is seen blocked while the
+      API's CPU stays near idle. The Free plan allows one rule, counted per IP over 10 s with a
+      10 s block, matching on path; pick the threshold from the P7-02 numbers and record it.
+      Why: [load testing](operations/load-testing.md#chat-overload-p7-08).
