@@ -49,7 +49,8 @@ build watch **exclude paths** `infrastructure/*` and `docs/*` (`*` matches acros
 still builds when any changed file falls outside them, and always when it has no file changes,
 3,000 or more changed files, or 20 or more commits. That would have skipped the 43 release-pin
 builds and every docs-only change, about a third of the first week's builds. Applied 2026-11-20
-(**P7-07**).
+(**P7-07**); on 2026-11-21 the first release-pin commit after it was skipped. Still to see: the
+next change under `apps/web` building as before.
 
 ## Sources
 
