@@ -28,7 +28,12 @@ import {
   RATE_LIMITER,
   type RateLimiter,
 } from './limits.js';
-import { MESSAGE_GUARD, type MessageGuard } from './message-guard.js';
+import {
+  MESSAGE_GUARD,
+  type MessageGuard,
+  type ScreenedMessage,
+  ScreeningUnavailableError,
+} from './message-guard.js';
 import { MAX_REPLY_LINKS, resolveNavigationLinks } from './navigation-links.js';
 import { withoutEmoji } from './reply-emoji.js';
 import {
@@ -126,6 +131,8 @@ export class ChatService {
   private readonly limits: ChatConfig;
   /** The session lock must outlast screening, queueing for a slot, and the AI call itself. */
   private readonly lockTtlMs: number;
+  /** `Retry-After` for a full queue or unfinished screening: about one queue wait. */
+  private readonly retryAfterSeconds: number;
 
   constructor(
     @Inject(CHAT_SESSION_STORE) private readonly store: ChatSessionStore,
@@ -141,6 +148,7 @@ export class ChatService {
     this.limits = config.chat;
     const screeningMs = config.chat.guard.kind === 'classifier' ? config.chat.guard.timeoutMs : 0;
     this.lockTtlMs = screeningMs + config.chat.queueWaitMs + AI_LEASE_MS;
+    this.retryAfterSeconds = Math.ceil(config.chat.queueWaitMs / 1_000) || 1;
   }
 
   /**
@@ -219,8 +227,12 @@ export class ChatService {
       const session = await this.store.load(sessionId);
       if (session === undefined) throw sessionRequired();
 
-      // Quotas count messages that would reach the model (not 409s or 401s); `generate()` says
-      // which 503s are refunded.
+      // A full AI queue turns the message away first, so overload costs neither quota nor
+      // screening (P7-08). Advisory: `generate()` still takes the slot for real.
+      if (!(await this.concurrency.hasCapacity())) throw aiBusy(this.retryAfterSeconds);
+
+      // Quotas count messages that would reach the model (not 409s or 401s); `generate()` and
+      // `screen()` say which 503s are refunded.
       const quota = [
         await this.enforce(
           `ip:${clientBucket}:messages`,
@@ -236,7 +248,7 @@ export class ChatService {
 
       // Screened after the quotas on purpose: rejected attempts cost quota, so the screen can't
       // be probed for free. Only the screened text reaches retrieval, the model, and history.
-      const screened = await this.guard.screenMessage(message);
+      const screened = await this.screen(message, quota);
       if (!screened.allowed) {
         this.logger.warn({ message: 'Chat message rejected', reason: screened.reason, requestId });
         throw messageRejected();
@@ -300,6 +312,25 @@ export class ChatService {
   }
 
   /**
+   * Screens a message. Without a complete screening the message is refused as `503
+   * ai_overloaded` (P7-08, fail closed). The quota is refunded only when the classifier did no
+   * work (its queue was full or it failed at once); a timeout spent real CPU, so it counts.
+   */
+  private async screen(message: string, quota: readonly QuotaHit[]): Promise<ScreenedMessage> {
+    try {
+      return await this.guard.screenMessage(message);
+    } catch (error) {
+      if (!(error instanceof ScreeningUnavailableError)) throw error;
+      if (error.reason !== 'timeout') await this.refund(quota);
+      throw aiBusy(this.retryAfterSeconds);
+    }
+  }
+
+  private async refund(quota: readonly QuotaHit[]): Promise<void> {
+    await Promise.allSettled(quota.map(({ key, window }) => this.rateLimiter.refund(key, window)));
+  }
+
+  /**
    * One completion within global capacity. Overload becomes `503 ai_overloaded`, never a hang;
    * typed provider errors become client-safe codes without upstream text. The quota is refunded
    * only when the request certainly used no capacity: an immediate queue-full rejection, or AI
@@ -320,9 +351,7 @@ export class ChatService {
       return completion.content;
     } catch (error) {
       if ((error instanceof AiCapacityError && !error.waited) || error instanceof AiDisabledError) {
-        await Promise.allSettled(
-          quota.map(({ key, window }) => this.rateLimiter.refund(key, window)),
-        );
+        await this.refund(quota);
       }
       throw toApiError(error);
     }

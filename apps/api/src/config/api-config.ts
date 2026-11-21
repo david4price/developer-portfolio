@@ -170,7 +170,8 @@ const apiEnvironmentSchema = z
     CHAT_GUARD: z.enum(messageGuardNames).default('rules'),
     CHAT_GUARD_MODEL_DIR: z.string().trim().min(1).default('models/injection-classifier'),
     CHAT_GUARD_THRESHOLD: z.coerce.number().gt(0).max(1).default(0.5),
-    CHAT_GUARD_TIMEOUT_MS: count(50, 10_000).default(2_000),
+    // Covers the heaviest message (999 characters, ~7 windows, ~2 s on one CPU) with room (P7-08).
+    CHAT_GUARD_TIMEOUT_MS: count(50, 10_000).default(5_000),
     INFRASTRUCTURE_SOURCE: z.enum(infrastructureSourceNames).default('disabled'),
     INFRASTRUCTURE_NAMESPACE: namespaceName.default('portfolio'),
     ARGOCD_ENABLED: booleanFromEnv.default(false),

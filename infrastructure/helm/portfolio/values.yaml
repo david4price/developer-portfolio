@@ -78,8 +78,9 @@ api:
     mode: rules
     # Scores at or above this reject the message.
     threshold: 0.5
-    # Longest a message waits for a score; after that the rules' verdict stands alone.
-    timeoutMs: 2000
+    # Longest a message waits for a score; past it the message is refused as busy (P7-08). 5 s
+    # covers the heaviest message (~7 windows, ~2 s on the reference CPU) with room.
+    timeoutMs: 5000
     classifierResources:
       requests:
         cpu: 250m

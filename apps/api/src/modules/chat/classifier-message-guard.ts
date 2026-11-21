@@ -1,16 +1,19 @@
 import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { InjectionClassifierBusyError, type InjectionClassifier } from './injection-classifier.js';
-import type { MessageGuard, ReplyRejection, ScreenedMessage } from './message-guard.js';
+import {
+  type MessageGuard,
+  type ReplyRejection,
+  type ScreenedMessage,
+  ScreeningUnavailableError,
+  type ScreeningUnavailableReason,
+} from './message-guard.js';
 
 export interface ClassifierGuardOptions {
   /** Scores at or above this reject the message. */
   readonly threshold: number;
-  /** Longest a message waits for its score before the rules' verdict stands alone. */
+  /** Longest a message waits for its score; past it, the message is refused for now. */
   readonly timeoutMs: number;
 }
-
-/** Why the classifier gave no score; logged, never shown to the visitor. */
-type Degraded = 'classifier_busy' | 'classifier_timeout' | 'classifier_error';
 
 /**
  * Rules first, then a classifier (P5-08). The rules normalize the text and keep every rejection
@@ -19,10 +22,11 @@ type Degraded = 'classifier_busy' | 'classifier_timeout' | 'classifier_error';
  * paraphrased, indirect, and non-English attempts that no pattern anticipates. It sees the
  * normalized text, the same text the model would.
  *
- * Without a score (queue full, timeout, error), the rules' verdict stands and the event is logged:
- * screening is one layer of several (fixed rules, data framing, no tools, the reply check,
- * quotas), and refusing every message whenever the classifier lags would let a burst of traffic
- * take the chat down.
+ * Without a score (queue full, timeout, error) the message is refused for now, never passed on
+ * the rules alone (P7-08, ADR 0003): otherwise padding a message to outlast the timeout, or a
+ * flood that fills the queue, would switch the classifier off at will. The chat stays available
+ * enough: it only answers about one message per model call, and the classifier scores an
+ * ordinary message in milliseconds, so it lags only under a flood or crafted input.
  */
 export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdown {
   private readonly logger = new Logger('MessageGuard');
@@ -39,8 +43,10 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
 
     const score = await this.scoreWithin(screened.message);
     if (typeof score === 'string') {
-      this.logger.warn({ message: 'Message screened by rules only', reason: score });
-      return screened;
+      const log = { message: 'Message refused: classifier gave no score', reason: score };
+      if (score === 'error') this.logger.error(log);
+      else this.logger.warn(log);
+      throw new ScreeningUnavailableError(score);
     }
     return score >= this.options.threshold
       ? { allowed: false, reason: 'classified_injection' }
@@ -57,22 +63,22 @@ export class ClassifierMessageGuard implements MessageGuard, OnApplicationShutdo
     return this.rules.screenReply(reply);
   }
 
-  private async scoreWithin(text: string): Promise<number | Degraded> {
+  private async scoreWithin(text: string): Promise<number | ScreeningUnavailableReason> {
     // Aborting on timeout frees the message's place in the classifier's queue and stops its
     // remaining windows, so a burst doesn't leave the queue full of work nobody is waiting for.
     const abandon = new AbortController();
     let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<Degraded>((resolve) => {
+    const timeout = new Promise<ScreeningUnavailableReason>((resolve) => {
       timer = setTimeout(() => {
         abandon.abort();
-        resolve('classifier_timeout');
+        resolve('timeout');
       }, this.options.timeoutMs);
     });
     try {
       const score = await Promise.race([this.classifier.score(text, abandon.signal), timeout]);
-      return typeof score === 'number' && !Number.isFinite(score) ? 'classifier_error' : score;
+      return typeof score === 'number' && !Number.isFinite(score) ? 'error' : score;
     } catch (error) {
-      return error instanceof InjectionClassifierBusyError ? 'classifier_busy' : 'classifier_error';
+      return error instanceof InjectionClassifierBusyError ? 'busy' : 'error';
     } finally {
       clearTimeout(timer);
     }

@@ -220,7 +220,7 @@ describe('loadApiConfig', () => {
       kind: 'classifier',
       modelDir: 'models/injection-classifier',
       threshold: 0.5,
-      timeoutMs: 2_000,
+      timeoutMs: 5_000,
     });
     const tuned = loadApiConfig({
       ...ai,

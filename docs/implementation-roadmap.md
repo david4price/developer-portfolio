@@ -14,7 +14,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- **P7-02 done** (`feat/p7-02-load-tests`): the API carried 200 requests a second in the cluster
+- **P7-08 built** (`feat/p7-08-chat-overload`): a full AI queue is refused before quotas and
+  screening, and unscored messages are refused instead of passed on the rules alone (ADR 0003).
+- **P7-02 done** (PR #67, deployed 2026-11-21): the API carried 200 requests a second in the cluster
   with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
   `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
 - **PR #65 live** (2026-11-21): P7-01 metrics confirmed on the live pod over port-forward;
@@ -273,9 +275,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 3. **P7-07**: confirm the next change under `apps/web` still triggers a Pages build.
-4. **P7-08**: stop chat overload rejections from costing the API a CPU (found by P7-02).
+4. **P7-08**: built on `feat/p7-08-chat-overload`; open question on an edge rate limit for
+   floods that no API code can absorb (see the P7-08 entry).
 
-**Branch in progress:** `feat/p7-02-load-tests` (P7-02).
+**Branch in progress:** `feat/p7-08-chat-overload` (P7-08, not pushed). PR #67 (P7-02) is
+merged and deployed: the API runs with 250m CPU and 640Mi requested, 1Gi limit.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -703,3 +707,10 @@ Read-only inventory of the reference host. Findings:
       1,000-character message takes about 1.5–2 s to score); unit tests cover it, and the stage-3
       chat load test ([load testing](operations/load-testing.md#chat-overload-p7-08)) shows the
       API's CPU stay low with 8 visitors.
+      Built 2026-11-21 (`feat/p7-08-chat-overload`, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
+      a full AI queue is refused before quotas and screening; the classifier budget is 5 s; a
+      message without a score is refused as `503 ai_overloaded`, never passed on the rules
+      alone. On the stage-3 stack a rejection costs about 0.5 ms of CPU (was 10–100 ms), and no
+      dense message reached the model unscored. Open: a client resending without pause still
+      holds a CPU (as it would on `/health`), so the first criterion needs an edge limit; the
+      owner decides whether to amend it and track that separately.

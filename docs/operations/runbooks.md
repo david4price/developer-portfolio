@@ -98,7 +98,9 @@ unaffected.
 
 ## Inference Overload (Proposed, Phase 5)
 
-- Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. In the metrics,
+- Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. `ai_overloaded` also covers a
+  message the classifier couldn't score in time (logged `Message refused: classifier gave no
+score`; ADR 0003). In the metrics,
   `ai_capacity_rejections_total` rises, `ai_queue_waiting` (requests acquiring a slot right now)
   stays above zero, and the upper buckets of `ai_queue_wait_seconds` fill (long waits since the
   pod started, still visible after a burst drains); or
