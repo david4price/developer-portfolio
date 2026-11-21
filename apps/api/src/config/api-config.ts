@@ -45,8 +45,8 @@ export type InfrastructureConfig =
 
 /**
  * How visitor messages are screened (P5-08). `classifier` runs the rules, then a CPU injection
- * classifier loaded from `modelDir`; it needs about 650 MiB more memory than `rules`. With AI off
- * no message reaches screening, so the guard is always `rules` and no model is loaded.
+ * classifier loaded from `modelDir`; P7-02 measured the API at about 590 MiB with it loaded.
+ * With AI off no message reaches screening, so the guard is always `rules` and no model is loaded.
  */
 export type MessageGuardConfig =
   | { readonly kind: 'rules' }

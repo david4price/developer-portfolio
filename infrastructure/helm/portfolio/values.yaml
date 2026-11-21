@@ -4,7 +4,10 @@
 # Image references: set `digest` (preferred, `sha256:…`) or `tag`. Environment values files under
 # `infrastructure/environments/*` pin digests; rendering fails if an image has neither.
 #
-# Resource numbers are small placeholders until Phase 7 load tests measure real usage.
+# Resource numbers and the P7-02 load tests (docs/operations/load-testing.md): the API's classifier
+# profile was set from measurements; PostgreSQL, Redis, cloudflared, and the worker were measured
+# well inside theirs and kept. `api.resources` (rules only), migrations, and backups weren't
+# measured and remain estimates.
 
 nameOverride: ''
 fullnameOverride: ''
@@ -68,8 +71,9 @@ api:
       port: 0
   # Visitor message screening (P5-08). `rules` is pattern matching only. `classifier` runs the
   # rules, then a CPU prompt-injection classifier baked into the API image, and (with AI enabled;
-  # otherwise no model is loaded) the pod uses `classifierResources` instead of `resources`: the
-  # model and tokenizer take about 650 MiB.
+  # otherwise no model is loaded) the pod uses `classifierResources` instead of `resources`. P7-02
+  # measured about 590 MiB per pod with the model loaded; the CPU request sets where the HPA
+  # scales (70% of 250m, roughly 70-100 read requests a second per pod).
   messageGuard:
     mode: rules
     # Scores at or above this reject the message.
@@ -78,10 +82,10 @@ api:
     timeoutMs: 2000
     classifierResources:
       requests:
-        cpu: 100m
-        memory: 896Mi
+        cpu: 250m
+        memory: 640Mi
       limits:
-        memory: 1280Mi
+        memory: 1Gi
   # Infrastructure Explorer snapshot (P6-01, P6-02). When enabled, the API runs as its own
   # service account bound to a namespaced, read-only Role (get/list on deployments, statefulsets,
   # and pods; nothing else), its token is mounted, and INFRASTRUCTURE_SOURCE=kubernetes. Off by

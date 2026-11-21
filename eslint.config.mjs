@@ -52,5 +52,16 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // k6 scripts (P7-02) run in k6's JavaScript runtime, not Node.js.
+    files: ['infrastructure/load-tests/**/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' },
+    },
+  },
+  {
+    files: ['infrastructure/load-tests/**/*.mjs'],
+    languageOptions: { globals: { setTimeout: 'readonly' } },
+  },
   prettier,
 );

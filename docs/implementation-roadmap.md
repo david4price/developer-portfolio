@@ -14,6 +14,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **P7-02 done** (`feat/p7-02-load-tests`): the API carried 200 requests a second in the cluster
+  with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
+  `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
 - **PR #65 live** (2026-11-21): P7-01 metrics confirmed on the live pod over port-forward;
   P7-07 half verified: the release-pin commit's Pages build was skipped; a site change building
   is still to be seen.
@@ -270,9 +273,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 3. **P7-07**: confirm the next change under `apps/web` still triggers a Pages build.
-4. **P7-02** (load tests, which read P7-01's live metrics); needs approval.
+4. **P7-08**: stop chat overload rejections from costing the API a CPU (found by P7-02).
 
-**Branch in progress:** `docs/p7-live-checks` (this roadmap update; PR #65 is merged and deployed).
+**Branch in progress:** `feat/p7-02-load-tests` (P7-02).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -620,7 +623,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (4/7)
+## Phase 7: Hardening (5/8)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -634,8 +637,16 @@ Read-only inventory of the reference host. Findings:
       does real work. Live since PR #65 (2026-11-21): a port-forward from the reference host read
       227 series from the new pod (readiness 1/1, route-pattern labels); `/metrics` on the public
       API host returns 404, and the Service exposes only the API port.
-- [ ] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
+- [x] **P7-02** 🔒 Load tests and final resource requests and limits. _Needs:_ P7-01. _Done when:_
       `maxReplicas` and limits documented.
+      Done 2026-11-21 ([load testing](operations/load-testing.md)): k6 in the cluster read the
+      API at 10–200 requests a second with no errors (p95 under 6 ms at every rate, 2.8 ms at
+      200; node at most 6% CPU in the cluster stage, 9% during the local chat stage), 10 a second
+      through Cloudflare (p95 182 ms), and chat on a local stack with a stand-in model: short,
+      prose, and dense (five-window) messages, the last two under the new 1Gi limit. The API's classifier
+      profile becomes 250m CPU and 640Mi requested, 1Gi limit (measured peak 590 MiB), so the
+      HPA scales at roughly 70–100 requests a second per pod instead of 25;
+      `maxReplicas` stays 3, and the other components keep their numbers. Found P7-08.
 - [x] **P7-03** Clean-machine reproducibility check. _Needs:_ Phase 2. _Done when:_ a fresh clone
       works from [local.md](deployment/local.md) alone.
       Done 2026-11-20: a fresh clone, with an empty home directory and pnpm store, followed
@@ -684,3 +695,11 @@ Read-only inventory of the reference host. Findings:
       `path_excludes: []`. Verified 2026-11-21: PR #65's merge commit built and deployed; the
       release-pin commit after it was skipped (`is_skipped: true`, no build ran). PR #65 changed
       nothing under `apps/web`, so left: see the next site change build.
+- [ ] **P7-08** Make chat overload cost the client, not the API, and keep screening meaningful
+      under load. _Needs:_ P7-02. _Done when:_ a client that retries an overloaded chat at once
+      can't hold an API pod's CPU (e.g. check for a free AI slot, or a full queue, before
+      screening; or stop refunding immediate rejections past a small allowance), and a decision
+      is recorded for messages that pass the 2 s classifier timeout unscored (a dense
+      1,000-character message takes about 1.5–2 s to score); unit tests cover it, and the stage-3
+      chat load test ([load testing](operations/load-testing.md#chat-overload-p7-08)) shows the
+      API's CPU stay low with 8 visitors.

@@ -1,0 +1,45 @@
+# P7-02 chat load test: the released API image, with chat on, the classifier screening messages,
+# and a stand-in model (stub-ai.mjs) instead of the GPU runtime. Local and throwaway only:
+#   API_IMAGE=ghcr.io/<owner>/portfolio-api@sha256:<digest> \
+#   TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA docker compose -p <name> \
+#     --env-file <env> -f compose.full.yaml -f infrastructure/load-tests/compose.chat.yaml \
+#     up -d --no-build --wait api stub-ai
+# Paths resolve from the repository root (the first file's directory).
+services:
+  migrate:
+    image: ${API_IMAGE:?set API_IMAGE to the released portfolio-api image}
+  seed:
+    image: ${API_IMAGE:?set API_IMAGE}
+  api:
+    image: ${API_IMAGE:?set API_IMAGE}
+    environment:
+      AI_ENABLED: 'true'
+      AI_PROVIDER: openai-compatible
+      AI_MODEL: stub
+      AI_BASE_URL: http://stub-ai:8000/v1
+      # Use Cloudflare's published always-pass test secret (see the command above). Sessions are
+      # seeded into Redis instead (seed-sessions.sh): test tokens carry no action, which the API
+      # rightly rejects.
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?set the Turnstile test secret}
+      TURNSTILE_HOSTNAMES: example.com
+      CHAT_GUARD: classifier
+      # Production's concurrency and queue (defaults); only the per-visitor quotas are raised so
+      # one load generator isn't throttled.
+      CHAT_SESSION_MESSAGE_LIMIT: '500'
+      CHAT_IP_MESSAGES_PER_HOUR: '1000'
+    # Production's memory limit for the classifier profile (classifierResources.limits.memory),
+    # so an overrun shows as an OOM kill. Keep the two equal.
+    mem_limit: 1g
+    depends_on:
+      stub-ai:
+        condition: service_started
+  stub-ai:
+    image: node:24-trixie-slim
+    command: [node, /stub/stub-ai.mjs]
+    environment:
+      DELAY_MS: ${STUB_DELAY_MS:-3000}
+    volumes:
+      - ./infrastructure/load-tests/stub-ai.mjs:/stub/stub-ai.mjs:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
