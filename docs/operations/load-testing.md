@@ -174,4 +174,4 @@ stack built from the change:
 
 A rejected message now costs about 0.5 ms of CPU, against 10–100 ms before, and nothing
 unscored reaches the model. A client that resends without pause still keeps a CPU busy, but so it
-would on any endpoint: that limit belongs at the edge (Cloudflare, before the tunnel).
+would on any endpoint: that limit belongs at the edge (Cloudflare, before the tunnel), **P7-09**.
