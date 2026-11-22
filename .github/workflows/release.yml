@@ -3,6 +3,11 @@ name: Release
 # Runs after CI succeeds on a push to main: builds the api and worker images, pushes them to GHCR,
 # and commits their digests to infrastructure/environments/production/images.yaml. Argo CD deploys
 # whatever that file pins, so a deployment only ever runs images built from main.
+#
+# It releases only when something since the last release can change an image (P7-10): a merge of
+# only docs, Markdown, agent instructions, the static site, or load-test scripts builds nothing,
+# pins nothing, and restarts nothing (.github/scripts/needs-release.sh). Such changes are counted
+# with the next release that does build, so nothing is lost.
 on:
   workflow_run:
     workflows: [CI]
@@ -17,13 +22,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  images:
-    name: Build and push images
+  changes:
+    name: Decide whether an image is affected
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare with the last release
+        id: check
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          release="$(bash .github/scripts/needs-release.sh "$HEAD_SHA")"
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+          echo "Image release needed: ${release}"
+
+  images:
+    name: Build and push images
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -527,6 +527,15 @@ Argo CD references: [project roles and expiring tokens](https://argo-cd.readthed
    commit), so the repository's default read-only setting stays as is. New GHCR packages start
    private: make `portfolio-api` and `portfolio-worker` public once, after the first release, so
    the cluster can pull them without a pull secret.
+
+   It first checks whether anything since the last release (the `# source-commit:` in
+   `images.yaml`) can change an image (P7-10, `.github/scripts/needs-release.sh`). When every
+   change is docs, Markdown, `.agents/` or `.claude/`, the static site (`apps/web/`, which
+   Cloudflare Pages builds), or `infrastructure/load-tests/`, it builds and pins nothing, so no
+   pod restarts; those changes ride along with the next release that does build. Anything else,
+   or any doubt (no pin, or a pin that isn't an ancestor), releases. The Infrastructure
+   Explorer's version then stays at the last released commit.
+
 3. Argo CD syncs. The rolling update uses `maxUnavailable: 0`, and readiness gates traffic.
 4. Run migrations as a pre-sync Job, only for backward-compatible migrations (see runbooks).
 

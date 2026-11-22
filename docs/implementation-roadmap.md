@@ -284,7 +284,7 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 3. **P7-10**: skip image releases for docs-only merges.
 4. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** `docs/p7-10-release-skip` (adds P7-10). PRs #65–#69 are merged and
+**Branch in progress:** `ci/p7-10-release-skip` (P7-10). PRs #65–#69 are merged and
 deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
@@ -741,3 +741,9 @@ Read-only inventory of the reference host. Findings:
       workflow's docs say which paths count. Why: PRs #66 and #69 changed only docs, yet each
       rebuilt and pinned the images and restarted the API and worker. Note: the version the
       Infrastructure Explorer shows then stays at the last released commit.
+      Built 2026-11-22: a first `changes` job in the release workflow runs
+      `.github/scripts/needs-release.sh` (diff from the last released commit; anything outside
+      docs, Markdown, `.agents/`, `.claude/`, `apps/web/`, and `infrastructure/load-tests/`
+      releases), tested by `needs-release.test.sh` in CI. On the real history it would have
+      skipped PRs #66 and #69 and released #65, #67, and #68. Left: see a docs-only merge skip
+      on `main`.

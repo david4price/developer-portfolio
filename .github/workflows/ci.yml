@@ -32,6 +32,8 @@ jobs:
       - run: pnpm audit signatures
       - run: pnpm check
       - run: pnpm build
+      # The release workflow's "is an image affected?" check (P7-10).
+      - run: bash .github/scripts/needs-release.test.sh
 
   integration:
     name: Integration tests (PostgreSQL + Redis)
