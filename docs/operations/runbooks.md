@@ -98,6 +98,9 @@ unaffected.
 
 ## Inference Overload (Proposed, Phase 5)
 
+- A `429` with `server: cloudflare` (an HTML page, not the API's JSON) is the edge rate limit
+  (P7-09, [rule](../deployment/cloudflare-pages.md#edge-rate-limit-p7-09)): more than 100 API
+  requests in 10 s from one address. It lifts after 10 s.
 - Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. `ai_overloaded` also covers a
   message the classifier couldn't score, logged with its request ID as
   `Message refused: classifier gave no score` and counted in `chat_screening_refusals_total`
