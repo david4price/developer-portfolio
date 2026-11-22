@@ -15,8 +15,11 @@ Procedures marked **Proposed** apply once the corresponding phase is deployed.
 
 ## Rollback
 
-**Application image (Proposed):** revert the commit that changed the image digest in
-`infrastructure/environments/production/values.yaml`. Argo CD rolls back to the previous digest.
+**Application image:** revert the code change on `main` (the merge that introduced the problem).
+CI passes, the release rebuilds the previous code and pins its digests in
+`infrastructure/environments/production/images.yaml`, and Argo CD rolls it out. Reverting only the
+release commit (`chore(release): pin images for …`) doesn't last: the revert itself triggers a
+release that rebuilds `main` as it is, bad code included.
 
 **Migration compatibility rules** (these keep image rollback safe):
 

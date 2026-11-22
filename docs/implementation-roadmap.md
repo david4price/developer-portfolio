@@ -6,7 +6,9 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-22_
 
-**Current phase:** 7 (Hardening), done except P7-05 (TypeScript 7, waiting on typescript-eslint).
+**Current phase:** 7 (Hardening): left are P7-10 (skip releases for docs-only merges) and P7-05
+(TypeScript 7, waiting on typescript-eslint). The infrastructure is otherwise complete, so new
+projects can be added (`add-project` skill).
 Phase 6 has only P6-05's token rotation left, due 2027-02-16.
 Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -279,10 +281,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
+3. **P7-10**: skip image releases for docs-only merges.
+4. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** `docs/p7-09-edge-rate-limit` (records P7-07 and P7-09). PRs #65–#68
-are merged and deployed.
+**Branch in progress:** `ci/p7-10-release-skip` (P7-10). PRs #65–#69 are merged and
+deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -630,7 +633,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (8/9)
+## Phase 7: Hardening (8/10)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -731,3 +734,16 @@ Read-only inventory of the reference host. Findings:
       (plus its probes) at 12m CPU; the block lifted after 10 s; a minute of normal traffic was
       untouched. Not covered (Free plan): other paths on the API host, which `cloudflared`
       answers with a 404 without the API; and IPv6 grouping, which Cloudflare doesn't document.
+- [ ] **P7-10** Release only when a merge can change an image. _Needs:_ P3-02. _Done when:_ a
+      merge to `main` that changes only documentation (`docs/`, Markdown, `.agents/`, `.claude/`)
+      builds no images, makes no release-pin commit, and restarts no pods, while a merge that
+      touches code, Dockerfiles, lockfiles, or the chart still releases as before; the release
+      workflow's docs say which paths count. Why: PRs #66 and #69 changed only docs, yet each
+      rebuilt and pinned the images and restarted the API and worker. Note: the version the
+      Infrastructure Explorer shows then stays at the last released commit.
+      Built 2026-11-22: a first `changes` job in the release workflow runs
+      `.github/scripts/needs-release.sh` (diff from the last released commit; anything outside
+      docs, Markdown, `.agents/`, `.claude/`, `apps/web/`, and `infrastructure/load-tests/`
+      releases), tested by `needs-release.test.sh` in CI. On the real history it would have
+      skipped PRs #66 and #69 and released #65, #67, and #68. Left: see a docs-only merge skip
+      on `main`.
