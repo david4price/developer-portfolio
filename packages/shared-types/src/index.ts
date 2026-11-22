@@ -199,3 +199,6 @@ export interface InfrastructureSnapshot {
   readonly release: { readonly commit: string; readonly pinnedAt: string } | null;
   readonly components: readonly InfrastructureComponent[];
 }
+
+// Contracts of projects created by `pnpm new:project` (P8-02), one file each in ./projects.
+// new-project: exports

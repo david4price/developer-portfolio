@@ -35,6 +35,32 @@ jobs:
       # The release workflow's "is an image affected?" check (P7-10).
       - run: bash .github/scripts/needs-release.test.sh
 
+  generator:
+    name: Project generator (pnpm new:project)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/new-project.test.mjs
+      # Generates a mini-app and a full API + database project from the templates, then holds the
+      # result to every check the repository has, so the templates can't drift out of date.
+      - name: Generate sample projects
+        run: |
+          set -euo pipefail
+          printf '%s\n' sample-app 'Sample App' 'A generated mini-app.' '' TypeScript 2 '' n y | pnpm new:project
+          printf '%s\n' sample-store 'Sample Store' 'A generated app with an API and a table.' '' 'TypeScript, NestJS' 4 '' n y | pnpm new:project
+      - run: pnpm check
+      - run: pnpm build
+      - name: Migrations match the schema
+        run: |
+          set -euo pipefail
+          pnpm --filter @portfolio/api exec drizzle-kit generate --name ci-check | tee drizzle.log
+          grep -q 'No schema changes' drizzle.log
+
   integration:
     name: Integration tests (PostgreSQL + Redis)
     runs-on: ubuntu-latest

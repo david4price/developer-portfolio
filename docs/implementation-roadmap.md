@@ -6,9 +6,9 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-22_
 
-**Current phase:** 7 (Hardening): left are P7-10 (skip releases for docs-only merges) and P7-05
-(TypeScript 7, waiting on typescript-eslint). The infrastructure is otherwise complete, so new
-projects can be added (`add-project` skill).
+**Current phase:** 8 (Developer experience) is done: `pnpm bootstrap`, `pnpm dev`, `pnpm db:reset`,
+and `pnpm new:project`. Phase 7 has only P7-05 left (TypeScript 7, waiting on typescript-eslint).
+Ready for new projects: `pnpm new:project`.
 Phase 6 has only P6-05's token rotation left, due 2027-02-16.
 Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
@@ -17,6 +17,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **Phase 8 done** (`feat/p8-dev-experience`): one-command setup (`pnpm bootstrap`), all-in-one
+  `pnpm dev`, a guarded `pnpm db:reset`, and `pnpm new:project`, which scaffolds a project page,
+  mini-app, API module, and table from templates that CI keeps working.
+- **P7-10 done**: a docs-only merge (PR #71) skipped the release entirely.
 - **P7-10 merged** (PR #70, 2026-11-22): the release workflow builds only when a merge can change
   an image; it released for its own merge, as it should. Still to see: a docs-only merge skip.
 - **P7-09 done** (2026-11-22): a Cloudflare rate-limiting rule blocks more than 100 API
@@ -283,11 +287,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-10**: confirm a docs-only merge skips the release on `main`, then tick it.
-4. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
+3. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** none open. PRs #65–#70 are merged and deployed; the next docs-only merge
-(the first is this roadmap update) checks that P7-10 skips.
+**Branch in progress:** `feat/p8-dev-experience` (Phase 8).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -635,7 +637,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (8/10)
+## Phase 7: Hardening (9/10)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -736,7 +738,7 @@ Read-only inventory of the reference host. Findings:
       (plus its probes) at 12m CPU; the block lifted after 10 s; a minute of normal traffic was
       untouched. Not covered (Free plan): other paths on the API host, which `cloudflared`
       answers with a 404 without the API; and IPv6 grouping, which Cloudflare doesn't document.
-- [ ] **P7-10** Release only when a merge can change an image. _Needs:_ P3-02. _Done when:_ a
+- [x] **P7-10** Release only when a merge can change an image. _Needs:_ P3-02. _Done when:_ a
       merge to `main` that changes only documentation (`docs/`, Markdown, `.agents/`, `.claude/`)
       builds no images, makes no release-pin commit, and restarts no pods, while a merge that
       touches code, Dockerfiles, lockfiles, or the chart still releases as before; the release
@@ -749,5 +751,31 @@ Read-only inventory of the reference host. Findings:
       pin file itself releases), tested by `needs-release.test.sh` in CI. On the real history it would have
       skipped PRs #66 and #69 and released #65, #67, and #68. Merged as PR #70 (2026-11-22): its
       own merge changed `.github/`, and the new `changes` job answered `true` and released as
-      before. Left: see a docs-only merge skip on `main` (no build, no pin commit, no restart);
-      record the run in the change that ticks this box.
+      before (pin `dd8fa9c`). Done 2026-11-22: PR #71's docs-only merge (`3bacad8`, Release run 45018358859) answered `false`; building and pinning were skipped, no pin commit followed,
+      and the API pod didn't restart.
+
+## Phase 8: Developer Experience (3/3)
+
+- [x] **P8-01** One-command local setup. _Needs:_ P7-03. _Done when:_ `pnpm bootstrap` takes a
+      fresh clone to a migrated, seeded database (checking Node.js and Docker Compose, writing
+      `.env` with a generated password without ever overwriting one), `pnpm dev` runs the API,
+      worker, and site together, `pnpm db:reset` wipes and rebuilds the local database only after
+      confirmation, and local.md documents them.
+      Done 2026-11-22: a fresh clone ran `pnpm bootstrap` to healthy PostgreSQL and Redis,
+      migrations, and seed; a second run left `.env` alone; `pnpm db:reset` refused without a
+      terminal or `--yes`, and with it emptied and rebuilt the database. Plain Node.js scripts in
+      `scripts/`, no new dependencies besides `concurrently` (already in the lockfile).
+- [x] **P8-02** Scaffold new projects. _Needs:_ P8-01. _Done when:_ `pnpm new:project` asks for a
+      slug, title, summary, and what to include (a page; a mini-app; an API module; a table), checks
+      every answer before writing, and creates and registers working code from templates, inside
+      the existing apps (no new services); CI generates sample projects and runs every check on
+      them.
+      Done 2026-11-22: one file per project and mini-app in the registry, a slug → view map for
+      `/apps/<slug>`, markers in the registry, web, API module list, and shared types, and
+      module-owned tables (`<name>.schema.ts`, picked up by `drizzle-kit`). A generated level-4
+      project passed `pnpm check` and `pnpm build`; in a fresh clone, after `pnpm db:migrate`, its
+      `GET /api/v1/<slug>/items` served rows from its own table. CI's `generator` job does the
+      same for a mini-app and a full project, plus unit tests of the generator.
+- [x] **P8-03** Document the workflow. _Done when:_ the README quick start is three commands, and
+      local.md, the `add-project` and `db-migration` skills, and the package rules describe the
+      new layout. Done 2026-11-22.

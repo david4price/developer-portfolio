@@ -35,15 +35,16 @@ see [Explorer configuration](docs/deployment/local.md).
 
 ## Quick Start
 
+Needs Node.js 24 and Docker (Compose 2.20+).
+
 ```bash
-corepack enable
-pnpm install
-cp .env.example .env          # replace the change-me values
-docker compose up -d          # PostgreSQL + Redis on 127.0.0.1
-pnpm db:migrate && pnpm db:seed
-pnpm dev:api                  # http://127.0.0.1:3001/api/v1/health
-pnpm dev:web                  # http://localhost:3000
+corepack enable               # puts pnpm on PATH
+pnpm bootstrap                # .env, dependencies, PostgreSQL + Redis, migrations, seed
+pnpm dev                      # API http://127.0.0.1:3001/api/v1/health, site http://localhost:3000
 ```
+
+Add a project (a page, a mini-app, an API module, a table) with `pnpm new:project`; wipe and
+rebuild the local database with `pnpm db:reset`.
 
 Or run everything in containers with `docker compose -f compose.full.yaml up -d --build`. Details are
 in [docs/deployment/local.md](docs/deployment/local.md).

@@ -16,12 +16,24 @@ AI stays disabled unless you configure a provider.
 git clone https://github.com/david4price/developer-portfolio.git
 cd developer-portfolio
 corepack enable            # puts pnpm on PATH (see below if it needs sudo)
+pnpm bootstrap
+```
+
+`pnpm bootstrap` (P8-01) checks Node.js and Docker Compose, creates `.env` from `.env.example` with
+a generated database password (an existing `.env` is never touched), installs dependencies, starts
+PostgreSQL 17 and Redis 7 on 127.0.0.1 and waits until they're healthy, then applies migrations
+and seeds the registry. It's safe to run again. By hand, the same steps are:
+
+```bash
 pnpm install
-cp .env.example .env       # then replace every change-me value
-docker compose up -d       # PostgreSQL 17 + Redis 7 on 127.0.0.1
+cp .env.example .env       # then replace every change-me value (two places)
+docker compose up -d --wait
 pnpm db:migrate            # builds, then applies migrations
 pnpm db:seed               # loads the project registry into PostgreSQL (idempotent)
 ```
+
+`pnpm db:reset` deletes the local PostgreSQL and Redis data (this project's Compose volumes only,
+after you type `reset`), then starts them empty, migrates, and seeds.
 
 `corepack enable` writes a `pnpm` link next to `node`. With a system-wide Node.js (for example in
 `/usr/bin`) that needs `sudo`; instead, link it into a directory of your own that is on `PATH`:
@@ -31,7 +43,11 @@ they call `pnpm` again and fail with `pnpm: not found`.
 
 ## Run
 
-In separate terminals:
+```bash
+pnpm dev          # API, worker, and site together, with prefixed output; Ctrl-C stops all
+```
+
+Or one per terminal:
 
 ```bash
 pnpm dev:api      # http://127.0.0.1:3001/api/v1/health
@@ -188,8 +204,16 @@ one-shot jobs also use a read-only root filesystem.
 
 ## Editing Content
 
-- Projects and mini-apps: `packages/project-registry/src/data.ts`. Entries are validated, so a bad
-  slug, duplicate, or non-HTTPS link fails tests and the build. Run `pnpm db:seed` after changes.
+- New project: `pnpm new:project` (P8-02) asks a few questions and scaffolds it from
+  `scripts/templates/project/`: a project page; or also a mini-app on `/apps/<slug>`; or also an
+  API module (`GET /api/v1/<slug>/items`, with a test); or also a table the module owns, with its
+  migration. It registers everything (registry, site, API) and checks every answer before writing,
+  so a refused one changes nothing. CI generates sample projects and runs every check on them, so
+  the templates stay working.
+- Projects and mini-apps: one file each in `packages/project-registry/src/projects/` and
+  `src/mini-apps/`, listed in that folder's `index.ts`. Entries are validated, so a bad slug,
+  duplicate, or non-HTTPS link fails tests and the build. Run `pnpm db:seed` after changes. A
+  mini-app's page shows the view registered for its slug in `apps/web/src/mini-apps/index.ts`.
 - Profile, About (including the optional "Beyond the code" interests, `personal`), and Experience:
   `packages/project-registry/src/profile-data.ts` (validated by the same schema checks as
   projects).

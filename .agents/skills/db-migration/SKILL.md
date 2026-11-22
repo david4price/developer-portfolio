@@ -5,7 +5,7 @@ description: Change the PostgreSQL schema of the API safely — edit the Drizzle
 
 # Database Migration
 
-Schema: `apps/api/src/database/schema.ts`. Migrations: `apps/api/drizzle/` (SQL plus `meta/`
+Schema: `apps/api/src/database/schema.ts`, plus tables owned by feature modules in `apps/api/src/modules/<name>/<name>.schema.ts` (P8-02). Migrations: `apps/api/drizzle/` (SQL plus `meta/`
 snapshots, all committed). Migrations run only through `pnpm db:migrate`, never at API startup.
 
 ## 1. Plan for Rollback
@@ -27,7 +27,7 @@ which part ships now. Add follow-ups to `docs/implementation-roadmap.md`.
 
 ## 2. Change
 
-1. Edit `schema.ts`.
+1. Edit `schema.ts` (or the module's `<name>.schema.ts`).
 2. Generate (offline, no database needed):
 
    ```bash

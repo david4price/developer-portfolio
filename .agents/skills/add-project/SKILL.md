@@ -5,7 +5,12 @@ description: Add, update, or remove a portfolio project or integrated mini-app i
 
 # Add or Update a Portfolio Project
 
-The registry (`packages/project-registry/src/data.ts`) is the single source of truth. It drives the
+For a new project, start with `pnpm new:project` (interactive; see `docs/deployment/local.md`):
+it creates the registry files and, if chosen, a mini-app, an API module, and a table, all wired
+up. This skill covers the content rules and editing existing entries.
+
+The registry (one file per project in `packages/project-registry/src/projects/`, per mini-app in
+`src/mini-apps/`, each listed in its folder's `index.ts`) is the single source of truth. It drives the
 static `/projects/[slug]` and `/apps/[slug]` pages, the API's `projects` table (via seed), and later
 the chatbot's grounding and navigation links.
 
@@ -28,7 +33,8 @@ Mini-apps have `slug`, `title`, `summary`, and `status` (`planned` until the app
 
 ## 2. Edit
 
-- Add or modify the entry in `data.ts`. Keep featured projects first.
+- Add or modify the entry's file, and list a new file in its folder's `index.ts`. Keep featured
+  projects first.
 - Public content only: no private hostnames, addresses, or internal service names. Describe
   self-hosted infrastructure generically ("a single-node K3s cluster").
 - Renaming a slug breaks public URLs. Avoid it; if unavoidable, mention the broken link to the user.
