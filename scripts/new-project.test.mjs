@@ -1,7 +1,6 @@
 // Unit tests for the project generator's helpers (P8-02). Run: node --test scripts/new-project.test.mjs
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseEnv } from './lib/local.mjs';
 import { insertAbove, names, plan, schemaProblems, slugProblem } from './new-project.mjs';
 
 describe('new-project', () => {
@@ -20,7 +19,9 @@ describe('new-project', () => {
       ['Recipe', /kebab-case/],
       ['3d-viewer', /starting with a letter/],
       ['recipe--box', /kebab-case/],
-      ['a'.repeat(65), /64/],
+      ['a'.repeat(41), /40/],
+      ['traffic', /apps\/api\/test\/traffic\.test\.ts already exists/],
+      ['index', /projects\/index\.ts already exists/],
       ['projects', /already used/],
       ['developer-portfolio', /registry already has/],
       ['infrastructure-explorer', /registry already has/],
@@ -119,14 +120,5 @@ describe('new-project', () => {
       level: 2,
     });
     assert.match(problems.join('\n'), /technologies\.0: .*40/);
-  });
-
-  it('reads .env values as Compose does: quotes and an export prefix', () => {
-    assert.deepEqual(parseEnv('# c\nA=1\nexport B="2"\nC=\'3\'\nD="x\n'), {
-      A: '1',
-      B: '2',
-      C: '3',
-      D: '"x',
-    });
   });
 });

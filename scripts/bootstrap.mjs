@@ -5,7 +5,6 @@
 // healthy, then applies migrations and seeds the registry. Safe to run again at any time.
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { URL } from 'node:url';
 import {
   capture,
   composeProject,
@@ -13,6 +12,7 @@ import {
   generatePassword,
   ok,
   portInUse,
+  portMismatches,
   readEnvFile,
   root,
   run,
@@ -60,25 +60,8 @@ async function main() {
   }
   const env = readEnvFile(envPath) ?? {};
   // The apps connect through DATABASE_URL and REDIS_URL; Compose publishes on the *_PORT values.
-  for (const [url, portKey, fallback] of [
-    ['DATABASE_URL', 'POSTGRES_PORT', '5432'],
-    ['REDIS_URL', 'REDIS_PORT', '6379'],
-  ]) {
-    let target;
-    try {
-      target = new URL(env[url] ?? '');
-    } catch {
-      throw new Error(`${url} in .env is not a valid URL`);
-    }
-    const published = env[portKey] ?? fallback;
-    const local = ['localhost', '127.0.0.1'].includes(target.hostname);
-    if (local && (target.port || fallback) !== published) {
-      throw new Error(
-        `${url} uses port ${target.port || fallback} but ${portKey} is ${published}; ` +
-          'make them the same in .env and run again',
-      );
-    }
-  }
+  const mismatches = portMismatches(env);
+  if (mismatches.length > 0) throw new Error(`${mismatches.join('; ')}. Fix .env and run again`);
   ok('DATABASE_URL and REDIS_URL match the published ports');
 
   step('Dependencies');
@@ -90,8 +73,8 @@ async function main() {
     capture('docker', ['compose', 'ps', '--services', '--status', 'running']) ?? ''
   ).split('\n');
   for (const [name, port] of [
-    ['POSTGRES_PORT', env.POSTGRES_PORT ?? '5432'],
-    ['REDIS_PORT', env.REDIS_PORT ?? '6379'],
+    ['POSTGRES_PORT', env.POSTGRES_PORT || '5432'],
+    ['REDIS_PORT', env.REDIS_PORT || '6379'],
   ]) {
     const service = name === 'POSTGRES_PORT' ? 'postgres' : 'redis';
     if (!running.includes(service) && (await portInUse(Number(port)))) {
@@ -112,7 +95,7 @@ async function main() {
   console.log(`
 Ready. Start everything with:
 
-  pnpm dev     # API http://127.0.0.1:${env.API_PORT ?? '3001'}/api/v1/health, site http://localhost:3000
+  pnpm dev     # API http://127.0.0.1:${env.API_PORT || '3001'}/api/v1/health, site http://localhost:3000
 
 The site's port is 3000 (PORT=3100 pnpm dev to change it; add the origin to CORS_ORIGINS).
 Stop PostgreSQL and Redis with \`docker compose down\`; \`pnpm db:reset\` wipes and rebuilds them.`);

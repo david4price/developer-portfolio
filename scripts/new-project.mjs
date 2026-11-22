@@ -40,7 +40,8 @@ export function slugProblem(slug) {
   if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(slug)) {
     return 'use kebab-case starting with a letter, e.g. recipe-box';
   }
-  if (slug.length > 64) return 'at most 64 characters';
+  // 40 keeps generated database names (`<slug>_items_created_at_idx`) within PostgreSQL's 63.
+  if (slug.length > 40) return 'at most 40 characters';
   if (RESERVED.has(slug)) return `"${slug}" is already used by the site or the API`;
   const registryDir = join(root, 'packages', 'project-registry', 'src');
   for (const folder of ['projects', 'mini-apps']) {
@@ -53,6 +54,10 @@ export function slugProblem(slug) {
   for (const path of [
     ['apps', 'web', 'src', 'mini-apps', slug],
     ['apps', 'api', 'src', 'modules', slug],
+    ['apps', 'api', 'test', `${slug}.test.ts`],
+    ['packages', 'project-registry', 'src', 'projects', `${slug}.ts`],
+    ['packages', 'project-registry', 'src', 'mini-apps', `${slug}.ts`],
+    ['packages', 'shared-types', 'src', 'projects', `${slug}.ts`],
   ]) {
     if (existsSync(join(root, ...path))) return `${path.join('/')} already exists`;
   }

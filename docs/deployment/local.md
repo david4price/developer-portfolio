@@ -247,11 +247,15 @@ compatibility rules that keep image rollbacks safe.
 
 ## Troubleshooting
 
-| Symptom                                                 | Fix                                                                                                                                        |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Invalid environment: DATABASE_URL …` at startup        | Copy `.env.example` to `.env`; the message names every missing or invalid variable                                                         |
-| Readiness shows `postgres: down`                        | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                                                                          |
-| `required variable POSTGRES_DB is missing` from Compose | Run Compose from the repository root, where `.env` lives                                                                                   |
-| Port already in use                                     | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, `API_METRICS_PORT`, or `PORT` (web) in `.env`                                            |
-| `ENOTFOUND postgres` from `migrate` after a failed `up` | A half-started stack (e.g. a port clash) can leave containers off the network: `docker compose -f compose.full.yaml down`, then `up` again |
-| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version                                              |
+| Symptom                                                                     | Fix                                                                                                                                        |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Invalid environment: DATABASE_URL …` at startup                            | Copy `.env.example` to `.env`; the message names every missing or invalid variable                                                         |
+| Readiness shows `postgres: down`                                            | `docker compose ps`; check `POSTGRES_PORT` matches `DATABASE_URL`                                                                          |
+| `required variable POSTGRES_DB is missing` from Compose                     | Run Compose from the repository root, where `.env` lives                                                                                   |
+| Port already in use                                                         | Change `POSTGRES_PORT`, `REDIS_PORT`, `API_PORT`, `API_METRICS_PORT`, or `PORT` (web) in `.env`                                            |
+| `pnpm bootstrap`: `DATABASE_URL uses port … but POSTGRES_PORT is …`         | The apps connect through `DATABASE_URL`/`REDIS_URL`; Compose publishes on `POSTGRES_PORT`/`REDIS_PORT`. Use the same port in both          |
+| `pnpm bootstrap`: `.env is missing, but the database volume … still exists` | Restore your `.env`; or delete the old local data with `docker compose --env-file .env.example down --volumes` and run again               |
+| `pnpm db:reset`: `The full stack is running`                                | Stop it first: `docker compose -f compose.full.yaml down`                                                                                  |
+| `pnpm new:project` refuses a slug                                           | The reason is printed; the slug's generated names or files would clash with existing ones. Pick another                                    |
+| `ENOTFOUND postgres` from `migrate` after a failed `up`                     | A half-started stack (e.g. a port clash) can leave containers off the network: `docker compose -f compose.full.yaml down`, then `up` again |
+| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                                    | A dependency version is younger than pnpm's release-age policy; wait, or pin an older version                                              |

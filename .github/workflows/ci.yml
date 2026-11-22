@@ -45,7 +45,7 @@ jobs:
           node-version-file: .node-version
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: node --test scripts/new-project.test.mjs
+      - run: node --test scripts/new-project.test.mjs scripts/local.test.mjs
       # Generates a mini-app and a full API + database project from the templates, then holds the
       # result to every check the repository has, so the templates can't drift out of date.
       - name: Generate sample projects

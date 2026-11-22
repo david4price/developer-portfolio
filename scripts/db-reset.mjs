@@ -3,15 +3,14 @@
 // compose.yaml volumes only), starts them again empty, then migrates and seeds. Asks first;
 // `--yes` skips the question for scripts.
 import { createInterface } from 'node:readline/promises';
-import { capture, composeProject, ok, run, step } from './lib/local.mjs';
+import { capture, composeProject, ok, otherServices, run, step } from './lib/local.mjs';
 
 async function confirmed() {
   if (process.argv.includes('--yes')) return true;
   if (!process.stdin.isTTY) {
     throw new Error('Refusing to wipe the database without a terminal; pass --yes to confirm');
   }
-  const project = capture('docker', ['compose', 'config', '--format', 'json']);
-  const name = project === undefined ? 'this project' : JSON.parse(project).name;
+  const name = composeProject();
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = await prompt.question(
@@ -27,20 +26,18 @@ async function confirmed() {
 async function main() {
   // compose.full.yaml includes compose.yaml under the same project: with its services up, removing
   // PostgreSQL, Redis, and their network would fail halfway.
-  const services = (
+  const services = otherServices(
     capture('docker', [
       'ps',
       '--filter',
       `label=com.docker.compose.project=${composeProject()}`,
       '--format',
       '{{.Label "com.docker.compose.service"}}',
-    ]) ?? ''
-  )
-    .split('\n')
-    .filter((service) => service !== '' && service !== 'postgres' && service !== 'redis');
+    ]) ?? '',
+  );
   if (services.length > 0) {
     throw new Error(
-      `The full stack is running (${[...new Set(services)].join(', ')}); stop it first with ` +
+      `The full stack is running (${services.join(', ')}); stop it first with ` +
         '`docker compose -f compose.full.yaml down`',
     );
   }
