@@ -18,7 +18,7 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 **Recently done**
 
 - **P7-10 merged** (PR #70, 2026-11-22): the release workflow builds only when a merge can change
-  an image; it released for its own merge, as it should. A docs-only merge skipping is next.
+  an image; it released for its own merge, as it should. Still to see: a docs-only merge skip.
 - **P7-09 done** (2026-11-22): a Cloudflare rate-limiting rule blocks more than 100 API
   requests in 10 s from one address; a test flood was stopped at the edge with the API idle.
 - **P7-07 done** (2026-11-21): a change under `apps/web` built (PR #68) while release-pin
@@ -283,11 +283,11 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-10**: skip image releases for docs-only merges.
+3. **P7-10**: confirm a docs-only merge skips the release on `main`, then tick it.
 4. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** `docs/p7-10-skip-check` (docs only; its merge checks that P7-10 skips).
-PRs #65–#70 are merged and deployed.
+**Branch in progress:** none open. PRs #65–#70 are merged and deployed; the next docs-only merge
+(the first is this roadmap update) checks that P7-10 skips.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -745,9 +745,9 @@ Read-only inventory of the reference host. Findings:
       Infrastructure Explorer shows then stays at the last released commit.
       Built 2026-11-22: a first `changes` job in the release workflow runs
       `.github/scripts/needs-release.sh` (diff from the last released commit; anything outside
-      docs, Markdown, `.agents/`, `.claude/`, `apps/web/`, and `infrastructure/load-tests/`
-      releases), tested by `needs-release.test.sh` in CI. On the real history it would have
+      docs, Markdown, `.agents/`, `.claude/`, `apps/web/`, `infrastructure/load-tests/`, and the
+      pin file itself releases), tested by `needs-release.test.sh` in CI. On the real history it would have
       skipped PRs #66 and #69 and released #65, #67, and #68. Merged as PR #70 (2026-11-22): its
       own merge changed `.github/`, and the new `changes` job answered `true` and released as
-      before. Left: see a docs-only merge skip on `main` (the merge of this roadmap update is
-      the first: no build, no pin commit, no restart).
+      before. Left: see a docs-only merge skip on `main` (no build, no pin commit, no restart);
+      record the run in the change that ticks this box.
