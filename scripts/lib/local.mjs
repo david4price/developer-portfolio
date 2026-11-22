@@ -23,12 +23,18 @@ export function capture(command, args) {
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
-/** `KEY=value` pairs of a dotenv file (comments and blank lines skipped, no interpolation). */
+/**
+ * `KEY=value` pairs of a dotenv file, read as Compose and Node's --env-file do: comments and blank
+ * lines skipped, an `export ` prefix allowed, one pair of surrounding quotes removed.
+ */
 export function parseEnv(text) {
   const values = {};
   for (const line of text.split('\n')) {
-    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
-    if (match) values[match[1]] = match[2].trim();
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (!match) continue;
+    const value = match[2].trim();
+    const quoted = /^(['"])(.*)\1$/.exec(value);
+    values[match[1]] = quoted ? quoted[2] : value;
   }
   return values;
 }
@@ -59,6 +65,9 @@ export function composeVersion() {
   const match = output === undefined ? null : /^v?(\d+)\.(\d+)/.exec(output);
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : undefined;
 }
+
+/** The Compose project name: COMPOSE_PROJECT_NAME, else compose.yaml's `name:`. */
+export const composeProject = () => process.env.COMPOSE_PROJECT_NAME || 'developer-portfolio';
 
 export const step = (message) => console.log(`\n▸ ${message}`);
 export const ok = (message) => console.log(`  ✓ ${message}`);

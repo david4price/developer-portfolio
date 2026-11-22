@@ -56,7 +56,67 @@ export function slugProblem(slug) {
   ]) {
     if (existsSync(join(root, ...path))) return `${path.join('/')} already exists`;
   }
+  // The generated names must not clash with code that already exists, or the result won't build.
+  const { pascal, camel } = names(slug);
+  if (slug === 'loader') return '"loader" would overwrite the mini-app\'s own loader file';
+  if (pascal in globalThis)
+    return `"${pascal}" would shadow a JavaScript global; pick another slug`;
+  const taken = [
+    ['apps/api/src/app.module.ts', `${pascal}Module`],
+    ['apps/web/src/mini-apps/index.ts', `${pascal}Loader`],
+    ['packages/project-registry/src/projects/index.ts', `${camel}Project`],
+    ['packages/project-registry/src/mini-apps/index.ts', `${camel}MiniApp`],
+    ['packages/shared-types/src/index.ts', `${pascal}Item`],
+  ];
+  for (const [file, identifier] of taken) {
+    if (new RegExp(`\\b${identifier}\\b`).test(readFileSync(join(root, file), 'utf8'))) {
+      return `the name ${identifier} is already used in ${file}; pick another slug`;
+    }
+  }
   return undefined;
+}
+
+/** The registry entries the answers describe, as the schema will see them. */
+export function entries(answers) {
+  const project = {
+    slug: answers.slug,
+    title: answers.title,
+    summary: answers.summary,
+    description: answers.description,
+    kind:
+      answers.level === 1 && answers.repositoryUrl !== null
+        ? 'external-repository'
+        : 'portfolio-app',
+    technologies: answers.technologies,
+    featured: answers.featured,
+    repositoryUrl: answers.repositoryUrl,
+    liveUrl: null,
+    miniAppSlug: answers.level >= 2 ? answers.slug : null,
+  };
+  const miniApp =
+    answers.level >= 2
+      ? { slug: answers.slug, title: answers.title, summary: answers.summary, status: 'planned' }
+      : undefined;
+  return { project, miniApp };
+}
+
+/**
+ * Checks the entries with the registry's own schema (lengths, URLs, prompt control markup, hidden
+ * text), building the package first. Returns the problems, empty when valid.
+ */
+export async function schemaProblems(answers) {
+  run('pnpm', ['exec', 'tsc', '-b', '--pretty', 'false', 'packages/project-registry']);
+  const schema = await import(
+    pathToFileURL(join(root, 'packages', 'project-registry', 'dist', 'schema.js')).href
+  );
+  const { project, miniApp } = entries(answers);
+  const results = [schema.projectSchema.safeParse(project)];
+  if (miniApp !== undefined) results.push(schema.miniAppSchema.safeParse(miniApp));
+  return results.flatMap((result) =>
+    result.success
+      ? []
+      : result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+  );
 }
 
 export function render(template, values) {
@@ -79,22 +139,21 @@ export function insertAbove(text, marker, line) {
 /** Every file to create and every marker edit, computed without touching the disk. */
 export function plan(answers) {
   const n = names(answers.slug);
+  const { project } = entries(answers);
   const values = {
     ...n,
     Pascal: n.pascal,
     CONST: n.constant,
-    title: answers.title,
+    // Only ever inside comments: `*/` would end the comment early.
+    title: answers.title.replaceAll('*/', '*\\/'),
     titleJson: JSON.stringify(answers.title),
     summaryJson: JSON.stringify(answers.summary),
     descriptionJson: JSON.stringify(answers.description),
     technologiesJson: JSON.stringify(answers.technologies),
     featured: String(answers.featured),
     repositoryJson: JSON.stringify(answers.repositoryUrl),
-    kind:
-      answers.level === 1 && answers.repositoryUrl !== null
-        ? 'external-repository'
-        : 'portfolio-app',
-    miniAppJson: answers.level >= 2 ? JSON.stringify(answers.slug) : 'null',
+    kind: project.kind,
+    miniAppJson: JSON.stringify(project.miniAppSlug),
   };
   const creates = [];
   const edits = [];
@@ -108,7 +167,11 @@ export function plan(answers) {
     '// new-project: project imports',
     `import { ${n.camel}Project } from './${n.slug}.js';`,
   );
-  edit(`${registry}/projects/index.ts`, '// new-project: projects', `${n.camel}Project,`);
+  edit(
+    `${registry}/projects/index.ts`,
+    answers.featured ? '// new-project: featured projects' : '// new-project: projects',
+    `${n.camel}Project,`,
+  );
 
   if (answers.level >= 2) {
     create(`${registry}/mini-apps/${n.slug}.ts`, 'registry-mini-app.ts.tpl');
@@ -172,7 +235,10 @@ export function apply({ creates, edits }) {
     const current = edited.get(path) ?? readFileSync(join(root, path), 'utf8');
     edited.set(path, insertAbove(current, marker, line));
   }
-  for (const { path } of creates) {
+  const paths = creates.map(({ path }) => path);
+  const duplicate = paths.find((path, index) => paths.indexOf(path) !== index);
+  if (duplicate !== undefined) throw new Error(`two files would be written to ${duplicate}`);
+  for (const path of paths) {
     if (existsSync(join(root, path))) throw new Error(`${path} already exists`);
   }
   for (const { path, content } of creates) {
@@ -257,6 +323,12 @@ async function main() {
       repositoryUrl: repository === '' ? null : repository,
       featured,
     };
+    const problems = await schemaProblems(answers);
+    if (problems.length > 0) {
+      throw new Error(
+        `The registry would reject these answers (nothing was written):\n  ${problems.join('\n  ')}`,
+      );
+    }
     const result = plan(answers);
     console.log(`\nThis creates:\n${result.creates.map(({ path }) => `  + ${path}`).join('\n')}`);
     console.log(

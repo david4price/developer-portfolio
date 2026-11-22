@@ -5,8 +5,10 @@
 // healthy, then applies migrations and seeds the registry. Safe to run again at any time.
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { URL } from 'node:url';
 import {
   capture,
+  composeProject,
   composeVersion,
   generatePassword,
   ok,
@@ -42,12 +44,42 @@ async function main() {
       warn(`.env still contains "${PLACEHOLDER}"; replace it in both places it appears`);
     }
   } else {
+    // PostgreSQL keeps the password it was first created with: a new one wouldn't match old data.
+    const volume = `${composeProject()}_postgres-data`;
+    if (capture('docker', ['volume', 'inspect', volume]) !== undefined) {
+      throw new Error(
+        `.env is missing, but the database volume ${volume} from an earlier setup still exists, ` +
+          'and a new password would not match it. Restore your .env, or delete the old local ' +
+          'data with `docker compose --env-file .env.example down --volumes` and run again.',
+      );
+    }
     copyFileSync(join(root, '.env.example'), envPath);
     const password = generatePassword();
     writeFileSync(envPath, readFileSync(envPath, 'utf8').replaceAll(PLACEHOLDER, password));
     ok('.env created from .env.example with a generated database password');
   }
   const env = readEnvFile(envPath) ?? {};
+  // The apps connect through DATABASE_URL and REDIS_URL; Compose publishes on the *_PORT values.
+  for (const [url, portKey, fallback] of [
+    ['DATABASE_URL', 'POSTGRES_PORT', '5432'],
+    ['REDIS_URL', 'REDIS_PORT', '6379'],
+  ]) {
+    let target;
+    try {
+      target = new URL(env[url] ?? '');
+    } catch {
+      throw new Error(`${url} in .env is not a valid URL`);
+    }
+    const published = env[portKey] ?? fallback;
+    const local = ['localhost', '127.0.0.1'].includes(target.hostname);
+    if (local && (target.port || fallback) !== published) {
+      throw new Error(
+        `${url} uses port ${target.port || fallback} but ${portKey} is ${published}; ` +
+          'make them the same in .env and run again',
+      );
+    }
+  }
+  ok('DATABASE_URL and REDIS_URL match the published ports');
 
   step('Dependencies');
   run('pnpm', ['install', '--frozen-lockfile']);
@@ -63,7 +95,11 @@ async function main() {
   ]) {
     const service = name === 'POSTGRES_PORT' ? 'postgres' : 'redis';
     if (!running.includes(service) && (await portInUse(Number(port)))) {
-      throw new Error(`Port ${port} is already in use; set another ${name} in .env and run again`);
+      const url = name === 'POSTGRES_PORT' ? 'DATABASE_URL' : 'REDIS_URL';
+      throw new Error(
+        `Port ${port} is already in use; set another ${name} in .env, the same port in ${url}, ` +
+          'and run again',
+      );
     }
   }
   run('docker', ['compose', 'up', '--detach', '--wait']);

@@ -22,16 +22,25 @@ export function __Pascal__() {
 
   useEffect(() => {
     if (url === null) return;
+    let unmounted = false;
     const controller = new AbortController();
+    // A hanging API shows as unavailable, not as loading forever.
+    const timeout = setTimeout(() => controller.abort(), 8_000);
     fetch(url, { signal: controller.signal, credentials: 'omit' })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        setState({ kind: 'ready', response: (await response.json()) as __Pascal__ItemsResponse });
+        const body = (await response.json()) as __Pascal__ItemsResponse;
+        if (!unmounted) setState({ kind: 'ready', response: body });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setState({ kind: 'unavailable' });
-      });
-    return () => controller.abort();
+        if (!unmounted) setState({ kind: 'unavailable' });
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      unmounted = true;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [url]);
 
   if (state.kind === 'not-configured') return <p>This build has no API configured.</p>;

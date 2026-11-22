@@ -8,5 +8,6 @@ import { developerPortfolio } from './developer-portfolio.js';
  */
 export const projects: readonly ProjectInput[] = [
   developerPortfolio,
+  // new-project: featured projects
   // new-project: projects
 ];

@@ -12,7 +12,11 @@ export class Drizzle__Pascal__Repository implements __Pascal__Repository {
   list(limit: number): Promise<readonly __Pascal__Item[]> {
     return withDatabase(async () => {
       const rows = await this.database
-        .select()
+        .select({
+          id: __camel__Items.id,
+          name: __camel__Items.name,
+          createdAt: __camel__Items.createdAt,
+        })
         .from(__camel__Items)
         .orderBy(desc(__camel__Items.createdAt))
         .limit(limit);
