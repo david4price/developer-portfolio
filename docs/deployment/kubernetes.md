@@ -533,8 +533,11 @@ Argo CD references: [project roles and expiring tokens](https://argo-cd.readthed
    change is docs, Markdown, `.agents/` or `.claude/`, the static site (`apps/web/`, which
    Cloudflare Pages builds), or `infrastructure/load-tests/`, it builds and pins nothing, so no
    pod restarts; those changes ride along with the next release that does build. Anything else,
-   or any doubt (no pin, or a pin that isn't an ancestor), releases. The Infrastructure
-   Explorer's version then stays at the last released commit.
+   or any doubt (no pin, a pin that isn't an ancestor, or a failing diff), releases; a file moved
+   out of an image counts on both sides. The last release is read from `main` as it is now, so a
+   release that finished while this merge waited counts. A commit that changes only
+   `images.yaml` (a hand-made pin, such as reverting a release to roll back) isn't rebuilt over.
+   The Infrastructure Explorer's version stays at the last released commit.
 
 3. Argo CD syncs. The rolling update uses `maxUnavailable: 0`, and readiness gates traffic.
 4. Run migrations as a pre-sync Job, only for backward-compatible migrations (see runbooks).

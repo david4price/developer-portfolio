@@ -25,9 +25,9 @@ pin() { # pin <sha>: a release commit, as release.yml writes it
   git add -A
   git commit -qm "chore(release): pin images for ${1::7}"
 }
-expect() { # expect <answer> <head> <label>
+expect() { # expect <answer> <head> <label> [<latest-ref>]
   local got
-  got="$(bash "$script" "$2")"
+  got="$(bash "$script" "$2" "${4:-refs/none}")"
   if [[ "$got" != "$1" ]]; then
     echo "FAIL: $3: expected $1, got $got" >&2
     failures=$((failures + 1))
@@ -55,6 +55,33 @@ expect true "$(commit infrastructure/docker/node-service.Dockerfile)" 'a Dockerf
 pin "$(git rev-parse HEAD)"
 commit docs/a.md >/dev/null
 expect true "$(commit packages/config/src/index.ts)" 'docs and code together'
+
+# A file moved out of the API into an excluded path still changes the image.
+pin "$(git rev-parse HEAD)"
+mkdir -p infrastructure/load-tests
+git mv apps/api/src/main.ts infrastructure/load-tests/main.ts
+git commit -qm 'move a file out of the api'
+expect true "$(git rev-parse HEAD)" 'a file moved out of the api'
+
+# A release that finished while this merge waited: its newer pin (on the latest ref) is used.
+pin "$(git rev-parse HEAD)"
+code="$(commit apps/worker/src/job.ts)"
+docs_merge="$(commit docs/c.md)" # merged while the release for $code was still running
+expect true "$docs_merge" 'older pin in its own tree: the code merge counts'
+git branch -f released "$docs_merge"
+git checkout -q released
+pin "$code"
+git checkout -q main
+expect false "$docs_merge" 'newer pin on the latest ref covers the code merge' released
+
+# A hand-made pin (reverting a release to roll back) is left alone, not rebuilt.
+pin "$(git rev-parse HEAD)"
+commit apps/api/src/app.ts >/dev/null
+release_pin_parent="$(git rev-parse HEAD)"
+pin "$release_pin_parent"
+git revert --no-edit HEAD >/dev/null
+expect false "$(git rev-parse HEAD)" 'reverting a release (pin file only)'
+expect true "$release_pin_parent" 'the same code without the revert'
 
 # A pinned commit that isn't an ancestor (history rewritten): release, to be safe.
 pin "$(printf '%040d' 0)"

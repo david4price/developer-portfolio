@@ -46,7 +46,8 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          release="$(bash .github/scripts/needs-release.sh "$HEAD_SHA")"
+          # origin/main may already pin a release that finished while this merge waited.
+          release="$(bash .github/scripts/needs-release.sh "$HEAD_SHA" origin/main)"
           echo "release=${release}" >> "$GITHUB_OUTPUT"
           echo "Image release needed: ${release}"
 

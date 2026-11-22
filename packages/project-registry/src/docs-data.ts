@@ -84,9 +84,9 @@ export const docNotesData: DocNotesInput = {
         'pushed',
       ],
       text:
-        'GitHub Actions lints, tests, and builds every change. After a merge to main, a release ' +
-        'workflow pushes the API and worker images to GitHub Container Registry and commits ' +
-        'their digests to the production values. Argo CD, which is not public, syncs the cluster ' +
+        'GitHub Actions lints, tests, and builds every change. After a merge to main that can ' +
+        'change an image (not docs alone), a release workflow pushes the API and worker images ' +
+        'to GitHub Container Registry and commits their digests to the production values. Argo CD, which is not public, syncs the cluster ' +
         'from Git with rolling updates gated by readiness checks. Rolling back means reverting ' +
         'that commit.',
       source: 'docs/architecture/kubernetes.md',
