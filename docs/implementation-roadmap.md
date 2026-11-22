@@ -17,6 +17,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
+- **P7-10 merged** (PR #70, 2026-11-22): the release workflow builds only when a merge can change
+  an image; it released for its own merge, as it should. A docs-only merge skipping is next.
 - **P7-09 done** (2026-11-22): a Cloudflare rate-limiting rule blocks more than 100 API
   requests in 10 s from one address; a test flood was stopped at the edge with the API idle.
 - **P7-07 done** (2026-11-21): a change under `apps/web` built (PR #68) while release-pin
@@ -284,8 +286,8 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 3. **P7-10**: skip image releases for docs-only merges.
 4. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** `ci/p7-10-release-skip` (P7-10). PRs #65–#69 are merged and
-deployed.
+**Branch in progress:** `docs/p7-10-skip-check` (docs only; its merge checks that P7-10 skips).
+PRs #65–#70 are merged and deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -745,5 +747,7 @@ Read-only inventory of the reference host. Findings:
       `.github/scripts/needs-release.sh` (diff from the last released commit; anything outside
       docs, Markdown, `.agents/`, `.claude/`, `apps/web/`, and `infrastructure/load-tests/`
       releases), tested by `needs-release.test.sh` in CI. On the real history it would have
-      skipped PRs #66 and #69 and released #65, #67, and #68. Left: see a docs-only merge skip
-      on `main`.
+      skipped PRs #66 and #69 and released #65, #67, and #68. Merged as PR #70 (2026-11-22): its
+      own merge changed `.github/`, and the new `changes` job answered `true` and released as
+      before. Left: see a docs-only merge skip on `main` (the merge of this roadmap update is
+      the first: no build, no pin commit, no restart).
