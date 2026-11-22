@@ -93,13 +93,17 @@ it.
 
 ## GitOps
 
-1. CI builds images and pushes them to GHCR. Tags are human-friendly, but deployments use digests.
-2. A release workflow commits the new digest to `infrastructure/environments/production/values.yaml`.
+1. After CI passes on `main`, a release workflow builds the API and worker images and pushes them
+   to GHCR. Tags are human-friendly, but deployments use digests. It skips merges that can't
+   change an image (docs, Markdown, agent instructions, the static site, load-test scripts; P7-10).
+2. It commits the new digests to `infrastructure/environments/production/images.yaml`.
 3. Argo CD, reachable only over Tailscale, polls the repository and syncs.
 4. Rolling update with `maxUnavailable: 0`; readiness gates traffic.
 
-Rollback means reverting the values commit. Database migrations must be backward compatible for
-one release ([runbooks](../operations/runbooks.md#rollback)).
+Rollback means reverting the code change on `main`: the release rebuilds the previous code and
+pins it. Reverting only the release commit doesn't last, since the next release rebuilds `main`
+as it is. Database migrations must be backward compatible for one release
+([runbooks](../operations/runbooks.md#rollback)).
 
 ## Single-Node Caveats
 
