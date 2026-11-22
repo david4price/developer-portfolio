@@ -82,6 +82,10 @@ export const registrySchema = z
   });
 
 export type RegistryInput = z.input<typeof registrySchema>;
+/** One project as written in `src/projects/<slug>.ts`. */
+export type ProjectInput = RegistryInput['projects'][number];
+/** One integrated mini-app as written in `src/mini-apps/<slug>.ts`. */
+export type MiniAppInput = RegistryInput['miniApps'][number];
 
 export const experienceEntrySchema = z.object({
   role: content(80),

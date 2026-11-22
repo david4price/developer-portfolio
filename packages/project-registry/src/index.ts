@@ -37,8 +37,10 @@ export type {
   DocNotes,
   DocNotesInput,
   ExperienceEntry,
+  MiniAppInput,
   Profile,
   ProfileInput,
+  ProjectInput,
   RegistryInput,
 } from './schema.js';
 

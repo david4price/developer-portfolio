@@ -8,6 +8,7 @@ import { InfrastructureModule } from './modules/infrastructure/infrastructure.mo
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { MetricsModule } from './metrics/metrics.module.js';
 import { REDIS_READINESS, RedisModule } from './redis/redis.module.js';
+// new-project: module imports (pnpm new:project adds lines above this one)
 
 @Global()
 @Module({})
@@ -36,6 +37,7 @@ export class AppModule {
         ProjectsModule,
         ChatModule,
         InfrastructureModule,
+        // new-project: modules
       ],
     };
   }

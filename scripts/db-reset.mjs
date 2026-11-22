@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+// pnpm db:reset (P8-01): deletes the local PostgreSQL and Redis data (this repository's
+// compose.yaml volumes only), starts them again empty, then migrates and seeds. Asks first;
+// `--yes` skips the question for scripts.
+import { createInterface } from 'node:readline/promises';
+import { capture, composeProject, ok, otherServices, run, step } from './lib/local.mjs';
+
+async function confirmed() {
+  if (process.argv.includes('--yes')) return true;
+  if (!process.stdin.isTTY) {
+    throw new Error('Refusing to wipe the database without a terminal; pass --yes to confirm');
+  }
+  const name = composeProject();
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await prompt.question(
+      `This deletes all local PostgreSQL and Redis data of "${name}" (its Docker volumes).\n` +
+        'Type "reset" to continue: ',
+    );
+    return answer.trim() === 'reset';
+  } finally {
+    prompt.close();
+  }
+}
+
+async function main() {
+  // compose.full.yaml includes compose.yaml under the same project: with its services up, removing
+  // PostgreSQL, Redis, and their network would fail halfway.
+  const services = otherServices(
+    capture('docker', [
+      'ps',
+      '--filter',
+      `label=com.docker.compose.project=${composeProject()}`,
+      '--format',
+      '{{.Label "com.docker.compose.service"}}',
+    ]) ?? '',
+  );
+  if (services.length > 0) {
+    throw new Error(
+      `The full stack is running (${services.join(', ')}); stop it first with ` +
+        '`docker compose -f compose.full.yaml down`',
+    );
+  }
+  if (!(await confirmed())) {
+    console.log('Nothing changed.');
+    return;
+  }
+  step('Removing PostgreSQL and Redis with their data');
+  run('docker', ['compose', 'down', '--volumes']);
+  step('Starting them again');
+  run('docker', ['compose', 'up', '--detach', '--wait']);
+  ok('running and healthy');
+  step('Database');
+  run('pnpm', ['db:migrate']);
+  run('pnpm', ['db:seed']);
+  console.log('\nReset done: an empty database with the registry seeded.');
+}
+
+main().catch((error) => {
+  console.error(`\n✗ ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+});
