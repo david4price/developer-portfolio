@@ -85,6 +85,58 @@ Set on the reference zone on 2026-11-13 (dashboard search finds each by name):
 Keep Rocket Loader and email obfuscation off for the same reason as JavaScript Detections. The API
 gets its own abuse controls (Turnstile, Redis rate limits) in Phase 5.
 
+### Edge rate limit (P7-09)
+
+The Free plan's one rate-limiting rule (Security → WAF → Rate limiting rules), added 2026-11-22.
+It applies to the whole zone; the reference zone has two proxied hostnames, the API and the site.
+
+| Field                 | Value                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Expression            | `starts_with(http.request.uri.path, "/api/v1/")`                                      |
+| Counted per           | IP and Cloudflare data centre (`cf.colo.id` is mandatory on every plan): 100 per colo |
+| Threshold             | 100 requests in 10 s                                                                  |
+| Action and block time | Block (`429` from Cloudflare) for 10 s                                                |
+
+The exact body, to set it or put it back after a rollback:
+
+```bash
+cf rulesets account-rulesets phases update http_ratelimit --zone <domain> --body '{
+  "name": "Zone rate limiting",
+  "rules": [{
+    "description": "P7-09: more than 100 API requests in 10 s from one IP: block for 10 s",
+    "expression": "starts_with(http.request.uri.path, \"/api/v1/\")",
+    "action": "block",
+    "ratelimit": {
+      "characteristics": ["ip.src", "cf.colo.id"],
+      "period": 10, "requests_per_period": 100, "mitigation_timeout": 10
+    }
+  }]
+}'
+```
+
+Check a change first with `--validate-only`; roll back with the same command and `"rules": []`.
+
+**Why 100.** A visitor sends few API requests: one status check when the home page loads, the
+Infrastructure Explorer's snapshot every 12 s while it's open, and for chat one session request,
+then one message at a time (each taking seconds), plus CORS preflights the browser caches for
+10 minutes. That's well under 10 in 10 s, so 100 leaves room for several visitors behind one
+address. A no-pause flood gets about 100 requests through per block cycle (an estimate: Cloudflare
+doesn't document its window), which the API doesn't notice: it carried 200 a second in the
+[load tests](../operations/load-testing.md).
+
+**Verified:** 300 requests from one address in 4.4 s gave 100 `200`s and 200 `429`s, the API
+counted only the 100 (plus its own probes) and stayed idle, the block lifted after 10 s, and a
+minute of normal traffic from the same address was untouched.
+
+**Not covered:**
+
+- Other paths on the API host (`/`, `/anything`): the Free plan's rules can match only the path,
+  and counting every path would also count the static site's assets. Those requests still cross
+  the tunnel, but `cloudflared` answers them with its catch-all 404; they never reach the API.
+- IPv6: Cloudflare doesn't document whether `ip.src` groups IPv6 by /64 or counts each address
+  (**Unknown**). If each address counts, one host could spread a flood across its /64.
+- Floods from many addresses: left to Cloudflare's automatic DDoS protection.
+
 ## Rollback
 
 Every deployment stays available. Roll production back to an earlier one in the dashboard

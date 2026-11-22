@@ -4,9 +4,10 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-21_
+_Last updated: 2026-11-22_
 
-**Current phase:** 7 (Hardening). Phase 6 has only P6-05's token rotation left, due 2027-02-16.
+**Current phase:** 7 (Hardening), done except P7-05 (TypeScript 7, waiting on typescript-eslint).
+Phase 6 has only P6-05's token rotation left, due 2027-02-16.
 Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
 the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
 Phase 2 is complete with the owner's profile (P2-12), and the chat answers about it (P5-13);
@@ -14,9 +15,12 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 **Recently done**
 
-- **P7-08 done** (`feat/p7-08-chat-overload`): a full AI queue is refused before quotas and
+- **P7-09 done** (2026-11-22): a Cloudflare rate-limiting rule blocks more than 100 API
+  requests in 10 s from one address; a test flood was stopped at the edge with the API idle.
+- **P7-07 done** (2026-11-21): a change under `apps/web` built (PR #68) while release-pin
+  commits skip.
+- **P7-08 done** (PR #68, deployed 2026-11-21): a full AI queue is refused before quotas and
   screening, and unscored messages are refused instead of passed on the rules alone (ADR 0003).
-  New **P7-09**: an edge rate limit for no-pause floods.
 - **P7-02 done** (PR #67, deployed 2026-11-21): the API carried 200 requests a second in the cluster
   with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
   `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
@@ -275,12 +279,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-07**: confirm the next change under `apps/web` still triggers a Pages build.
-4. **P7-09**: a Cloudflare rate-limiting rule on the API hostname for floods no API code can
-   absorb (needs approval).
+3. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
 
-**Branch in progress:** `feat/p7-08-chat-overload` (P7-08, not pushed). PR #67 (P7-02) is
-merged and deployed: the API runs with 250m CPU and 640Mi requested, 1Gi limit.
+**Branch in progress:** `docs/p7-09-edge-rate-limit` (records P7-07 and P7-09). PRs #65–#68
+are merged and deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -628,7 +630,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (6/9)
+## Phase 7: Hardening (8/9)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -691,7 +693,7 @@ Read-only inventory of the reference host. Findings:
       - a Secret `get`;
       - a server-side dry-run `create`, which is never saved.
 
-- [ ] **P7-07** 🔒 Skip Pages builds for commits that can't change the site. _Needs:_ P7-04.
+- [x] **P7-07** 🔒 Skip Pages builds for commits that can't change the site. _Needs:_ P7-04.
       _Done when:_ the Pages project's build watch paths exclude `infrastructure/*` and `docs/*`,
       a release-pin commit on `main` triggers no build, and a change under `apps/web` still
       does. Why: [cost review](operations/cost-review.md#limit-to-watch-pages-builds).
@@ -699,7 +701,9 @@ Read-only inventory of the reference host. Findings:
       `path_excludes` changed; nothing else differed afterwards). Rollback: the same edit with
       `path_excludes: []`. Verified 2026-11-21: PR #65's merge commit built and deployed; the
       release-pin commit after it was skipped (`is_skipped: true`, no build ran). PR #65 changed
-      nothing under `apps/web`, so left: see the next site change build.
+      nothing under `apps/web`, so left: see the next site change build. Done 2026-11-21: PR #68
+      (which changed `apps/web`) built its preview and its production merge, and the release-pin
+      commit after it was skipped.
 - [x] **P7-08** Make chat overload cost the client, not the API, and keep screening meaningful
       under load. _Needs:_ P7-02. _Done when:_ a chat message the API can't answer costs about as
       much as a trivial request (no quota, no screening), no message reaches the model without
@@ -707,17 +711,23 @@ Read-only inventory of the reference host. Findings:
       budget, and unit tests cover it. Narrowed 2026-11-21 by the owner: the first version also
       asked that a client resending at once "can't hold an API pod's CPU", which no API code can
       meet (the same flood on `/health` does it); that limit moved to P7-09.
-      Done 2026-11-21 (`feat/p7-08-chat-overload`, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
+      Done 2026-11-21 (PR #68, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
       a full AI queue is refused before quotas and screening; the classifier budget is 5 s; a
       message without a score is never passed on the rules alone (`422 message_too_long` when
       scoring itself ran out of time, otherwise a refunded `503 ai_overloaded`). On the stage-3
       stack a rejection costs about 0.5 ms of CPU (was 10–100 ms; `/health` about 0.1 ms), and no
       dense message reached the model unscored
       ([load testing](operations/load-testing.md#chat-overload-p7-08)).
-- [ ] **P7-09** 🔒 Rate-limit the public API at the edge. _Needs:_ P7-08. _Done when:_ a
+- [x] **P7-09** 🔒 Rate-limit the public API at the edge. _Needs:_ P7-08. _Done when:_ a
       Cloudflare rate-limiting rule on the API hostname blocks a single client that floods it
       before the requests reach the tunnel, without affecting normal visitors (the site's own
       calls and a chat session), and a short flood from one address is seen blocked while the
       API's CPU stays near idle. The Free plan allows one rule, counted per IP over 10 s with a
       10 s block, matching on path; pick the threshold from the P7-02 numbers and record it.
       Why: [load testing](operations/load-testing.md#chat-overload-p7-08).
+      Done 2026-11-22 ([rule](deployment/cloudflare-pages.md#edge-rate-limit-p7-09)): paths
+      starting `/api/v1/`, 100 requests in 10 s per IP, then a 10 s block. From one address, 300
+      requests in 4.4 s gave 100 `200`s and 200 Cloudflare `429`s; the API counted only those 100
+      (plus its probes) at 12m CPU; the block lifted after 10 s; a minute of normal traffic was
+      untouched. Not covered (Free plan): other paths on the API host, which `cloudflared`
+      answers with a 404 without the API; and IPv6 grouping, which Cloudflare doesn't document.

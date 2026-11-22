@@ -96,6 +96,20 @@ Pods restarted once each and came back Ready, the tunnel reconnected with 4 conn
 returned to `Synced/Healthy`, the PostgreSQL data was intact, and the 14 Docker containers were
 unaffected.
 
+## Edge Rate Limit (P7-09)
+
+- **What visitors see:** the site's API calls fail as if the API were down: chat says "Chat is
+  unavailable", the home page's status badge shows the API unavailable, and the Infrastructure
+  Explorer goes unavailable. Cloudflare's block response has no CORS headers, so the browser
+  reports a network error rather than a `429`.
+- **How to tell:** in devtools or with `curl -sI https://api.<domain>/api/v1/health` from the
+  affected address, a `429` with `server: cloudflare` (an HTML page, not the API's JSON) is the
+  edge limit: more than 100 API requests in 10 s from one address (and data centre). It lifts
+  after 10 s. The API's logs show nothing, since the requests never reach it.
+- **If real visitors hit it** (many behind one address): raise `requests_per_period` with the
+  command in the [rule](../deployment/cloudflare-pages.md#edge-rate-limit-p7-09), or roll the
+  rule back.
+
 ## Inference Overload (Proposed, Phase 5)
 
 - Symptoms: chat returns `ai_overloaded` or `ai_unavailable`. `ai_overloaded` also covers a
