@@ -17,10 +17,10 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
 
 - **P7-09 done** (2026-11-22): a Cloudflare rate-limiting rule blocks more than 100 API
   requests in 10 s from one address; a test flood was stopped at the edge with the API idle.
-- **P7-07 done**: a change under `apps/web` built (PR #68) while release-pin commits skip.
+- **P7-07 done** (2026-11-21): a change under `apps/web` built (PR #68) while release-pin
+  commits skip.
 - **P7-08 done** (PR #68, deployed 2026-11-21): a full AI queue is refused before quotas and
   screening, and unscored messages are refused instead of passed on the rules alone (ADR 0003).
-  New **P7-09**: an edge rate limit for no-pause floods.
 - **P7-02 done** (PR #67, deployed 2026-11-21): the API carried 200 requests a second in the cluster
   with p95 of 2.8 ms; its classifier profile becomes 250m CPU, 640Mi requested, 1Gi limit, and
   `maxReplicas` stays 3. Found **P7-08** (chat overload costs the API a CPU).
@@ -711,7 +711,7 @@ Read-only inventory of the reference host. Findings:
       budget, and unit tests cover it. Narrowed 2026-11-21 by the owner: the first version also
       asked that a client resending at once "can't hold an API pod's CPU", which no API code can
       meet (the same flood on `/health` does it); that limit moved to P7-09.
-      Done 2026-11-21 (`feat/p7-08-chat-overload`, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
+      Done 2026-11-21 (PR #68, [ADR 0003](architecture/adr-0003-chat-screening-under-load.md)):
       a full AI queue is refused before quotas and screening; the classifier budget is 5 s; a
       message without a score is never passed on the rules alone (`422 message_too_long` when
       scoring itself ran out of time, otherwise a refunded `503 ai_overloaded`). On the stage-3
@@ -729,4 +729,5 @@ Read-only inventory of the reference host. Findings:
       starting `/api/v1/`, 100 requests in 10 s per IP, then a 10 s block. From one address, 300
       requests in 4.4 s gave 100 `200`s and 200 Cloudflare `429`s; the API counted only those 100
       (plus its probes) at 12m CPU; the block lifted after 10 s; a minute of normal traffic was
-      untouched.
+      untouched. Not covered (Free plan): other paths on the API host, which `cloudflared`
+      answers with a 404 without the API; and IPv6 grouping, which Cloudflare doesn't document.

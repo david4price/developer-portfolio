@@ -17,6 +17,9 @@ The public surface is a static site and a small REST API. The main risks:
 - Cloudflare Turnstile on chat session creation: server verification is **Confirmed in code**;
   the live widget and browser integration are **Proposed**. A CAPTCHA is one layer of protection,
   not the only one.
+- **Confirmed (P7-09):** a Cloudflare rate-limiting rule blocks more than 100 requests to
+  `/api/v1/` in 10 s from one address (per data centre) for 10 s, before they reach the tunnel
+  ([rule and its limits](../deployment/cloudflare-pages.md#edge-rate-limit-p7-09)).
 - Plan limits and costs are reviewed in the [cost review](../operations/cost-review.md) (P7-04),
   because free tiers change.
 
