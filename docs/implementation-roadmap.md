@@ -4,9 +4,9 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-22_
+_Last updated: 2026-11-23_
 
-**Current phase:** none open. Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** no phase in progress. Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -289,7 +289,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 3. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `docs/p7-05-watch-list` (closes Phase 7). PRs #65–#72 are merged and deployed.
+**Branch in progress:** none open. The last merge closes Phase 7 (`docs/p7-05-watch-list`); PRs
+#65 onwards are merged and deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -747,27 +748,6 @@ Read-only inventory of the reference host. Findings:
       before (pin `dd8fa9c`). Done 2026-11-22: PR #71's docs-only merge (`3bacad8`, Release run 45018358859) answered `false`; building and pinning were skipped, no pin commit followed,
       and the API pod didn't restart.
 
-## Watch List
-
-Not phases: items that start when something outside this repository changes. Check them now and
-then; P6-05 (the Argo CD token, due 2027-02-16) stays in Phase 6 because it has a date.
-
-- [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. Moved here from
-      Phase 7 on 2026-11-23 (owner's call): it gives build speed, not hardening, and waits on
-      typescript-eslint. _Done when:_
-      typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
-      Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
-      attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
-      ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
-      hand: check typescript-eslint's peer range from time to time. Last checked 2026-11-20:
-      typescript-eslint 8.73.0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
-      Checked 2026-11-23: typescript-eslint 8.73.0 (and its canary) still allow only `<6.1.0`,
-      while TypeScript 7.0.2 has been out since July 2026. TypeScript 7 drops the JavaScript
-      compiler API that type-aware ESLint rules (and likely Next's type check and other tools)
-      use, so support may take a while. _Trigger:_ typescript-eslint's peer range includes 7.
-      Not chosen for now: running TypeScript 6 for ESLint beside 7 for builds, or replacing
-      ESLint with Oxlint and tsgolint (a separate decision with its own ADR).
-
 ## Phase 8: Developer Experience (3/3)
 
 - [x] **P8-01** One-command local setup. _Needs:_ P7-03. _Done when:_ `pnpm bootstrap` takes a
@@ -793,3 +773,23 @@ then; P6-05 (the Argo CD token, due 2027-02-16) stays in Phase 6 because it has 
 - [x] **P8-03** Document the workflow. _Done when:_ the README quick start is three commands, and
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
+
+## Watch List
+
+Not phases: items that start when something outside this repository changes. Check them now and
+then; P6-05 (the Argo CD token, due 2027-02-16) stays in Phase 6 because it has a date.
+
+- [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. Moved here from
+      Phase 7 on 2026-11-23 (owner's call): it gives build speed, not hardening, and waits on
+      typescript-eslint. _Done when:_
+      typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
+      Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
+      attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
+      ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
+      hand: check typescript-eslint's peer range from time to time. First checked 2026-11-20 (blocked).0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
+      Checked 2026-11-23: typescript-eslint 8.73.0 (and its canary) still allow only `<6.1.0`,
+      while TypeScript 7.0.2 has been out since July 2026. TypeScript 7 drops the JavaScript
+      compiler API that type-aware ESLint rules (and likely Next's type check and other tools)
+      use, so support may take a while. _Trigger:_ typescript-eslint's peer range includes 7.
+      Not chosen for now: running TypeScript 6 for ESLint beside 7 for builds, or replacing
+      ESLint with Oxlint and tsgolint (a separate decision with its own ADR).
