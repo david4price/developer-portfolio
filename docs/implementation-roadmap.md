@@ -6,17 +6,17 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-22_
 
-**Current phase:** 8 (Developer experience) is done: `pnpm bootstrap`, `pnpm dev`, `pnpm db:reset`,
-and `pnpm new:project`. Phase 7 has only P7-05 left (TypeScript 7, waiting on typescript-eslint).
-Ready for new projects: `pnpm new:project`.
-Phase 6 has only P6-05's token rotation left, due 2027-02-16.
-Phases 3 (Kubernetes and GitOps) and 4 (public edge) are complete:
-the site and API are public, hardened, autoscaled, backed up, and proven to degrade gracefully.
-Phase 2 is complete with the owner's profile (P2-12), and the chat answers about it (P5-13);
-Phase 5's retrieval measurement (P5-10) waits for more projects.
+**Current phase:** none open. Phases 1–4, 7, and 8 are complete: the site and API are public,
+hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
+runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
+conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
+P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects:
+`pnpm new:project`.
 
 **Recently done**
 
+- **Phase 7 closed** (2026-11-23): P7-05 (TypeScript 7) moved to a new watch list; it waits on
+  typescript-eslint, which can't support 7 until it has a new compiler API to build on.
 - **Phase 8 done** (`feat/p8-dev-experience`): one-command setup (`pnpm bootstrap`), all-in-one
   `pnpm dev`, a guarded `pnpm db:reset`, and `pnpm new:project`, which scaffolds a project page,
   mini-app, API module, and table from templates that CI keeps working.
@@ -287,9 +287,9 @@ Phase 5's retrieval measurement (P5-10) waits for more projects.
    rotating.
 2. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. **P7-05** when typescript-eslint supports TypeScript 7 (check its peer range now and then).
+3. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p8-dev-experience` (Phase 8).
+**Branch in progress:** `docs/p7-05-watch-list` (closes Phase 7). PRs #65–#72 are merged and deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -637,7 +637,7 @@ Read-only inventory of the reference host. Findings:
       configuration (it can't see a rotation). Its outage and sync alerts come from the public
       snapshot. Steps: [rotation](deployment/kubernetes.md#argo-cd-explorer-token-p6-03).
 
-## Phase 7: Hardening (9/10)
+## Phase 7: Hardening (9/9)
 
 - [x] **P7-01** Prometheus-style metrics (latency, errors, queue depth, inference time). _Needs:_
       Phase 3. _Done when:_ metrics endpoint is not publicly routed.
@@ -679,13 +679,6 @@ Read-only inventory of the reference host. Findings:
       ([cost review](operations/cost-review.md)). The limit to watch is Pages' 500 builds a
       month: 150 in the first week, 43 of them release-pin commits that don't change the site
       (P7-07).
-- [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. _Done when:_
-      typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
-      Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
-      attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
-      ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
-      hand: check typescript-eslint's peer range from time to time. Last checked 2026-11-20:
-      typescript-eslint 8.73.0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
 - [x] **P7-06** 🔒 K3s API audit logging. _Needs:_ Phase 3. _Done when:_ writes, `exec`/`attach`/
       `port-forward`, and Secret reads are recorded at Metadata level (never bodies), routine
       traffic is dropped, `apiserver_audit_error_total` stays absent or 0, and the log is
@@ -753,6 +746,27 @@ Read-only inventory of the reference host. Findings:
       own merge changed `.github/`, and the new `changes` job answered `true` and released as
       before (pin `dd8fa9c`). Done 2026-11-22: PR #71's docs-only merge (`3bacad8`, Release run 45018358859) answered `false`; building and pinning were skipped, no pin commit followed,
       and the API pod didn't restart.
+
+## Watch List
+
+Not phases: items that start when something outside this repository changes. Check them now and
+then; P6-05 (the Argo CD token, due 2027-02-16) stays in Phase 6 because it has a date.
+
+- [ ] **P7-05** Upgrade to TypeScript 7 once typescript-eslint supports it. Moved here from
+      Phase 7 on 2026-11-23 (owner's call): it gives build speed, not hardening, and waits on
+      typescript-eslint. _Done when:_
+      typescript-eslint's peer range includes TS 7; `pnpm check`, build, and integration tests pass;
+      Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
+      attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
+      ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
+      hand: check typescript-eslint's peer range from time to time. Last checked 2026-11-20:
+      typescript-eslint 8.73.0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
+      Checked 2026-11-23: typescript-eslint 8.73.0 (and its canary) still allow only `<6.1.0`,
+      while TypeScript 7.0.2 has been out since July 2026. TypeScript 7 drops the JavaScript
+      compiler API that type-aware ESLint rules (and likely Next's type check and other tools)
+      use, so support may take a while. _Trigger:_ typescript-eslint's peer range includes 7.
+      Not chosen for now: running TypeScript 6 for ESLint beside 7 for builds, or replacing
+      ESLint with Oxlint and tsgolint (a separate decision with its own ADR).
 
 ## Phase 8: Developer Experience (3/3)
 
