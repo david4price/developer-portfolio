@@ -786,8 +786,8 @@ then; P6-05 (the Argo CD token, due 2027-02-16) stays in Phase 6 because it has 
       Nest dependency injection still works (decorator metadata). Dependabot PR #2 was the first
       attempt (failed lint). Since 2026-11-19 Dependabot opens no version PRs
       ([ADR 0002](architecture/adr-0002-dependency-updates.md)), so this upgrade is started by
-      hand: check typescript-eslint's peer range from time to time. First checked 2026-11-20 (blocked).0 allows `>=4.8.4 <6.1.0`, TypeScript 7.0.2 is out; still blocked.
-      Checked 2026-11-23: typescript-eslint 8.73.0 (and its canary) still allow only `<6.1.0`,
+      hand: check typescript-eslint's peer range from time to time. First checked 2026-11-20
+      (blocked). Last checked 2026-11-23: typescript-eslint 8.73.0 (and its canary) still allow only `<6.1.0`,
       while TypeScript 7.0.2 has been out since July 2026. TypeScript 7 drops the JavaScript
       compiler API that type-aware ESLint rules (and likely Next's type check and other tools)
       use, so support may take a while. _Trigger:_ typescript-eslint's peer range includes 7.
