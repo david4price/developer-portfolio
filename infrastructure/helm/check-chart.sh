@@ -183,6 +183,8 @@ else
 fi
 expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
   -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.serviceAccount=
+expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
+  -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.namespace=
 
 # No template anywhere may render cluster-wide RBAC, with the view on or off.
 for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml" \

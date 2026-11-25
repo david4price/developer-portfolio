@@ -2,7 +2,8 @@
 # docs/architecture/observability.md). The upstream charts render no RBAC and no policies.
 
 # Pod labels of the upstream releases, as their charts render them. Changing a release name in
-# infrastructure/argocd/monitoring means changing it here too.
+# infrastructure/argocd/monitoring means changing it here too, and in the portfolio chart's
+# `monitoring.readers` (pnpm helm:check compares all three).
 pods:
   alloy:
     app.kubernetes.io/name: alloy

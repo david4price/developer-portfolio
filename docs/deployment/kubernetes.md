@@ -446,15 +446,32 @@ Argo CD keeps each in sync with `main`.
      it from `main`.
    - **Alloy**, after that sync: `kubectl apply -f infrastructure/argocd/monitoring/alloy.yaml`.
    - **Validate:**
-     - `kubectl auth can-i get pods --subresource=log -n portfolio --as=system:serviceaccount:monitoring:alloy`
-       returns yes. The same for `get secrets`, `create pods --subresource=exec`, and
-       `get pods -n kube-system` returns no.
-     - The API's Explorer account still can't read logs.
+     - Alloy's account reads logs in `portfolio` and nothing more. Expect `yes` for the first
+       command and `no` for the rest:
+
+       ```bash
+       sa=system:serviceaccount:monitoring:alloy
+       kubectl auth can-i get pods --subresource=log -n portfolio --as=$sa       # yes
+       kubectl auth can-i get secrets -n portfolio --as=$sa                      # no
+       kubectl auth can-i create pods --subresource=exec -n portfolio --as=$sa   # no
+       kubectl auth can-i list pods -n kube-system --as=$sa                      # no
+       ```
+
+     - The API's Explorer account still can't read logs:
+       `kubectl auth can-i get pods --subresource=log -n portfolio --as=system:serviceaccount:portfolio:portfolio-api`
+       returns `no`.
+     - Alloy runs as non-root with no host paths:
+       `kubectl -n monitoring get deploy alloy -o jsonpath='{.spec.template.spec.containers[0].securityContext.runAsUser} {.spec.template.spec.volumes}'`
+       shows `65534` and no `hostPath`.
      - A request id from a live request is found in Loki:
        `kubectl -n monitoring port-forward svc/loki 3100:3100`, then query
        `{namespace="portfolio", container="api"} |= "<request id>"` on `/loki/api/v1/query_range`.
-     - Retention is 720h in `/config`.
+     - Retention is `30d` under `limits_config` in Loki's `/config`.
      - A pod in another namespace can't reach `loki.monitoring.svc:3100`.
+     - **Privacy, after a day of collection:** search the last 24 hours of `{namespace="portfolio"}`
+       for IP addresses, cookies, tokens, and chat text (for example
+       `|~ "\\b[0-9]{1,3}(\\.[0-9]{1,3}){3}\\b"`, `|~ "(?i)cookie|token|bearer"`). Any match is
+       fixed at its source before retention is relied on.
 3. **Metrics** (P9-04): Prometheus and kube-state-metrics.
 4. **Grafana** (P9-05), after its admin SealedSecret.
 

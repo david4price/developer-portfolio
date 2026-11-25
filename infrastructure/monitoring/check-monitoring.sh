@@ -241,6 +241,14 @@ else
   fail "the NetworkPolicies $policies"
 fi
 
+# The portfolio chart binds its log reader to Alloy's account by name; it must be the account the
+# monitoring chart binds (which check_contract compared with the pod Alloy actually runs as).
+echo "== portfolio log reader subject"
+[[ "$(yq '.monitoring.readers.logs.namespace + "/" + .monitoring.readers.logs.serviceAccount' \
+  "$root/infrastructure/helm/portfolio/values.yaml")" == \
+  "$namespace/$(jq -r '.readers.serviceAccounts.alloy' <<<"$own_values")" ]] ||
+  fail "portfolio monitoring.readers.logs must name the $namespace namespace's Alloy account"
+
 # Prometheus reaches the API pods by the labels the portfolio chart gives them.
 echo "== portfolio API pod labels"
 if portfolio="$(render portfolio "$root/infrastructure/helm/portfolio" \

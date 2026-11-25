@@ -6,7 +6,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-25_
 
-**Current phase:** Phase 9, Observability (P9-03 in progress: Loki live, Alloy next). Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (P9-03 🔒 in progress: Loki live, Alloy next). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -292,9 +292,10 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Next up, in order**
 
-1. **P9-03** 🔒: apply the `monitoring` namespace, project, and chart, then Loki and Alloy, with
-   the portfolio chart's `monitoring.readers` Role
-   ([order](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). **P9-08**
+1. **P9-03** 🔒 (namespace, policies, and Loki are live): merge `feat/p9-03-logs` so Argo CD
+   syncs the portfolio chart's log reader Role, then apply Alloy and validate, including a day of
+   collected logs checked for private data
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). **P9-08**
    (local stack) can run alongside P9-03 to P9-06.
 2. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
