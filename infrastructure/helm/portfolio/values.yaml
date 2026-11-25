@@ -219,6 +219,17 @@ cloudflared:
     limits:
       memory: 128Mi
 
+# Phase 9 monitoring (docs/architecture/observability.md#least-privilege): read-only Roles in this
+# namespace for the collectors running in the monitoring namespace. This chart grants them, so the
+# portfolio AppProject keeps owning everything here and no ClusterRole is needed.
+monitoring:
+  readers:
+    # P9-03: Alloy lists pods and reads their logs through the API server (no host paths).
+    logs:
+      enabled: false
+      namespace: monitoring
+      serviceAccount: alloy
+
 networkPolicy:
   # Default-deny for every pod in the namespace plus the explicit allows in
   # docs/architecture/networking.md.

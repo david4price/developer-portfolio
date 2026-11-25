@@ -64,6 +64,8 @@ resultsCache:
   enabled: false
 chunksCache:
   enabled: false
+# Loki joins its own ring through this headless Service before it is ready; publishing the
+# not-ready pod lets it find itself at once instead of retrying DNS for about 40 s on each start.
 memberlist:
   service:
-    publishNotReadyAddresses: false
+    publishNotReadyAddresses: true
