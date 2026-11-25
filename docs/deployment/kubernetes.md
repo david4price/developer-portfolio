@@ -424,25 +424,47 @@ read each pod (`port-forward pod/<name>`) and add them up.
 Grafana, Loki, Prometheus, Alloy, and kube-state-metrics in the `monitoring` namespace
 ([ADR 0004](../architecture/adr-0004-observability-stack.md),
 [plan](../architecture/observability.md)). The manifests are in Git (P9-02) and checked by
-`pnpm helm:check`. **Nothing is applied yet:** like the other files in `infrastructure/argocd/`,
-the project and Applications are applied by hand, so merging them changes nothing in the
-cluster. P9-03 to P9-06 apply them one step at a time, each with its own change, impact,
-validation, and rollback; the steps will be written here as each is done.
+`pnpm helm:check`. Like the other files in `infrastructure/argocd/`, the project and
+Applications are applied by hand, so merging them changes nothing in the cluster; once applied,
+Argo CD keeps each in sync with `main`.
 
-Order, when the time comes:
+1. **Namespace, project, and policies** (applied 2026-11-25). Do this first, so the default-deny
+   policies and Roles exist before any pod:
 
-1. Create the namespace, then apply the project and the `monitoring` Application, so the
-   default-deny policies and Roles exist before any pod:
-   `kubectl create namespace monitoring`,
-   `kubectl apply -f infrastructure/argocd/monitoring-project.yaml`,
-   `kubectl apply -f infrastructure/argocd/monitoring/monitoring.yaml`.
-2. Then each release's Application in `infrastructure/argocd/monitoring/`: Loki and Alloy (P9-03),
-   Prometheus and kube-state-metrics (P9-04), Grafana (P9-05, after its admin SealedSecret).
+   ```bash
+   kubectl create namespace monitoring
+   kubectl apply -f infrastructure/argocd/monitoring-project.yaml
+   kubectl apply -f infrastructure/argocd/monitoring/monitoring.yaml
+   ```
 
-**Rollback:** `kubectl -n argocd delete application <name>` stops management and leaves the
-workloads (no resources finalizer). `kubectl delete namespace monitoring` then removes
-everything, including the logs and metrics volumes. Nothing in `portfolio` depends on
-monitoring.
+2. **Logs (P9-03).**
+   - **Loki** (applied 2026-11-25): `kubectl apply -f infrastructure/argocd/monitoring/loki.yaml`.
+     Ready in about a minute, with a 5 GiB `local-path` volume.
+   - **The portfolio chart's log reader:** `monitoring.readers.logs.enabled` (production: on)
+     gives Alloy's account in `monitoring` one Role in `portfolio`: `get`/`list`/`watch` on pods
+     and `get` on `pods/log`, nothing else (`pnpm helm:check` compares it exactly). Argo CD syncs
+     it from `main`.
+   - **Alloy**, after that sync: `kubectl apply -f infrastructure/argocd/monitoring/alloy.yaml`.
+   - **Validate:**
+     - `kubectl auth can-i get pods --subresource=log -n portfolio --as=system:serviceaccount:monitoring:alloy`
+       returns yes. The same for `get secrets`, `create pods --subresource=exec`, and
+       `get pods -n kube-system` returns no.
+     - The API's Explorer account still can't read logs.
+     - A request id from a live request is found in Loki:
+       `kubectl -n monitoring port-forward svc/loki 3100:3100`, then query
+       `{namespace="portfolio", container="api"} |= "<request id>"` on `/loki/api/v1/query_range`.
+     - Retention is 720h in `/config`.
+     - A pod in another namespace can't reach `loki.monitoring.svc:3100`.
+3. **Metrics** (P9-04): Prometheus and kube-state-metrics.
+4. **Grafana** (P9-05), after its admin SealedSecret.
+
+**Rollback:**
+
+- `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no
+  resources finalizer). `kubectl delete namespace monitoring` then removes everything, including
+  the logs and metrics volumes.
+- Turning `monitoring.readers.logs.enabled` off removes the portfolio Role on the next sync.
+- Nothing in `portfolio` depends on monitoring.
 
 ### Infrastructure Explorer reader (P6-01, approval required)
 

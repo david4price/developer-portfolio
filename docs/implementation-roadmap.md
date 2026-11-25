@@ -6,7 +6,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-25_
 
-**Current phase:** Phase 9, Observability (manifests in Git; P9-03 next, 🔒). Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (P9-03 in progress: Loki live, Alloy next). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -15,6 +15,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-03 started** (2026-11-25): the `monitoring` namespace, project, default-deny policies,
+  Roles, and Loki are live (Synced/Healthy, 5 GiB volume). Alloy follows once the portfolio
+  chart's log reader Role (`feat/p9-03-logs`) is merged and synced.
 - **P9-02 done** (2026-11-25, `feat/p9-02-monitoring-manifests`): the monitoring stack's
   Argo CD project, Applications, pinned charts, values, own chart, and a CI check, in Git only.
   Loki's chart would have read every Secret in the cluster; that's off.
@@ -300,8 +303,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-02-monitoring-manifests` (the Phase 9 plan, then P9-02). PRs
-#65 to #73 are merged and deployed.
+**Branch in progress:** `feat/p9-03-logs` (the portfolio chart's log reader for Alloy). PRs #65 to
+#74 are merged; the `monitoring` namespace, project, policies, and Loki are live (2026-11-25).
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.

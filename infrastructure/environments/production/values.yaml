@@ -59,3 +59,8 @@ cloudflared:
   image:
     # cloudflare/cloudflared:2026.10.7, multi-arch index digest
     digest: sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+# Phase 9: Alloy (monitoring namespace) reads this namespace's pod logs (P9-03).
+monitoring:
+  readers:
+    logs:
+      enabled: true

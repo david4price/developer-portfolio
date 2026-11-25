@@ -151,8 +151,42 @@ else
   [[ "$(grep -cE '^kind: (Role|RoleBinding|ClusterRole|ClusterRoleBinding)$' <<<"$reader")" == 2 ]] ||
     fail "the reader must be exactly one Role and one RoleBinding (no cluster-wide RBAC)"
 fi
+# Monitoring log reader (P9-03): exactly pods get/list/watch and pods/log get, bound to Alloy's
+# account in the monitoring namespace alone; nothing renders while it's off.
+echo "== monitoring log reader Role"
+expected_rules="rules:
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: ['']
+    resources: [pods/log]
+    verbs: [get]"
+expected_role_ref="roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portfolio-monitoring-log-reader"
+expected_subjects="subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: monitoring"
+if ! reader="$(render -f "$chart/ci/monitoring-values.yaml" -s templates/monitoring-readers.yaml 2>&1)"; then
+  fail "monitoring readers don't render: $reader"
+else
+  [[ "$(section Role rules)" == "$expected_rules" ]] ||
+    fail "the log reader Role must grant exactly pods get/list/watch and pods/log get"
+  [[ "$(section RoleBinding roleRef | sed '/^subjects:/,$d')" == "$expected_role_ref" ]] ||
+    fail "the log reader RoleBinding must reference the log reader Role (not a ClusterRole)"
+  [[ "$(section RoleBinding subjects)" == "$expected_subjects" ]] ||
+    fail "the log reader RoleBinding must bind only the monitoring namespace's alloy account"
+  [[ "$(grep -cE '^kind: (Role|RoleBinding|ClusterRole|ClusterRoleBinding)$' <<<"$reader")" == 2 ]] ||
+    fail "the log reader must be exactly one Role and one RoleBinding"
+fi
+expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
+  -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.serviceAccount=
+
 # No template anywhere may render cluster-wide RBAC, with the view on or off.
-for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml"; do
+for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml" \
+  "$chart/ci/monitoring-values.yaml"; do
   if render -f "$values" | grep -qE '^kind: (ClusterRole|ClusterRoleBinding)$'; then
     fail "$(basename "$values") renders cluster-wide RBAC"
   fi

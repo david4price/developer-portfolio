@@ -1,0 +1,11 @@
+# CI rendering only: the Phase 9 monitoring readers on (P9-03), so their Roles render.
+api:
+  image:
+    tag: ci
+worker:
+  image:
+    tag: ci
+monitoring:
+  readers:
+    logs:
+      enabled: true
