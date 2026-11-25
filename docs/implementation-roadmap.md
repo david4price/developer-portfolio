@@ -803,22 +803,32 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       hosted services ([ADR 0004](architecture/adr-0004-observability-stack.md)); measured about
       1.8 MB of logs a day across `portfolio`.
 - [x] **P9-02** Monitoring manifests in Git, nothing applied. _Needs:_ P9-01. _Done when:_
-      `infrastructure/monitoring/` holds the `monitoring` AppProject (listed chart sources, one
-      destination, no cluster-scoped kinds), one Argo CD Application per upstream chart with its
-      chart version and image digests pinned (each chart's current repository confirmed; Loki's
-      is `grafana-community`), the repository's own manifests (default-deny and per-pod
-      NetworkPolicies, provisioning ConfigMaps), and `pnpm helm:check` renders every chart with
-      its values and passes kubeconform, failing on any ClusterRole, Ingress, NodePort, or
-      LoadBalancer.
-      Done 2026-11-25 ([layout](architecture/observability.md#layout)): - **Pinned:** Loki 21.4.1 and Grafana 14.5.0 from `grafana-community`, Alloy 1.16.0 from
-      `grafana`, Prometheus 29.47.2 and kube-state-metrics 9.0.1 from `prometheus-community`.
-      Each is the newest release at least a week old, with its archive's sha256 and image
-      digests recorded. - **Values:** in `environments/production/monitoring/`. - **Own chart:** `infrastructure/helm/monitoring` (default-deny plus per-pod
-      NetworkPolicies, and Roles for Alloy and kube-state-metrics). - **Check:** `check-monitoring.sh` in `pnpm helm:check` and CI's Helm job (with pinned
-      `yq`). It also refuses other kinds, host access, undigested images, containers without
-      requests, and empty renders. Every guardrail was broken on purpose once to see it fail. - **Found:** Loki's chart by default gives Loki a ClusterRole that reads every Secret in
-      the cluster; turned off. - **Unknown, for P9-05:** the address `tailscale serve` reaches Grafana from, so Grafana
-      has no ingress yet.
+      `infrastructure/argocd/` holds the `monitoring` AppProject (listed chart sources, one
+      destination, no cluster-scoped kinds) and one Argo CD Application per upstream chart with
+      its chart version and image digests pinned (each chart's current repository confirmed;
+      Loki's is `grafana-community`); the repository's own chart holds default-deny and per-pod
+      NetworkPolicies (provisioning ConfigMaps come with P9-05 and P9-06); and `pnpm helm:check`
+      renders every chart with its values and passes kubeconform, failing on any ClusterRole,
+      Ingress, NodePort, or LoadBalancer.
+      Done 2026-11-25 ([layout](architecture/observability.md#layout)):
+
+      - **Pinned:** Loki 21.4.1 and Grafana 14.5.0 from `grafana-community`, Alloy 1.16.0 from
+        `grafana`, Prometheus 29.47.2 and kube-state-metrics 9.0.1 from
+        `prometheus-community`. Each is the newest release at least a week old, with its
+        archive's sha256 and image digests recorded.
+      - **Values:** in `environments/production/monitoring/`.
+      - **Own chart:** `infrastructure/helm/monitoring` (default-deny plus per-pod
+        NetworkPolicies, and Roles for Alloy and kube-state-metrics).
+      - **Check:** `check-monitoring.sh` in `pnpm helm:check` and CI's Helm job (with pinned
+        `yq`). It also refuses other kinds, host access, undigested images, containers without
+        requests, empty renders, and selectors that no longer match the charts' pods. Every
+        guardrail was broken on purpose once to see it fail.
+      - **Found:** Loki's chart by default gives Loki a ClusterRole that reads every Secret in
+        the cluster; turned off. Review found that Prometheus would never apply a synced scrape
+        config without the chart's reloader (now on) and that Loki's memberlist needed a policy.
+      - **Unknown, for P9-05:** the address `tailscale serve` reaches Grafana from, so Grafana
+        has no ingress yet.
+
 - [ ] **P9-03** 🔒 Logs: Loki and Alloy. _Needs:_ P9-02. _Done when:_ the portfolio chart's
       `monitoring.readers` Role (pods and `pods/log` reads in `portfolio`, bound to Alloy) is
       live; Alloy tails `portfolio` and `monitoring` through the API server as non-root without

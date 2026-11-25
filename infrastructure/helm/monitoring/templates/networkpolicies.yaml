@@ -62,7 +62,8 @@ spec:
         - protocol: TCP
           port: {{ $ports.loki }}
 ---
-# Loki: receives from Alloy, answers Grafana, scraped by Prometheus; talks to nothing.
+# Loki: receives from Alloy, answers Grafana, scraped by Prometheus; otherwise talks only to its
+# own memberlist ring (Loki pods, including itself through the Service).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -82,6 +83,17 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $ports.loki }}
+    - from:
+        {{- include "monitoring.peer" $pods.loki | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.lokiMemberlist }}
+  egress:
+    - to:
+        {{- include "monitoring.peer" $pods.loki | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.lokiMemberlist }}
 ---
 # Prometheus: queried by Grafana; scrapes the API pods' metrics port, kube-state-metrics, Loki,
 # and Alloy, and discovers the API pods through the API server.

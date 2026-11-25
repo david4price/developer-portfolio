@@ -26,6 +26,8 @@ pods:
 ports:
   alloy: 12345
   loki: 3100
+  # Loki's ring gossip; with one replica it still joins through its own memberlist Service.
+  lokiMemberlist: 7946
   prometheus: 9090
   kubeStateMetrics: 8080
   grafana: 3000

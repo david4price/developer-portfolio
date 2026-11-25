@@ -5,7 +5,10 @@
 #   - each upstream chart archive matches the sha256 recorded on its Application;
 #   - every chart renders with its production values, passes kubeconform, and holds to the
 #     guardrails in check_manifests.
-# Needs `helm`, `kubeconform`, `yq` (mikefarah, v4), and network access to the chart repositories.
+#   - the monitoring chart's selectors (pod labels, ports, ServiceAccounts) match what the upstream
+#     charts and the portfolio chart render.
+# Needs `helm`, `kubeconform`, `yq` (mikefarah, v4), `jq`, and network access to the chart
+# repositories.
 #   pnpm helm:check
 set -euo pipefail
 
@@ -34,21 +37,22 @@ fail() {
 allowed_kinds="$(yq '.spec.namespaceResourceWhitelist[] | .group + "/" + .kind' "$project")"
 source_repos="$(yq '.spec.sourceRepos[]' "$project")"
 
-# docs <jq filter>: runs the filter over the YAML documents on stdin as one JSON array (yq only
-# converts; jq evaluates, since yq's multi-document semantics differ from jq's).
-docs() {
-  yq ea -o=json '[.] | map(select(. != null))' | jq -r "$1"
+# to_json: the YAML documents on stdin as one JSON array (yq converts; jq evaluates, since yq's
+# multi-document semantics differ from jq's).
+to_json() {
+  yq ea -o=json '[.] | map(select(. != null))'
 }
 
 # render <helm template args…>: prints the manifests, or the reason and status 1 when the chart
 # fails to render or renders nothing (an empty render would pass every guardrail). Runs in a
-# command substitution, so the caller records the failure.
+# command substitution, so the caller records the failure. Helm's warnings go to stderr and stay
+# out of the manifests.
 render() {
   local output
-  if ! output="$(helm template "$@" --namespace "$namespace" 2>&1)"; then
-    printf "doesn't render: %s\n" "$output"
+  if ! output="$(helm template "$@" --namespace "$namespace" 2>"$work/helm.err")"; then
+    printf "doesn't render: %s\n" "$(cat "$work/helm.err")"
     return 1
-  elif [[ -z "$(docs '.[] | .kind' <<<"$output")" ]]; then
+  elif [[ "$(to_json <<<"$output" | jq 'map(select(.kind != null)) | length')" == 0 ]]; then
     echo "renders nothing"
     return 1
   fi
@@ -66,39 +70,81 @@ render_and_check() {
   fi
 }
 
+# The monitoring chart's NetworkPolicies and Roles name the upstream pods by label, port, and
+# ServiceAccount (infrastructure/helm/monitoring/values.yaml). Release → key in that file.
+declare -A contract_keys=([alloy]=alloy [loki]=loki [prometheus]=prometheus
+  [kube-state-metrics]=kubeStateMetrics [grafana]=grafana)
+own_values="$(yq -o=json '.' "$own_chart/values.yaml")"
+
+# check_contract <name> <manifests as JSON>: the release's workload carries the labels the
+# policies select, listens on the ports they allow, and runs as the account the Roles bind, so a
+# chart upgrade that renames any of them fails here instead of silently matching nothing.
+check_contract() {
+  local name="$1" json="$2" key="${contract_keys[$1]:-}" problems
+  [[ -n "$key" ]] || return 0
+  if ! problems="$(jq -r --argjson own "$own_values" --arg key "$key" '
+    ($own.pods[$key]) as $labels
+    | ([$own.ports[$key], (if $key == "loki" then $own.ports.lokiMemberlist else empty end)]) as $ports
+    | ($own.readers.serviceAccounts[$key] // null) as $account
+    | [.[] | select(.kind == "Deployment" or .kind == "StatefulSet")
+        | select(.spec.template.metadata.labels | contains($labels))] as $matches
+    | if ($matches | length) != 1 then
+        "pods.\($key) labels match \($matches | length) workloads, not 1"
+      else
+        $matches[0].spec.template.spec as $pod
+        | ([$pod.containers[].ports[]?.containerPort]) as $open
+        | ($ports[] | select(. as $p | $open | index($p) | not) | "ports: \(.) isn'"'"'t a container port"),
+          (if $account != null and $pod.serviceAccountName != $account then
+             "readers.serviceAccounts.\($key) is \($account), the pod runs as \($pod.serviceAccountName)"
+           else empty end)
+      end' <<<"$json")"; then
+    fail "$name: the contract check couldn't run"
+  elif [[ -n "$problems" ]]; then
+    while read -r problem; do fail "$name: monitoring chart values: $problem"; done <<<"$problems"
+  fi
+}
+
 # check_manifests <name> <manifests>: guardrails for everything deployed into the namespace.
 check_manifests() {
-  local name="$1" manifests="$2" kind found
-  kubeconform -strict -summary -output text <<<"$manifests"
+  local name="$1" manifests="$2" json kind found
+  kubeconform -strict -summary -output text <<<"$manifests" || fail "$name fails kubeconform"
+  if ! json="$(to_json <<<"$manifests")"; then
+    fail "$name: the render isn't valid YAML"
+    return
+  fi
+  # q <jq filter>: one result per line; a failing filter is a failure, never an empty pass.
+  q() {
+    jq -r "$1" <<<"$json" || { fail "$name: query failed: $1"; echo "query failed"; }
+  }
 
   # Only kinds the project allows (so no ClusterRole, Ingress, or Secret), all in the namespace.
-  while read -r kind; do
+  for kind in $(q '.[] | (.apiVersion | sub("/?v[0-9][^/]*$"; "")) + "/" + .kind' | sort -u); do
     grep -qxF "$kind" <<<"$allowed_kinds" ||
       fail "$name renders $kind, which the monitoring project doesn't allow"
-  done < <(docs '.[] | (.apiVersion | sub("/?v[0-9][^/]*$"; "")) + "/" + .kind' <<<"$manifests" |
-    sort -u)
-  found="$(docs '.[] | select((.metadata.namespace // "'"$namespace"'") != "'"$namespace"'") |
-    .kind + "/" + .metadata.name' <<<"$manifests")"
+  done
+  found="$(q '.[] | select((.metadata.namespace // "'"$namespace"'") != "'"$namespace"'") |
+    .kind + "/" + .metadata.name')"
   [[ -z "$found" ]] || fail "$name renders resources outside $namespace: $found"
 
   # Nothing published outside the cluster.
-  found="$(docs '.[] | select(.kind == "Service" and (.spec.type // "ClusterIP") != "ClusterIP") |
-    .metadata.name' <<<"$manifests")"
+  found="$(q '.[] | select(.kind == "Service" and (.spec.type // "ClusterIP") != "ClusterIP") |
+    .metadata.name')"
   [[ -z "$found" ]] || fail "$name renders a NodePort or LoadBalancer Service: $found"
 
   # Pods: no host access, every image pinned by digest, every container with resource requests.
   local pods='.[] | select(.spec.template.spec != null)'
   local containers="$pods"' | .spec.template.spec | (.containers // []) + (.initContainers // []) | .[]'
-  found="$(docs "$pods"' | select(.spec.template.spec | .hostNetwork or .hostPID or .hostIPC or
-    any(.volumes[]?; .hostPath != null)) | .kind + "/" + .metadata.name' <<<"$manifests")"
+  found="$(q "$pods"' | select(.spec.template.spec | .hostNetwork or .hostPID or .hostIPC or
+    any(.volumes[]?; .hostPath != null)) | .kind + "/" + .metadata.name')"
   [[ -z "$found" ]] || fail "$name renders host namespaces or hostPath volumes: $found"
-  found="$(docs "$containers"' | select(.securityContext.privileged) | .name' <<<"$manifests")"
+  found="$(q "$containers"' | select(.securityContext.privileged) | .name')"
   [[ -z "$found" ]] || fail "$name renders a privileged container: $found"
-  found="$(docs "$containers"' | select(.image | test("@sha256:[0-9a-f]{64}$") | not) | .image' \
-    <<<"$manifests")"
+  found="$(q "$containers"' | select(.image | test("@sha256:[0-9a-f]{64}$") | not) | .image')"
   [[ -z "$found" ]] || fail "$name renders an image without a sha256 digest: $found"
-  found="$(docs "$containers"' | select(.resources.requests == null) | .name' <<<"$manifests")"
+  found="$(q "$containers"' | select(.resources.requests == null) | .name')"
   [[ -z "$found" ]] || fail "$name renders a container without resource requests: $found"
+
+  check_contract "$name" "$json"
 }
 
 shopt -s nullglob
@@ -116,10 +162,14 @@ for app in "${app_files[@]}"; do
     "https://kubernetes.default.svc $namespace" ]] ||
     fail "$name: destination must be the $namespace namespace of the local cluster"
   [[ -f "$values" ]] || { fail "$name: missing $values"; continue; }
-  while read -r repo; do
+  if ! repos="$(yq '.spec.sources[].repoURL' "$app")"; then
+    fail "$name: can't read its sources"
+    continue
+  fi
+  for repo in $repos; do
     grep -qxF "$repo" <<<"$source_repos" ||
       fail "$name: source $repo isn't listed in the monitoring project"
-  done < <(yq '.spec.sources[].repoURL' "$app")
+  done
 
   chart="$(yq '.spec.sources[0].chart // ""' "$app")"
   if [[ -z "$chart" ]]; then
@@ -172,17 +222,33 @@ elif ! grep -qF 'networkPolicy.apiServerEgress.cidr and .port are required' <<<"
   fail "expected the apiServerEgress error, got: $output"
 fi
 # Grafana: no ingress until P9-05 sets the tailnet proxy's range, no internet until alerts.
-policies="$(render monitoring "$own_chart" -f "$own_chart/ci/default-values.yaml" \
-  -s templates/networkpolicies.yaml)" || fail "the NetworkPolicies $policies"
-[[ "$(docs '.[] | select(.metadata.name == "monitoring-grafana") | .spec.ingress // [] | length' \
-  <<<"$policies")" == 0 ]] || fail "Grafana allows ingress with no ingressCidrs"
-[[ "$(docs '[.[] | select(.metadata.name == "monitoring-grafana") | .spec.egress[].to[] |
-  select(.ipBlock != null)] | length' <<<"$policies")" == 0 ]] ||
-  fail "Grafana has internet egress with alerts off"
-# Every pod in the namespace is covered by the default deny.
-[[ "$(docs '.[] | select(.metadata.name == "monitoring-default-deny") | .spec.podSelector == {} and
-  (.spec.policyTypes | contains(["Ingress", "Egress"]))' <<<"$policies")" == true ]] ||
-  fail "the default-deny policy must select every pod for ingress and egress"
+if policies="$(render monitoring "$own_chart" -f "$own_chart/ci/default-values.yaml" \
+  -s templates/networkpolicies.yaml)"; then
+  policies="$(to_json <<<"$policies")"
+  [[ "$(jq '.[] | select(.metadata.name == "monitoring-grafana") | .spec.ingress // [] | length' \
+    <<<"$policies")" == 0 ]] || fail "Grafana allows ingress with no ingressCidrs"
+  [[ "$(jq '[.[] | select(.metadata.name == "monitoring-grafana") | .spec.egress[].to[] |
+    select(.ipBlock != null)] | length' <<<"$policies")" == 0 ]] ||
+    fail "Grafana has internet egress with alerts off"
+  # Every pod in the namespace is covered by the default deny.
+  [[ "$(jq '.[] | select(.metadata.name == "monitoring-default-deny") | .spec.podSelector == {} and
+    (.spec.policyTypes | contains(["Ingress", "Egress"]))' <<<"$policies")" == true ]] ||
+    fail "the default-deny policy must select every pod for ingress and egress"
+else
+  fail "the NetworkPolicies $policies"
+fi
+
+# Prometheus reaches the API pods by the labels the portfolio chart gives them.
+echo "== portfolio API pod labels"
+if portfolio="$(render portfolio "$root/infrastructure/helm/portfolio" \
+  -f "$root/infrastructure/helm/portfolio/ci/digests-values.yaml" -s templates/api.yaml)"; then
+  [[ "$(to_json <<<"$portfolio" | jq --argjson own "$own_values" '[.[] |
+    select(.kind == "Deployment") | .spec.template.metadata.labels |
+    contains($own.networkPolicy.portfolio.apiPodLabels)] | any')" == true ]] ||
+    fail "networkPolicy.portfolio.apiPodLabels don't match the portfolio API pods"
+else
+  fail "the portfolio API $portfolio"
+fi
 
 if ((failures > 0)); then
   echo "$failures monitoring check(s) failed" >&2

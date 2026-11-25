@@ -61,16 +61,21 @@ is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
 - **Charts:** each chart archive's sha256 matches the one recorded on its Application. Argo CD
   itself doesn't verify it, so CI catches a republished version.
 - **Every render:**
-  - passes kubeconform and lints;
+  - passes kubeconform (this repository's chart also passes `helm lint --strict`);
   - uses only the kinds the project allows (so no ClusterRole, Ingress, or Secret);
   - stays in the namespace, with no NodePort or LoadBalancer;
   - has no host namespaces, host paths, or privileged containers;
   - pins every image by digest and gives every container resource requests.
 - **This repository's chart:** it refuses to render without the API server range, and Grafana
   gets no ingress or internet until P9-05 and P9-06 set them.
+- **Selectors:** the pod labels, ports, and ServiceAccounts the policies and Roles name in
+  `infrastructure/helm/monitoring/values.yaml` must match what the upstream charts (and the
+  portfolio chart's API pods) actually render. A chart upgrade that renames one fails CI, so a
+  policy can't silently match nothing.
 
-A render that fails or comes out empty is a failure, never a pass. Each guardrail was checked by
-breaking it on purpose.
+A render that fails or comes out empty is a failure, never a pass. A failing step is counted and
+the check carries on, so one run reports every problem. Each guardrail was checked by breaking it
+on purpose.
 
 ## Logs
 
@@ -89,7 +94,8 @@ breaking it on purpose.
   of raw logs a month. `local-path` doesn't enforce sizes, so retention is the real limit.
 - **Privacy:** the logging rules already forbid request bodies, chat messages, tokens, cookies,
   and personal data. P9-03 checks a day of collected logs for client IPs, cookies, and tokens
-  before retention is relied on. Loki is reachable only from Grafana and Alloy.
+  before retention is relied on. Loki is reachable only from Alloy, Grafana, and Prometheus
+  (which reads Loki's own metrics).
 
 ## Metrics
 
@@ -109,6 +115,9 @@ breaking it on purpose.
 - **Storage:** Prometheus server only (no Alertmanager, Pushgateway, or node-exporter), with
   `--storage.tsdb.retention.time=30d` and `retention.size=4GB` on a 5 GiB volume. That's
   roughly 300 series at a 30 s interval.
+- **Config reloads:** the chart's config reloader sidecar runs beside Prometheus and calls its
+  reload endpoint over localhost when the ConfigMap changes. The chart doesn't restart the pod
+  on config changes, so without the sidecar a synced scrape config would never apply.
 
 ## Least privilege
 
@@ -136,13 +145,14 @@ breaking it on purpose.
 
   | Pod                | Ingress from                        | Egress to                                                             |
   | ------------------ | ----------------------------------- | --------------------------------------------------------------------- |
-  | Alloy              | none                                | API server (6443), Loki (3100), DNS                                   |
-  | Loki               | Alloy, Grafana, Prometheus          | DNS                                                                   |
+  | Alloy              | Prometheus (12345, its metrics)     | API server (6443), Loki (3100), DNS                                   |
+  | Loki               | Alloy, Grafana, Prometheus; Loki    | Loki (memberlist 7946), DNS                                           |
   | Prometheus         | Grafana                             | API pods (9464), kube-state-metrics, Loki, Alloy, API server, DNS     |
   | kube-state-metrics | Prometheus                          | API server (6443), DNS                                                |
   | Grafana            | the tailnet proxy's address (P9-05) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
 
-  Alloy's ingress is from Prometheus on 12345 (its own metrics). **Unknown:** the source address
+  Loki joins its own memberlist ring even as a single replica (through its `loki-memberlist`
+  Service, so back to itself), so Loki pods may reach each other on 7946. **Unknown:** the source address
   of `tailscale serve`'s connection to Grafana's ClusterIP, as a NetworkPolicy sees it (the
   node's private address, or its pod-network address). Until P9-05 measures it,
   `networkPolicy.grafana.ingressCidrs` is empty and nothing can reach Grafana.
@@ -211,10 +221,12 @@ Requests as set in P9-02, to be confirmed in P9-07:
 | Pod                | CPU | Memory request | Memory limit |
 | ------------------ | --- | -------------- | ------------ |
 | Loki               | 50m | 256Mi          | 512Mi        |
-| Prometheus         | 50m | 256Mi          | 512Mi        |
+| Prometheus         | 55m | 272Mi          | 544Mi        |
 | Grafana            | 25m | 192Mi          | 384Mi        |
 | Alloy              | 25m | 128Mi          | 256Mi        |
 | kube-state-metrics | 10m | 64Mi           | 128Mi        |
+
+Prometheus's figures include its config reloader (5m, 16Mi, limit 32Mi).
 
 That's about 900 MiB requested and 1.8 GiB at most, on a node with roughly 24 GiB available.
 Loki sets `GOMEMLIMIT` to 85% of its limit. Disk: two 5 GiB `local-path` volumes (Loki,

@@ -3,9 +3,27 @@
 # Image: quay.io/prometheus/prometheus:v3.16.0 (multi-arch index digest below).
 rbac:
   create: false
+# The reloader tells Prometheus (over localhost) to reload when its ConfigMap changes; the chart
+# doesn't roll the pod on config changes, so without it a synced scrape config never applies.
 configmapReload:
   prometheus:
-    enabled: false
+    enabled: true
+    image:
+      # quay.io/prometheus-operator/prometheus-config-reloader:v0.95.2, multi-arch index digest
+      digest: sha256:cc74ddedad4ab1c49446971f6d51302ad4303d8660a2018af925c7f62c114304
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 5m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
 server:
   image:
     digest: sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
