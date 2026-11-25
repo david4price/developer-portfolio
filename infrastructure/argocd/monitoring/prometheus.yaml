@@ -1,0 +1,30 @@
+# Prometheus: scrapes the API, kube-state-metrics, Loki, and Alloy; keeps 30 days.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    # sha256 of the chart archive at this version; pnpm helm:check verifies it before rendering.
+    developer-portfolio/chart-sha256: ed5e5fc1f051637f6dad1306c30feba2a1cba3644ccdd1df5c0af0e42662ea1a
+  # No resources finalizer: deleting the Application leaves the workloads and volumes in place.
+spec:
+  project: monitoring
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: prometheus
+      targetRevision: 29.47.2
+      helm:
+        releaseName: prometheus
+        valueFiles:
+          - $values/infrastructure/environments/production/monitoring/prometheus.yaml
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

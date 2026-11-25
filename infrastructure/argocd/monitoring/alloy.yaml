@@ -1,0 +1,30 @@
+# Alloy: tails pod logs in portfolio and monitoring and sends them to Loki.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  annotations:
+    # sha256 of the chart archive at this version; pnpm helm:check verifies it before rendering.
+    developer-portfolio/chart-sha256: efb95c875245af3c73a93b50331dfcece7cd573d5f788d934748a741c9c1747a
+  # No resources finalizer: deleting the Application leaves the workloads and volumes in place.
+spec:
+  project: monitoring
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.16.0
+      helm:
+        releaseName: alloy
+        valueFiles:
+          - $values/infrastructure/environments/production/monitoring/alloy.yaml
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

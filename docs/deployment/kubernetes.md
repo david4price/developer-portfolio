@@ -342,7 +342,11 @@ SealedSecret sealed with the committed certificate to its exact original value.
 pnpm helm:check   # helm lint --strict, helm template | kubeconform -strict, guardrail tests
 ```
 
-Requires `helm` and `kubeconform` on `PATH`; CI installs pinned versions.
+Requires `helm`, `kubeconform`, `yq` (mikefarah v4), and `jq` on `PATH`; CI installs pinned
+versions of the first three. The second half (`infrastructure/monitoring/check-monitoring.sh`)
+downloads the monitoring stack's pinned charts from their repositories, checks each archive's
+sha256, and renders them with the production values
+([what it enforces](../architecture/observability.md#layout)).
 
 On the reference deployment, these Secrets live in Git as `SealedSecret` resources under
 `infrastructure/environments/production/secrets/`, sealed offline with the committed public
@@ -414,6 +418,31 @@ curl -s http://127.0.0.1:9464/metrics | grep -v '^#'
 
 Counters are per pod and start at zero when a pod starts; with the HPA at more than one replica,
 read each pod (`port-forward pod/<name>`) and add them up.
+
+### Monitoring stack (Phase 9, approval required)
+
+Grafana, Loki, Prometheus, Alloy, and kube-state-metrics in the `monitoring` namespace
+([ADR 0004](../architecture/adr-0004-observability-stack.md),
+[plan](../architecture/observability.md)). The manifests are in Git (P9-02) and checked by
+`pnpm helm:check`. **Nothing is applied yet:** like the other files in `infrastructure/argocd/`,
+the project and Applications are applied by hand, so merging them changes nothing in the
+cluster. P9-03 to P9-06 apply them one step at a time, each with its own change, impact,
+validation, and rollback; the steps will be written here as each is done.
+
+Order, when the time comes:
+
+1. Create the namespace, then apply the project and the `monitoring` Application, so the
+   default-deny policies and Roles exist before any pod:
+   `kubectl create namespace monitoring`,
+   `kubectl apply -f infrastructure/argocd/monitoring-project.yaml`,
+   `kubectl apply -f infrastructure/argocd/monitoring/monitoring.yaml`.
+2. Then each release's Application in `infrastructure/argocd/monitoring/`: Loki and Alloy (P9-03),
+   Prometheus and kube-state-metrics (P9-04), Grafana (P9-05, after its admin SealedSecret).
+
+**Rollback:** `kubectl -n argocd delete application <name>` stops management and leaves the
+workloads (no resources finalizer). `kubectl delete namespace monitoring` then removes
+everything, including the logs and metrics volumes. Nothing in `portfolio` depends on
+monitoring.
 
 ### Infrastructure Explorer reader (P6-01, approval required)
 

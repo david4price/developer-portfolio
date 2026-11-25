@@ -4,9 +4,9 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-23_
+_Last updated: 2026-11-25_
 
-**Current phase:** no phase in progress. Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (manifests in Git; P9-03 next, 🔒). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -15,6 +15,13 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-02 done** (2026-11-25, `feat/p9-02-monitoring-manifests`): the monitoring stack's
+  Argo CD project, Applications, pinned charts, values, own chart, and a CI check, in Git only.
+  Loki's chart would have read every Secret in the cluster; that's off.
+- **Phase 9 planned** (2026-11-25, P9-01): logs, metric history, and alerts with Grafana's
+  open-source stack (Grafana, Loki, Prometheus, Alloy) in a `monitoring` namespace, tailnet-only,
+  managed by Argo CD ([ADR 0004](architecture/adr-0004-observability-stack.md),
+  [plan](architecture/observability.md)). The API's metrics will open to Prometheus only.
 - **Phase 7 closed** (2026-11-23): P7-05 (TypeScript 7) moved to a new watch list; it waits on
   typescript-eslint, which can't support 7 until it has a new compiler API to build on.
 - **Phase 8 done** (`feat/p8-dev-experience`): one-command setup (`pnpm bootstrap`), all-in-one
@@ -282,15 +289,19 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Next up, in order**
 
-1. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
+1. **P9-03** 🔒: apply the `monitoring` namespace, project, and chart, then Loki and Alloy, with
+   the portfolio chart's `monitoring.readers` Role
+   ([order](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). **P9-08**
+   (local stack) can run alongside P9-03 to P9-06.
+2. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
-2. Owner content: more projects; then **P5-10**, and
+3. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-3. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
+4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** none open. The last merge closes Phase 7 (`docs/p7-05-watch-list`); PRs
-#65 onwards are merged and deployed.
+**Branch in progress:** `feat/p9-02-monitoring-manifests` (the Phase 9 plan, then P9-02). PRs
+#65 to #73 are merged and deployed.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -302,6 +313,10 @@ Open every PR against `main`.
 - [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
 - [x] Profile content for About and Experience (P2-12, 2026-11-19).
 - [x] K3s API audit logging applied with `sudo` (P7-06, 2026-11-19).
+- [ ] Phase 9 alert contact point (P9-06): the owner's chat bot, email, or another Grafana
+      contact point. It goes in a SealedSecret; nothing about it is committed.
+- [ ] Phase 9 Grafana access (P9-05): confirm tailnet-only via `tailscale serve` (needs `sudo`),
+      and 30-day retention for logs and metrics.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -773,6 +788,85 @@ Read-only inventory of the reference host. Findings:
 - [x] **P8-03** Document the workflow. _Done when:_ the README quick start is three commands, and
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
+
+## Phase 9: Observability (2/9)
+
+Keep logs, keep metric history, and alert the owner, with Grafana's open-source stack in a
+`monitoring` namespace ([ADR 0004](architecture/adr-0004-observability-stack.md),
+[plan](architecture/observability.md)). Free, self-hosted, tailnet-only, managed by Argo CD.
+Every 🔒 task states its change, impact, validation, and rollback before it is applied.
+
+- [x] **P9-01** Choose the stack and write the plan. _Done when:_ an ADR records the choice and
+      the alternatives, and the architecture doc covers collection, storage, retention, access,
+      least privilege, NetworkPolicies, alerts, local development, and capacity.
+      Done 2026-11-25: owner chose Grafana, Loki, Prometheus, and Alloy over SigNoz, ELK, and
+      hosted services ([ADR 0004](architecture/adr-0004-observability-stack.md)); measured about
+      1.8 MB of logs a day across `portfolio`.
+- [x] **P9-02** Monitoring manifests in Git, nothing applied. _Needs:_ P9-01. _Done when:_
+      `infrastructure/argocd/` holds the `monitoring` AppProject (listed chart sources, one
+      destination, no cluster-scoped kinds) and one Argo CD Application per upstream chart with
+      its chart version and image digests pinned (each chart's current repository confirmed;
+      Loki's is `grafana-community`); the repository's own chart holds default-deny and per-pod
+      NetworkPolicies (provisioning ConfigMaps come with P9-05 and P9-06); and `pnpm helm:check`
+      renders every chart with its values and passes kubeconform, failing on any ClusterRole,
+      Ingress, NodePort, or LoadBalancer.
+      Done 2026-11-25 ([layout](architecture/observability.md#layout)):
+
+      - **Pinned:** Loki 21.4.1 and Grafana 14.5.0 from `grafana-community`, Alloy 1.16.0 from
+        `grafana`, Prometheus 29.47.2 and kube-state-metrics 9.0.1 from
+        `prometheus-community`. Each is the newest release at least a week old, with its
+        archive's sha256 and image digests recorded.
+      - **Values:** in `environments/production/monitoring/`.
+      - **Own chart:** `infrastructure/helm/monitoring` (default-deny plus per-pod
+        NetworkPolicies, and Roles for Alloy and kube-state-metrics).
+      - **Check:** `check-monitoring.sh` in `pnpm helm:check` and CI's Helm job (with pinned
+        `yq`). It also refuses other kinds, host access, undigested images, containers without
+        requests, empty renders, and selectors that no longer match the charts' pods. Every
+        guardrail was broken on purpose once to see it fail.
+      - **Found:** Loki's chart by default gives Loki a ClusterRole that reads every Secret in
+        the cluster; turned off. Review found that Prometheus would never apply a synced scrape
+        config without the chart's reloader (now on) and that Loki's memberlist needed a policy.
+      - **Unknown, for P9-05:** the address `tailscale serve` reaches Grafana from, so Grafana
+        has no ingress yet.
+
+- [ ] **P9-03** 🔒 Logs: Loki and Alloy. _Needs:_ P9-02. _Done when:_ the portfolio chart's
+      `monitoring.readers` Role (pods and `pods/log` reads in `portfolio`, bound to Alloy) is
+      live; Alloy tails `portfolio` and `monitoring` through the API server as non-root without
+      host paths; a request id from a live request is found in Loki; retention is 30 days;
+      `kubectl auth can-i` shows the Alloy account can't read Secrets or `exec`, and the API's
+      Explorer account still can't read logs; a pod in another namespace can't reach Loki; and a
+      day of collected logs holds no client IPs, cookies, tokens, or chat text.
+- [ ] **P9-04** 🔒 Metrics: Prometheus and kube-state-metrics. _Needs:_ P9-02. _Done when:_
+      `api.metrics.scrape.enabled` binds the API's metrics to the pod IP, with ingress on 9464
+      from Prometheus only, `check-chart.sh` accepts that render and still fails any other host,
+      Service port, or wider rule (tests for both), Prometheus scrapes every API replica and
+      kube-state-metrics (limited to `portfolio` and `monitoring`), `/metrics` on the public host
+      still returns 404, and a pod in another namespace (cloudflared included) can't reach 9464.
+- [ ] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
+      its admin password from a SealedSecret, anonymous access and sign-up off, usage reporting and
+      update checks off; it is published only through `tailscale serve` (no Ingress, tunnel, or
+      public hostname); data sources and the four dashboards (API, chat and AI, workloads, logs)
+      are provisioned from Git with UI saves disabled; and a request id can be followed from a
+      5xx on the API dashboard to its log lines.
+- [ ] **P9-06** 🔒 Alerts. _Needs:_ P9-05 and the owner's contact point. _Done when:_ the nine
+      rules in the [plan](architecture/observability.md#alerts) are provisioned from Git; the
+      contact point comes entirely from a SealedSecret (nothing about it in Git); each rule has
+      fired and resolved once in a drill (scale the API to zero, fail a test backup Job, log a
+      test error line, or lower a threshold for a test) and the owner received it; thresholds are
+      tuned so a normal week sends nothing.
+- [ ] **P9-07** 🔒 Capacity and failure checks. _Needs:_ P9-06. _Done when:_ memory and disk are
+      measured over a week and under a k6 run like P7-02's, requests and limits are set from the
+      measurements, and stopping Loki or Prometheus leaves the site, API, and chat working (only
+      monitoring degrades, and the "monitoring broken" alert fires).
+- [ ] **P9-08** Local stack. _Needs:_ P9-02. _Done when:_ an opt-in `compose.observability.yaml`
+      runs the same images, dashboards, and rules against the local API (ports on `127.0.0.1`, the
+      Docker socket's risk documented), `pnpm check` validates the dashboard JSON and rule files,
+      and local.md documents it. Never started on the shared reference host.
+- [ ] **P9-09** Documentation. _Needs:_ P9-06. _Done when:_ runbooks cover "an alert fired"
+      (per rule: what it means, the first query, the likely fix) and "find a request by id";
+      the `observability` skill, the overview, networking, security, Kubernetes, cost review
+      (still $0 added), and validation register describe the live stack; and the plan's sections
+      are relabelled **Confirmed**.
 
 ## Watch List
 

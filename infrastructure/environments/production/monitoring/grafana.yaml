@@ -1,0 +1,70 @@
+# Grafana 13.3.1, distroless (grafana-community/grafana 14.5.0). Tailnet-only, no public
+# hostname; data sources from Git. docs/architecture/observability.md#grafana
+# Image: docker.io/grafana/grafana:13.3.1-distroless (multi-arch index digest below).
+# The admin Secret (grafana-admin) arrives sealed in P9-05; until then the pod can't start.
+image:
+  sha: 54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
+rbac:
+  create: false
+serviceAccount:
+  automountServiceAccountToken: false
+automountServiceAccountToken: false
+testFramework:
+  enabled: false
+initChownData:
+  enabled: false
+# One pod on a ReadWriteOnce volume (SQLite): replace it, never run two.
+deploymentStrategy:
+  type: Recreate
+persistence:
+  enabled: true
+  size: 1Gi
+  # The volume holds alert state and sessions; Argo CD must never prune it.
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+    helm.sh/resource-policy: keep
+admin:
+  existingSecret: grafana-admin
+resources:
+  requests:
+    cpu: 25m
+    memory: 192Mi
+  limits:
+    memory: 384Mi
+grafana.ini:
+  analytics:
+    reporting_enabled: false
+    check_for_updates: false
+    check_for_plugin_updates: false
+    feedback_links_enabled: false
+  news:
+    news_feed_enabled: false
+  users:
+    allow_sign_up: false
+    allow_org_create: false
+  auth.anonymous:
+    enabled: false
+  security:
+    cookie_secure: true
+    disable_gravatar: true
+  snapshots:
+    external_enabled: false
+  public_dashboards:
+    enabled: false
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.monitoring.svc
+        isDefault: true
+        editable: false
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc:3100
+        editable: false

@@ -1,0 +1,82 @@
+# Grafana Alloy v1.22.0 (grafana/alloy 1.16.0): one Deployment tailing pod logs through the
+# Kubernetes API (no root, no host paths). docs/architecture/observability.md#logs
+# Image: docker.io/grafana/alloy:v1.22.0 (multi-arch index digest below).
+alloy:
+  configMap:
+    content: |
+      // Pods in the namespaces the monitoring readers cover (Roles, no ClusterRole).
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          names = ["portfolio", "monitoring"]
+        }
+      }
+
+      // Low-cardinality labels only; JSON fields stay in the line and are parsed at query time.
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.local.receiver]
+      }
+
+      loki.write "local" {
+        endpoint {
+          url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+        }
+      }
+  enableReporting: false
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  mounts:
+    extra:
+      - name: storage
+        mountPath: /tmp/alloy
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+image:
+  digest: sha256:9acc2529bc1edb7f5b2bd801dd8334ebc80c158e3a9e5526ecd7c9a273d43189
+crds:
+  create: false
+rbac:
+  create: false
+configReloader:
+  enabled: false
+controller:
+  type: deployment
+  replicas: 1
+  volumes:
+    extra:
+      - name: storage
+        emptyDir:
+          sizeLimit: 256Mi

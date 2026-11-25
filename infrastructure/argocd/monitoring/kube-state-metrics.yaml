@@ -1,0 +1,30 @@
+# kube-state-metrics: restarts, OOM kills, Job results, and replicas for portfolio and monitoring.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-state-metrics
+  namespace: argocd
+  annotations:
+    # sha256 of the chart archive at this version; pnpm helm:check verifies it before rendering.
+    developer-portfolio/chart-sha256: 1a06f8bb44c545ade532f26ed11d8ae84753220e8c02e93c129618d9157420a5
+  # No resources finalizer: deleting the Application leaves the workloads and volumes in place.
+spec:
+  project: monitoring
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-state-metrics
+      targetRevision: 9.0.1
+      helm:
+        releaseName: kube-state-metrics
+        valueFiles:
+          - $values/infrastructure/environments/production/monitoring/kube-state-metrics.yaml
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
