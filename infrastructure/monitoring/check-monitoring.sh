@@ -75,6 +75,8 @@ render_and_check() {
 declare -A contract_keys=([alloy]=alloy [loki]=loki [prometheus]=prometheus
   [kube-state-metrics]=kubeStateMetrics [grafana]=grafana)
 own_values="$(yq -o=json '.' "$own_chart/values.yaml")"
+# jq's `contains` matches strings by substring ("loki-x" contains "loki"); matchLabels is exact.
+exact_labels='def has_labels($want): . as $have | $want | to_entries | all(.value == $have[.key]);'
 
 # check_contract <name> <manifests as JSON>: the release's workload carries the labels the
 # policies select, listens on the ports they allow, and runs as the account the Roles bind, so a
@@ -82,12 +84,13 @@ own_values="$(yq -o=json '.' "$own_chart/values.yaml")"
 check_contract() {
   local name="$1" json="$2" key="${contract_keys[$1]:-}" problems
   [[ -n "$key" ]] || return 0
-  if ! problems="$(jq -r --argjson own "$own_values" --arg key "$key" '
+  if ! problems="$(jq -r --argjson own "$own_values" --arg key "$key" "$exact_labels"'
     ($own.pods[$key]) as $labels
-    | ([$own.ports[$key], (if $key == "loki" then $own.ports.lokiMemberlist else empty end)]) as $ports
+    | ([$own.ports[$key], (if $key == "loki" then $own.ports.lokiGrpc, $own.ports.lokiMemberlist
+        else empty end)]) as $ports
     | ($own.readers.serviceAccounts[$key] // null) as $account
     | [.[] | select(.kind == "Deployment" or .kind == "StatefulSet")
-        | select(.spec.template.metadata.labels | contains($labels))] as $matches
+        | select(.spec.template.metadata.labels | has_labels($labels))] as $matches
     | if ($matches | length) != 1 then
         "pods.\($key) labels match \($matches | length) workloads, not 1"
       else
@@ -242,9 +245,9 @@ fi
 echo "== portfolio API pod labels"
 if portfolio="$(render portfolio "$root/infrastructure/helm/portfolio" \
   -f "$root/infrastructure/helm/portfolio/ci/digests-values.yaml" -s templates/api.yaml)"; then
-  [[ "$(to_json <<<"$portfolio" | jq --argjson own "$own_values" '[.[] |
+  [[ "$(to_json <<<"$portfolio" | jq --argjson own "$own_values" "$exact_labels"'[.[] |
     select(.kind == "Deployment") | .spec.template.metadata.labels |
-    contains($own.networkPolicy.portfolio.apiPodLabels)] | any')" == true ]] ||
+    has_labels($own.networkPolicy.portfolio.apiPodLabels)] | any')" == true ]] ||
     fail "networkPolicy.portfolio.apiPodLabels don't match the portfolio API pods"
 else
   fail "the portfolio API $portfolio"

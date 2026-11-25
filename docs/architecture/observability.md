@@ -94,8 +94,8 @@ on purpose.
   of raw logs a month. `local-path` doesn't enforce sizes, so retention is the real limit.
 - **Privacy:** the logging rules already forbid request bodies, chat messages, tokens, cookies,
   and personal data. P9-03 checks a day of collected logs for client IPs, cookies, and tokens
-  before retention is relied on. Loki is reachable only from Alloy, Grafana, and Prometheus
-  (which reads Loki's own metrics).
+  before retention is relied on. Loki is reachable only from Alloy, Grafana, Prometheus
+  (which reads Loki's own metrics), and other Loki pods (itself, through its Services).
 
 ## Metrics
 
@@ -146,13 +146,14 @@ on purpose.
   | Pod                | Ingress from                        | Egress to                                                             |
   | ------------------ | ----------------------------------- | --------------------------------------------------------------------- |
   | Alloy              | Prometheus (12345, its metrics)     | API server (6443), Loki (3100), DNS                                   |
-  | Loki               | Alloy, Grafana, Prometheus; Loki    | Loki (memberlist 7946), DNS                                           |
+  | Loki               | Alloy, Grafana, Prometheus; Loki    | Loki (3100, gRPC 9095, memberlist 7946), DNS                          |
   | Prometheus         | Grafana                             | API pods (9464), kube-state-metrics, Loki, Alloy, API server, DNS     |
   | kube-state-metrics | Prometheus                          | API server (6443), DNS                                                |
   | Grafana            | the tailnet proxy's address (P9-05) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
 
-  Loki joins its own memberlist ring even as a single replica (through its `loki-memberlist`
-  Service, so back to itself), so Loki pods may reach each other on 7946. **Unknown:** the source address
+  Even as a single replica, Loki calls itself through its own Services: the compactor over gRPC
+  (`common.compactor_grpc_address`) and the memberlist ring. So Loki pods may reach each other on
+  3100, 9095, and 7946. **Unknown:** the source address
   of `tailscale serve`'s connection to Grafana's ClusterIP, as a NetworkPolicy sees it (the
   node's private address, or its pod-network address). Until P9-05 measures it,
   `networkPolicy.grafana.ingressCidrs` is empty and nothing can reach Grafana.
