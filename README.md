@@ -67,7 +67,8 @@ docs/                       Architecture, deployment, operations
 
 - [Architecture overview](docs/architecture/overview.md)
 - [Networking](docs/architecture/networking.md) · [Kubernetes](docs/architecture/kubernetes.md) ·
-  [AI integration](docs/architecture/ai-integration.md) · [Security](docs/architecture/security.md)
+  [AI integration](docs/architecture/ai-integration.md) · [Security](docs/architecture/security.md) ·
+  [Observability (planned)](docs/architecture/observability.md)
 - [Validation register](docs/architecture/validation-register.md)
 - [Local deployment](docs/deployment/local.md) · [Kubernetes deployment](docs/deployment/kubernetes.md) ·
   [Cloudflare Pages](docs/deployment/cloudflare-pages.md)

@@ -6,8 +6,10 @@ description: Add or review logging, health and readiness checks, metrics, deploy
 # Observability
 
 Status: JSON logs, request ids, liveness, readiness, API metrics (P7-01), and the Infrastructure
-Explorer (Phase 6) are implemented. Keep it proportionate: no Prometheus server or Grafana until
-the roadmap calls for them.
+Explorer (Phase 6) are implemented. Phase 9 adds Grafana, Loki, Prometheus, and Alloy
+([ADR 0004](../../../docs/architecture/adr-0004-observability-stack.md),
+[plan](../../../docs/architecture/observability.md)); follow the plan, and keep log fields and
+metric labels low-cardinality so Loki and Prometheus stay small.
 
 ## Logging (implemented)
 
