@@ -6,7 +6,8 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
 
 **Confirmed today:** JSON logs with request ids (P2-04), the API's Prometheus metrics on a loopback
 port (P7-01), and the K3s API audit log on the host (P7-06). The audit log stays root-only on the
-host and is not shipped to Loki.
+host and is not shipped to Loki. **In Git, not applied (P9-02):** the manifests described under
+[Layout](#layout), checked by `pnpm helm:check`.
 
 ## Shape
 
@@ -22,13 +23,54 @@ host and is not shipped to Loki.
 - **Namespace:** `monitoring`, default-deny NetworkPolicies like `portfolio`.
 - **Argo CD:** a new `monitoring` AppProject. Its sources are this repository and the upstream
   chart repositories, listed one by one. Its only destination is the `monitoring` namespace,
-  and it allows no cluster-scoped kinds. There is one Application per upstream chart, each with
-  its chart version and image digest pinned and its values in
-  `infrastructure/monitoring/<component>/values.yaml`, plus one Application for this
-  repository's own manifests (NetworkPolicies, provisioning ConfigMaps, and SealedSecrets).
-- **Charts:** Grafana, Loki, and Alloy from Grafana's chart repositories (Loki's moved to
-  `grafana-community` in 2026); Prometheus and kube-state-metrics from `prometheus-community`.
-  P9-02 confirms each chart's current home and pins it.
+  and it allows no cluster-scoped kinds. There is one Application per upstream chart, plus one
+  for this repository's own manifests (NetworkPolicies and Roles now; SealedSecrets and
+  provisioning ConfigMaps in P9-05 and P9-06).
+
+## Layout
+
+In Git since P9-02, applied by hand from P9-03 (🔒), like the other Argo CD files:
+
+| Path                                                            | Holds                                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `infrastructure/argocd/monitoring-project.yaml`                 | The `monitoring` AppProject.                                                                                  |
+| `infrastructure/argocd/monitoring/<name>.yaml`                  | One Application per release: chart, exact version, and the archive's sha256 (annotation).                     |
+| `infrastructure/environments/production/monitoring/<name>.yaml` | Each release's values, image digests included (multi-source `$values` from `main`).                           |
+| `infrastructure/helm/monitoring/`                               | This repository's chart: default-deny and per-pod NetworkPolicies, and the collectors' Roles in `monitoring`. |
+| `infrastructure/monitoring/check-monitoring.sh`                 | The CI check, run by `pnpm helm:check`.                                                                       |
+
+**Pinned (Confirmed, 2026-11-25).** These are the newest stable releases that were at least a week
+old, in the spirit of pnpm's minimum release age:
+
+| Release            | Chart repository                             | Chart version | App version             |
+| ------------------ | -------------------------------------------- | ------------- | ----------------------- |
+| loki               | `grafana-community.github.io/helm-charts`    | 21.4.1        | Loki 3.7.10             |
+| alloy              | `grafana.github.io/helm-charts`              | 1.16.0        | Alloy v1.22.0           |
+| prometheus         | `prometheus-community.github.io/helm-charts` | 29.47.2       | Prometheus v3.16.0      |
+| kube-state-metrics | `prometheus-community.github.io/helm-charts` | 9.0.1         | kube-state-metrics 2.20 |
+| grafana            | `grafana-community.github.io/helm-charts`    | 14.5.0        | Grafana 13.3.1          |
+
+Loki's and Grafana's charts now live in `grafana-community`. The `grafana` repository's
+Grafana chart is deprecated, and its Loki chart serves Grafana Enterprise Logs. Every image
+is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
+
+**What the check enforces** (`pnpm helm:check`, CI's Helm job):
+
+- **Applications:** each stays in the project, with every source listed there, one destination,
+  an exact chart version, and values from this directory.
+- **Charts:** each chart archive's sha256 matches the one recorded on its Application. Argo CD
+  itself doesn't verify it, so CI catches a republished version.
+- **Every render:**
+  - passes kubeconform and lints;
+  - uses only the kinds the project allows (so no ClusterRole, Ingress, or Secret);
+  - stays in the namespace, with no NodePort or LoadBalancer;
+  - has no host namespaces, host paths, or privileged containers;
+  - pins every image by digest and gives every container resource requests.
+- **This repository's chart:** it refuses to render without the API server range, and Grafana
+  gets no ingress or internet until P9-05 and P9-06 set them.
+
+A render that fails or comes out empty is a failure, never a pass. Each guardrail was checked by
+breaking it on purpose.
 
 ## Logs
 
@@ -41,8 +83,8 @@ host and is not shipped to Loki.
 - **Labels (low cardinality):** `namespace`, `app` (component), `container`, `pod`. JSON fields
   such as `level`, `context`, and `message.requestId` are parsed at query time with `| json`,
   never turned into labels.
-- **Storage:** Loki in monolithic (single binary) mode with filesystem storage, on a `local-path`
-  volume from a `volumeClaimTemplate`, so no Argo CD prune can delete it. **Retention: 30 days**,
+- **Storage:** Loki in monolithic (single binary) mode with filesystem storage (TSDB, schema
+  v13), on a `local-path` volume from a `volumeClaimTemplate`, so no Argo CD prune can delete it. **Retention: 30 days**,
   matching the audit log, enforced by the compactor; the volume is 5 GiB against about 55 MB
   of raw logs a month. `local-path` doesn't enforce sizes, so retention is the real limit.
 - **Privacy:** the logging rules already forbid request bodies, chat messages, tokens, cookies,
@@ -70,37 +112,55 @@ host and is not shipped to Loki.
 
 ## Least privilege
 
-- **No ClusterRoles.** The portfolio chart gains `monitoring.readers` (off by default). It
-  renders one Role in `portfolio` (`get`/`list`/`watch` on pods, and `get` on `pods/log`) bound
-  to the Alloy and Prometheus ServiceAccounts, and one Role for kube-state-metrics (`list`/`watch`
-  on the kinds it reports). The upstream charts render no RBAC of their own in `portfolio`, so
-  the `portfolio` AppProject still owns everything in its namespace. The `monitoring` chart
-  grants the same reads in its own namespace.
+- **No ClusterRoles.** The portfolio chart gains `monitoring.readers` (off by default, P9-03 and
+  P9-04). It renders a log reader Role in `portfolio` (`get`/`list`/`watch` on pods, `get` on
+  `pods/log`) for Alloy, pod discovery (`list`/`watch` on pods) for Prometheus, and a state
+  reader (`list`/`watch` on the kinds it reports) for kube-state-metrics. The upstream charts
+  render no RBAC, so the `portfolio` AppProject still owns everything in its namespace.
+- **In `monitoring` (Confirmed in Git, P9-02):** the monitoring chart grants Alloy the log reader
+  and kube-state-metrics the state reader there. Prometheus needs no Role in `monitoring`: it
+  scrapes Loki, Alloy, and kube-state-metrics through their Services.
+- **Charts' own RBAC turned off:** Loki's chart, by default, gives Loki a ClusterRole that reads
+  every ConfigMap and Secret in the cluster, for a rules sidecar this stack doesn't use. Its values
+  turn both off. The Alloy, Prometheus, kube-state-metrics, and Grafana charts have
+  `rbac.create: false`.
 - **Unchanged:** the API's Infrastructure Explorer account still can't read logs
   (P6-01's `can-i` checks).
 - **Audit log:** the P7-06 policy drops `get` on `pods/log` as routine reads, so Alloy adds
   nothing to it.
-- **Containers:** non-root, read-only root filesystem where the image allows, `cap_drop: [ALL]`,
-  no service account token mounted where none is needed (Loki, Grafana), and resource requests
-  and limits on every container.
+- **Containers:** non-root, read-only root filesystem, `cap_drop: [ALL]`, no service account
+  token where none is needed (Loki, Grafana), and resource requests and memory limits on every
+  container. Alloy runs as `nobody` with an `emptyDir` for its positions file. Grafana's
+  root `chown` init container is off.
 - **NetworkPolicies in `monitoring`:**
 
-  | Pod                | Ingress from                             | Egress to                                                             |
-  | ------------------ | ---------------------------------------- | --------------------------------------------------------------------- |
-  | Alloy              | none                                     | API server (6443), Loki (3100), DNS                                   |
-  | Loki               | Alloy, Grafana                           | DNS                                                                   |
-  | Prometheus         | Grafana                                  | API pods (9464), kube-state-metrics, API server (6443), DNS           |
-  | kube-state-metrics | Prometheus                               | API server (6443), DNS                                                |
-  | Grafana            | the node's private range (tailnet proxy) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
+  | Pod                | Ingress from                        | Egress to                                                             |
+  | ------------------ | ----------------------------------- | --------------------------------------------------------------------- |
+  | Alloy              | none                                | API server (6443), Loki (3100), DNS                                   |
+  | Loki               | Alloy, Grafana, Prometheus          | DNS                                                                   |
+  | Prometheus         | Grafana                             | API pods (9464), kube-state-metrics, Loki, Alloy, API server, DNS     |
+  | kube-state-metrics | Prometheus                          | API server (6443), DNS                                                |
+  | Grafana            | the tailnet proxy's address (P9-05) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
+
+  Alloy's ingress is from Prometheus on 12345 (its own metrics). **Unknown:** the source address
+  of `tailscale serve`'s connection to Grafana's ClusterIP, as a NetworkPolicy sees it (the
+  node's private address, or its pod-network address). Until P9-05 measures it,
+  `networkPolicy.grafana.ingressCidrs` is empty and nothing can reach Grafana.
 
 ## Grafana
 
 - **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve`, the same
   way as Argo CD (a separate HTTPS port). There is no Ingress, tunnel, or public hostname.
-  Anonymous access and sign-up are off, and the admin password comes from a SealedSecret.
+  Anonymous access, sign-up, public dashboards, and external snapshots are off. The admin
+  password comes from the `grafana-admin` SealedSecret (P9-05); until it exists, the pod
+  doesn't start.
+- **Storage:** a 1 GiB volume for alert state and sessions. Grafana runs as a single Deployment
+  with the `Recreate` strategy (SQLite on a ReadWriteOnce volume), and the claim carries
+  `Prune=false` and Helm's `keep`, so Argo CD never deletes it.
 - **No phoning home:** usage reporting, update checks, and plugin update checks are off, and no
   plugins are installed at runtime.
-- **As code:** data sources, dashboards (`infrastructure/monitoring/dashboards/*.json`), and alert
+- **As code:** data sources (in Grafana's values since P9-02: Prometheus and Loki by Service
+  name, not editable), dashboards (`infrastructure/monitoring/dashboards/*.json`), and alert
   rules are provisioned from ConfigMaps with UI edits disabled. A change made in the UI is
   exported and committed.
 - **Dashboards:** an API overview (requests, p95 by route, 5xx and errors by code, client
@@ -146,6 +206,16 @@ Grafana, Loki, Prometheus, and Alloy images with the same provisioned dashboards
 
 ## Capacity
 
-Expected requests (to be confirmed under load in P9-07): Loki 256Mi, Prometheus 256Mi, Grafana
-192Mi, Alloy 128Mi, and kube-state-metrics 64Mi. That's under 1 GiB requested, with limits of
-about 1.5 GiB, on a node with roughly 24 GiB available. Disk: two 5 GiB `local-path` volumes.
+Requests as set in P9-02, to be confirmed in P9-07:
+
+| Pod                | CPU | Memory request | Memory limit |
+| ------------------ | --- | -------------- | ------------ |
+| Loki               | 50m | 256Mi          | 512Mi        |
+| Prometheus         | 50m | 256Mi          | 512Mi        |
+| Grafana            | 25m | 192Mi          | 384Mi        |
+| Alloy              | 25m | 128Mi          | 256Mi        |
+| kube-state-metrics | 10m | 64Mi           | 128Mi        |
+
+That's about 900 MiB requested and 1.8 GiB at most, on a node with roughly 24 GiB available.
+Loki sets `GOMEMLIMIT` to 85% of its limit. Disk: two 5 GiB `local-path` volumes (Loki,
+Prometheus) and 1 GiB for Grafana.

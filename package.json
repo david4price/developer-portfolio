@@ -21,7 +21,7 @@
     "db:reset": "node scripts/db-reset.mjs",
     "new:project": "node scripts/new-project.mjs",
     "format": "prettier --write .",
-    "helm:check": "bash infrastructure/helm/check-chart.sh",
+    "helm:check": "bash infrastructure/helm/check-chart.sh && bash infrastructure/monitoring/check-monitoring.sh",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",
     "test": "tsc -b --pretty false && pnpm -r --if-present test",

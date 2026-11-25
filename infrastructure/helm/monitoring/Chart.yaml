@@ -1,0 +1,9 @@
+apiVersion: v2
+name: monitoring
+description: >-
+  The repository's own manifests for the monitoring namespace (Phase 9): default-deny
+  NetworkPolicies with one allow per pod, and the read-only Roles the collectors use there.
+type: application
+version: 0.1.0
+appVersion: '0.0.0'
+kubeVersion: '>=1.30.0-0'

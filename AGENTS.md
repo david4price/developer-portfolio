@@ -93,8 +93,8 @@ pnpm build   # TypeScript projects + static export
 ```
 
 Plus `docker compose --env-file .env.example -f compose.yaml config --quiet` (and the same for
-`compose.full.yaml`) after Compose changes, `pnpm helm:check` after chart changes (needs `helm`
-and `kubeconform`), and `git diff --check`. Report anything that could not
+`compose.full.yaml`) after Compose changes, `pnpm helm:check` after chart changes (needs `helm`,
+`kubeconform`, `yq`, `jq`, and network access for the monitoring charts), and `git diff --check`. Report anything that could not
 run, such as integration tests that need PostgreSQL and Redis.
 
 ### Before Every Push

@@ -103,6 +103,8 @@ jobs:
     env:
       KUBECONFORM_VERSION: v0.8.0
       KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      YQ_VERSION: v4.54.3
+      YQ_SHA256: 129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973
     steps:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
@@ -115,7 +117,16 @@ jobs:
           echo "${KUBECONFORM_SHA256}  $RUNNER_TEMP/kubeconform.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP" kubeconform
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      # The runner image's yq may change; the monitoring check pins its own.
+      - name: Install yq
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/yq" \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  $RUNNER_TEMP/yq" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/yq"
       - run: bash infrastructure/helm/check-chart.sh
+      - name: Monitoring charts (Phase 9)
+        run: bash infrastructure/monitoring/check-monitoring.sh
 
   secrets:
     name: Secret scan

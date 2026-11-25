@@ -51,8 +51,9 @@ over them. Grafana is reachable on the tailnet only, like Argo CD.
 ## Consequences
 
 - **Four upstream charts to keep current.** Chart versions and image digests are pinned in Git
-  and updated by hand ([ADR 0002](adr-0002-dependency-updates.md)). Loki's chart moved to the
-  `grafana-community` repository in 2026; P9-02 confirms each chart's current home before pinning.
+  and updated by hand ([ADR 0002](adr-0002-dependency-updates.md)). Loki's and Grafana's charts
+  moved to the `grafana-community` repository in 2026 (confirmed and pinned in P9-02). CI checks
+  each chart archive's sha256, which Argo CD doesn't.
 - **The metrics port opens to one pod.** The API binds metrics to its pod IP instead of loopback,
   and a NetworkPolicy lets only Prometheus reach it. It stays out of the Service, the tunnel, and
   every other policy; `pnpm helm:check` enforces the new rule in place of the loopback one.

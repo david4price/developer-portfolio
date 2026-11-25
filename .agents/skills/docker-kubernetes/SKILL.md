@@ -46,7 +46,7 @@ yet (Phase 3). Read
 ## Validation
 
 ```bash
-pnpm helm:check   # infrastructure/helm/check-chart.sh
+pnpm helm:check   # infrastructure/helm/check-chart.sh, then infrastructure/monitoring/check-monitoring.sh
 ```
 
 It lints the chart, renders every `ci/*-values.yaml` through `kubeconform -strict`, rejects
@@ -56,6 +56,10 @@ Secret name). Add a `ci/*-values.yaml` fixture for
 new options and an `expect_failure` case for new `required`/`fail` guards. CI's `helm` job runs
 the same script with pinned tools. Install `helm`/`kubeconform` locally only with approval
 (a checksum-verified download into a temporary directory is enough).
+
+The second script covers the Phase 9 monitoring stack (upstream charts plus
+`infrastructure/helm/monitoring`); see
+[observability](../../../docs/architecture/observability.md#layout) for what it enforces. It also needs `yq` (mikefarah v4) and `jq`.
 
 ## K3s on the Reference Host
 

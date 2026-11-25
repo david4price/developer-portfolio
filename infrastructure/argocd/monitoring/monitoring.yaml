@@ -1,0 +1,25 @@
+# The repository's own monitoring manifests: NetworkPolicies and the collectors' Roles in this
+# namespace. SealedSecrets (Grafana's admin password, the alert contact point) join in P9-05/06.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  # No resources finalizer: deleting the Application leaves everything in place.
+spec:
+  project: monitoring
+  sources:
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      path: infrastructure/helm/monitoring
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - ../../environments/production/monitoring/monitoring.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

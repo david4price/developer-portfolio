@@ -1,0 +1,4 @@
+networkPolicy:
+  apiServerEgress:
+    # Documentation-only ranges for schema and guardrail tests.
+    cidr: 192.0.2.0/24

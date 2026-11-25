@@ -1,0 +1,30 @@
+# Loki: stores and searches logs for 30 days (docs/architecture/observability.md#logs).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    # sha256 of the chart archive at this version; pnpm helm:check verifies it before rendering.
+    developer-portfolio/chart-sha256: edf9f3443a3f850c090e84f02b8f26b4392c26054801c04a63f0562f2ba8b217
+  # No resources finalizer: deleting the Application leaves the workloads and volumes in place.
+spec:
+  project: monitoring
+  sources:
+    - repoURL: https://grafana-community.github.io/helm-charts
+      chart: loki
+      targetRevision: 21.4.1
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/infrastructure/environments/production/monitoring/loki.yaml
+    - repoURL: https://github.com/david4price/developer-portfolio.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,201 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- $pods := .Values.pods }}
+{{- $ports := .Values.ports }}
+# Everything in the namespace is denied unless a policy below allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-default-deny
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-allow-dns
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $np.dns.podLabels | nindent 14 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Alloy: scraped by Prometheus; reads logs from the API server and pushes them to Loki.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-alloy
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $pods.alloy | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "monitoring.peer" $pods.prometheus | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.alloy }}
+  egress:
+    {{- include "monitoring.apiServer" . | nindent 4 }}
+    - to:
+        {{- include "monitoring.peer" $pods.loki | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.loki }}
+---
+# Loki: receives from Alloy, answers Grafana, scraped by Prometheus; talks to nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-loki
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $pods.loki | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "monitoring.peer" $pods.alloy | nindent 8 }}
+        {{- include "monitoring.peer" $pods.grafana | nindent 8 }}
+        {{- include "monitoring.peer" $pods.prometheus | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.loki }}
+---
+# Prometheus: queried by Grafana; scrapes the API pods' metrics port, kube-state-metrics, Loki,
+# and Alloy, and discovers the API pods through the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-prometheus
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $pods.prometheus | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "monitoring.peer" $pods.grafana | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.prometheus }}
+  egress:
+    {{- include "monitoring.apiServer" . | nindent 4 }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.portfolio.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $np.portfolio.apiPodLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ $np.portfolio.metricsPort }}
+    - to:
+        {{- include "monitoring.peer" $pods.kubeStateMetrics | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.kubeStateMetrics }}
+    - to:
+        {{- include "monitoring.peer" $pods.loki | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.loki }}
+    - to:
+        {{- include "monitoring.peer" $pods.alloy | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.alloy }}
+---
+# kube-state-metrics: scraped by Prometheus; reads the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-kube-state-metrics
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $pods.kubeStateMetrics | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "monitoring.peer" $pods.prometheus | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.kubeStateMetrics }}
+  egress:
+    {{- include "monitoring.apiServer" . | nindent 4 }}
+---
+# Grafana: reached only from the node's tailnet proxy; queries Loki and Prometheus, and sends
+# alerts over HTTPS once a contact point exists.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-grafana
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $pods.grafana | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  {{- with $np.grafana.ingressCidrs }}
+  ingress:
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.grafana }}
+  {{- end }}
+  egress:
+    - to:
+        {{- include "monitoring.peer" $pods.loki | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.loki }}
+    - to:
+        {{- include "monitoring.peer" $pods.prometheus | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $ports.prometheus }}
+    {{- with $np.grafana.alertEgress }}
+    {{- if .enabled }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml .exceptCidrs | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    {{- end }}
+{{- end }}

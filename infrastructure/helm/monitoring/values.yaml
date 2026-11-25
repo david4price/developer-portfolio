@@ -1,0 +1,73 @@
+# Manifests that sit beside the upstream charts in the monitoring namespace (ADR 0004,
+# docs/architecture/observability.md). The upstream charts render no RBAC and no policies.
+
+# Pod labels of the upstream releases, as their charts render them. Changing a release name in
+# infrastructure/argocd/monitoring means changing it here too.
+pods:
+  alloy:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/instance: alloy
+  loki:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/instance: loki
+    app.kubernetes.io/component: single-binary
+  prometheus:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/instance: prometheus
+    app.kubernetes.io/component: server
+  kubeStateMetrics:
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/instance: kube-state-metrics
+  grafana:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: grafana
+
+# Container ports, as the upstream charts render them.
+ports:
+  alloy: 12345
+  loki: 3100
+  prometheus: 9090
+  kubeStateMetrics: 8080
+  grafana: 3000
+
+# Read-only Roles in this namespace for the collectors' ServiceAccounts. The same reads in the
+# portfolio namespace come from the portfolio chart (`monitoring.readers`), never from here.
+readers:
+  enabled: true
+  serviceAccounts:
+    alloy: alloy
+    prometheus: prometheus-server
+    kubeStateMetrics: kube-state-metrics
+
+networkPolicy:
+  enabled: true
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+  # Alloy, Prometheus, and kube-state-metrics read the Kubernetes API. Policies see the address the
+  # `kubernetes` Service forwards to: the node's private range on the API server port.
+  apiServerEgress:
+    cidr: ''
+    port: 6443
+  # The API pods Prometheus scrapes, on the metrics port that no Service exposes (P9-04).
+  portfolio:
+    namespace: portfolio
+    apiPodLabels:
+      app.kubernetes.io/name: portfolio
+      app.kubernetes.io/instance: portfolio
+      app.kubernetes.io/component: api
+    metricsPort: 9464
+  grafana:
+    # Where `tailscale serve` on the node reaches Grafana's ClusterIP from. Empty: nothing may
+    # connect (P9-05 sets and verifies it).
+    ingressCidrs: []
+    # HTTPS to the alert contact point (P9-06): port 443 anywhere outside private ranges.
+    alertEgress:
+      enabled: false
+      exceptCidrs:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 100.64.0.0/10
+        - 169.254.0.0/16

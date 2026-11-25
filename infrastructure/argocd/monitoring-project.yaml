@@ -1,0 +1,41 @@
+# Phase 9 monitoring (ADR 0004): each chart repository and this one listed explicitly, one
+# destination namespace, and no cluster-scoped kinds. The upstream charts render no RBAC; the
+# Roles come from this repository's charts. `pnpm helm:check` checks that every Application in
+# infrastructure/argocd/monitoring stays inside this project.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  description: Logs, metrics, dashboards, and alerts (Grafana, Loki, Prometheus, Alloy)
+  sourceRepos:
+    - https://github.com/david4price/developer-portfolio.git
+    - https://grafana-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: ServiceAccount
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: bitnami.com
+      kind: SealedSecret
