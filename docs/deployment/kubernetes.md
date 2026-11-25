@@ -446,15 +446,18 @@ Argo CD keeps each in sync with `main`.
      it from `main`.
    - **Alloy**, after that sync: `kubectl apply -f infrastructure/argocd/monitoring/alloy.yaml`.
    - **Validate:**
-     - Alloy's account reads logs in `portfolio` and nothing more. Expect `yes` for the first
-       command and `no` for the rest:
+     - Alloy's account reads pods and their logs in `portfolio` and `monitoring`, and nothing
+       more. Expect `yes` for the first two commands and `no` for the rest:
 
        ```bash
        sa=system:serviceaccount:monitoring:alloy
-       kubectl auth can-i get pods --subresource=log -n portfolio --as=$sa       # yes
-       kubectl auth can-i get secrets -n portfolio --as=$sa                      # no
-       kubectl auth can-i create pods --subresource=exec -n portfolio --as=$sa   # no
-       kubectl auth can-i list pods -n kube-system --as=$sa                      # no
+       kubectl auth can-i get pods --subresource=log -n portfolio --as=$sa        # yes
+       kubectl auth can-i get pods --subresource=log -n monitoring --as=$sa       # yes
+       kubectl auth can-i get secrets -n portfolio --as=$sa                       # no
+       kubectl auth can-i get secrets -n monitoring --as=$sa                      # no
+       kubectl auth can-i create pods --subresource=exec -n portfolio --as=$sa    # no
+       kubectl auth can-i create pods --subresource=exec -n monitoring --as=$sa   # no
+       kubectl auth can-i list pods -n kube-system --as=$sa                       # no
        ```
 
      - The API's Explorer account still can't read logs:
@@ -468,10 +471,18 @@ Argo CD keeps each in sync with `main`.
        `{namespace="portfolio", container="api"} |= "<request id>"` on `/loki/api/v1/query_range`.
      - Retention is `30d` under `limits_config` in Loki's `/config`.
      - A pod in another namespace can't reach `loki.monitoring.svc:3100`.
-     - **Privacy, after a day of collection:** search the last 24 hours of `{namespace="portfolio"}`
-       for IP addresses, cookies, tokens, and chat text (for example
-       `|~ "\\b[0-9]{1,3}(\\.[0-9]{1,3}){3}\\b"`, `|~ "(?i)cookie|token|bearer"`). Any match is
-       fixed at its source before retention is relied on.
+     - **Privacy, after a day of collection:** search the last 24 hours of everything Alloy
+       collects, `{namespace=~"portfolio|monitoring"}`, for client addresses, cookies, tokens, and
+       chat text, and review each match (words like "token" also appear in harmless messages,
+       such as the P6-05 expiry warning). For example:
+       - IPv4: `|~ "\\b[0-9]{1,3}(\\.[0-9]{1,3}){3}\\b"`;
+       - IPv6 (three or more colons, so `hh:mm:ss` times don't match):
+         `|~ "(?i)([0-9a-f]{0,4}:){3,7}[0-9a-f]{1,4}"`;
+       - forwarding headers and address fields:
+         `|~ "(?i)x-forwarded-for|cf-connecting-ip|remote.?addr|client.?ip"`;
+       - values rather than words: `|~ "(?i)bearer [a-z0-9._-]{10,}|cookie:\\s*\\S+|set-cookie"`.
+
+       A real leak is fixed at its source before retention is relied on.
 3. **Metrics** (P9-04): Prometheus and kube-state-metrics.
 4. **Grafana** (P9-05), after its admin SealedSecret.
 

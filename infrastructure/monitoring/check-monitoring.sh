@@ -241,13 +241,22 @@ else
   fail "the NetworkPolicies $policies"
 fi
 
-# The portfolio chart binds its log reader to Alloy's account by name; it must be the account the
-# monitoring chart binds (which check_contract compared with the pod Alloy actually runs as).
-echo "== portfolio log reader subject"
-[[ "$(yq '.monitoring.readers.logs.namespace + "/" + .monitoring.readers.logs.serviceAccount' \
-  "$root/infrastructure/helm/portfolio/values.yaml")" == \
-  "$namespace/$(jq -r '.readers.serviceAccounts.alloy' <<<"$own_values")" ]] ||
-  fail "portfolio monitoring.readers.logs must name the $namespace namespace's Alloy account"
+# The portfolio chart binds its log reader to Alloy's account by name. As production renders it
+# (the values Argo CD layers), it must be the account the monitoring chart binds, which
+# check_contract compared with the pod Alloy actually runs as.
+echo "== portfolio log reader subject (production)"
+production="$root/infrastructure/environments/production"
+production_args=(-f "$root/infrastructure/helm/portfolio/ci/digests-values.yaml" -f "$production/values.yaml")
+[[ -f "$production/images.yaml" ]] && production_args+=(-f "$production/images.yaml")
+if reader="$(render portfolio "$root/infrastructure/helm/portfolio" "${production_args[@]}" \
+  -s templates/monitoring-readers.yaml)"; then
+  [[ "$(to_json <<<"$reader" | jq -r '[.[] | select(.kind == "RoleBinding") | .subjects[] |
+    .kind + " " + .namespace + "/" + .name] | join(",")')" == \
+    "ServiceAccount $namespace/$(jq -r '.readers.serviceAccounts.alloy' <<<"$own_values")" ]] ||
+    fail "production's portfolio log reader must bind only the $namespace namespace's Alloy account"
+else
+  fail "the production portfolio log reader $reader"
+fi
 
 # Prometheus reaches the API pods by the labels the portfolio chart gives them.
 echo "== portfolio API pod labels"

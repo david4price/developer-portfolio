@@ -4,7 +4,7 @@ The single checklist for this project. Start here when you pick the work back up
 
 ## ▶ Resume Here
 
-_Last updated: 2026-11-25_
+_Last updated: 2026-11-26_
 
 **Current phase:** Phase 9, Observability (P9-03 🔒 in progress: Loki live, Alloy next). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
