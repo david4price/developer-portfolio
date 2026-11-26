@@ -6,8 +6,8 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-26_
 
-**Current phase:** Phase 9, Observability (logs and metrics live; P9-03's privacy check, then
-P9-05 Grafana). Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (logs, metrics, and Grafana live; P9-03's privacy
+check, then P9-06 alerts). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -16,6 +16,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-05 done** (PRs #79, #80, 2026-11-26): Grafana on the tailnet (port 8444) with four
+  read-only dashboards, request ids that link to their log lines, and its admin password sealed.
 - **P9-04 done** (PR #77, 2026-11-26): Prometheus and kube-state-metrics are live, scraping
   the API (its metrics opened to Prometheus alone), Loki, and Alloy; isolation and the public
   404 are verified.
@@ -304,8 +306,7 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
    a day of collected logs, scheduled for 2026-11-27
    ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)).
-2. **P9-05** 🔒 Grafana on the tailnet: needs the owner's `sudo` for `tailscale serve` and the
-   admin SealedSecret.
+2. **P9-06** 🔒 Alerts: needs the owner's choice of contact point (chat bot, email, or another).
 3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
@@ -313,9 +314,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-05-grafana` (dashboards, the request-id link, and the admin
-SealedSecret). PRs #65 to #78 are merged; Loki, Alloy, Prometheus, and kube-state-metrics are
-live, and P9-03's privacy check is scheduled for 2026-11-27.
+**Branch in progress:** `docs/p9-05-done` (ticks P9-05). PRs #65 to #80 are merged; Loki, Alloy,
+Prometheus, kube-state-metrics, and Grafana are live, and P9-03's privacy check is scheduled for
+2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -329,9 +330,8 @@ Open every PR against `main`.
 - [x] K3s API audit logging applied with `sudo` (P7-06, 2026-11-19).
 - [ ] Phase 9 alert contact point (P9-06): the owner's chat bot, email, or another Grafana
       contact point. It goes in a SealedSecret; nothing about it is committed.
-- [ ] Phase 9 Grafana access (P9-05): run the `sudo tailscale serve --https=8444` command in the
-      [guide](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required), and confirm
-      30-day retention for logs and metrics.
+- [x] Phase 9 Grafana access (P9-05): `tailscale serve --https=8444` (2026-11-26).
+- [ ] Phase 9 retention: confirm 30 days for logs and metrics (configured that way).
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -804,7 +804,7 @@ Read-only inventory of the reference host. Findings:
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
 
-## Phase 9: Observability (4/9)
+## Phase 9: Observability (5/9)
 
 Keep logs, keep metric history, and alert the owner, with Grafana's open-source stack in a
 `monitoring` namespace ([ADR 0004](architecture/adr-0004-observability-stack.md),
@@ -878,12 +878,30 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
         so the bind is `0.0.0.0` ([ADR 0004](architecture/adr-0004-observability-stack.md),
         amended).
 
-- [ ] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
+- [x] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
       its admin password from a SealedSecret, anonymous access and sign-up off, usage reporting and
       update checks off; it is published only through `tailscale serve` (no Ingress, tunnel, or
       public hostname); data sources and the four dashboards (API, chat and AI, workloads, logs)
       are provisioned from Git with UI saves disabled; and a request id can be followed from a
       5xx on the API dashboard to its log lines.
+      Done 2026-11-26 (PRs #79, #80; the owner ran `tailscale serve`):
+
+      - **Live:** Grafana 13.3.1 is Synced/Healthy, a ClusterIP Service only, with its volume
+        protected from pruning.
+      - **Tailnet only:** `https://<tailnet-hostname>:8444` has a valid Let's Encrypt
+        certificate. It listens only on the `tailscale0` interface; the LAN address and the
+        public API host don't answer on 8444, and a pod in another namespace can't reach it.
+      - **Login:** only the sealed admin password works; anonymous requests and a wrong password
+        get 401. Sign-up, org creation, anonymous access, public dashboards, external snapshots,
+        reporting, update checks, and plugin preinstall are off.
+      - **Dashboards:** the four are in the Portfolio folder, their panels return data, and a
+        save is refused (400). Both data sources are read-only and healthy.
+      - **From a 5xx to its log lines:** production has had no 5xx, so CI forces a real 503 and
+        finds it through the API dashboard's own query; the request-id link is configured live.
+      - **Found:** Grafana's own startup download of plugins from grafana.com (blocked by the
+        NetworkPolicy, now off, PR #80), and that `tailscale serve` on the node needs no ingress
+        rule (K3s admits the node's own traffic).
+
 - [ ] **P9-06** 🔒 Alerts. _Needs:_ P9-05 and the owner's contact point. _Done when:_ the nine
       rules in the [plan](architecture/observability.md#alerts) are provisioned from Git; the
       contact point comes entirely from a SealedSecret (nothing about it in Git); each rule has
