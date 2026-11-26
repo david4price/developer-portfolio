@@ -133,6 +133,11 @@ function ruleProblems(rule, where) {
   }
   if (typeof rule.title !== 'string' || rule.title === '')
     problems.push(`${where}: ${name} needs a title`);
+  // Grafana refuses to start provisioning a rule that links a dashboard without a panel.
+  const annotations = isObject(rule.annotations) ? rule.annotations : {};
+  if ('__dashboardUid__' in annotations !== '__panelId__' in annotations) {
+    problems.push(`${where}: ${name} needs both __dashboardUid__ and __panelId__, or neither`);
+  }
   const data = Array.isArray(rule.data) ? rule.data : [];
   if (data.length === 0) problems.push(`${where}: ${name} needs data queries`);
   const refIds = new Set(data.map((query) => (isObject(query) ? query.refId : undefined)));

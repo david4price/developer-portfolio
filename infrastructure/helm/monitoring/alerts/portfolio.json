@@ -1,0 +1,541 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "portfolio",
+      "folder": "Portfolio alerts",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "api-down",
+          "title": "API down",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "count(up{job=\"portfolio-api\"} == 1) or vector(0)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [1]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Alerting",
+          "for": "5m",
+          "isPaused": false,
+          "labels": {
+            "severity": "critical",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "No API replica has answered Prometheus for 5 minutes.",
+            "description": "up{job=\"portfolio-api\"} has had no healthy target for 5 minutes: the API pods are down, unready, or unreachable on their metrics port.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-api-down",
+            "dashboard": "/d/portfolio-api"
+          }
+        },
+        {
+          "uid": "dependency-down",
+          "title": "API dependency down",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "min by (dependency) (readiness_dependency_up)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [1]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "3m",
+          "isPaused": false,
+          "labels": {
+            "severity": "critical",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "An API dependency has been down for 3 minutes.",
+            "description": "readiness_dependency_up is 0 for {{ $labels.dependency }}: the API answers 503 on readiness and its requests fail.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-dependency-down",
+            "dashboard": "/d/portfolio-api"
+          }
+        },
+        {
+          "uid": "server-errors",
+          "title": "API server errors",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\", status_class=\"5xx\"}[10m])) / sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[10m]))) and on() (sum(increase(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[10m])) >= 20)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0.05]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "critical",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "More than 5% of API requests failed with a 5xx over 10 minutes.",
+            "description": "The 5xx share of visitor requests (health probes excluded) was {{ humanizePercentage $values.A.Value }} (at least 20 requests). Follow a request id from the API dashboard's server error panel to its log lines.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-server-errors",
+            "dashboard": "/d/portfolio-api"
+          }
+        },
+        {
+          "uid": "slow-api",
+          "title": "API slow",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m]))) and on () (sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m])) > 0)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [1]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "15m",
+          "isPaused": false,
+          "labels": {
+            "severity": "warning",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "API p95 latency has been above 1 s for 15 minutes.",
+            "description": "p95 of visitor requests (health probes excluded) was {{ humanizeDuration $values.A.Value }} (P7-02 measured 2.8 ms at 200 requests a second).",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-slow-api",
+            "dashboard": "/d/portfolio-api"
+          }
+        },
+        {
+          "uid": "crash-loop",
+          "title": "Container crash loop or OOM kill",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 3) or ((sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1)) or (count_over_time((max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{namespace=~\"portfolio|monitoring\", reason=\"CrashLoopBackOff\"}) == 1)[5m:1m]) >= 5)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "critical",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "{{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is restarting.",
+            "description": "Waiting in CrashLoopBackOff for 5 minutes, more than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-crash-loop",
+            "dashboard": "/d/portfolio-workloads"
+          }
+        },
+        {
+          "uid": "backup-failed",
+          "title": "PostgreSQL backup failed or overdue",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "((time() - (kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"} or kube_cronjob_created{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"})) > 93600) or (max(kube_job_status_start_time{namespace=\"portfolio\", job_name=~\"portfolio-postgres-backup-.*\"} * on (namespace, job_name) group_left () (kube_job_failed{namespace=\"portfolio\", job_name=~\"portfolio-postgres-backup-.*\", condition=\"true\"} == 1)) > on () (max(kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"}) or on () vector(0)))",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "critical",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "The latest PostgreSQL backup failed, or none has succeeded for 26 hours.",
+            "description": "A failed run counts only while it is newer than the last success, so a later good backup resolves it. Check the backup Job's logs (Logs dashboard, app postgres-backup) and the backup directory on the host.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-backup-failed",
+            "dashboard": "/d/portfolio-workloads"
+          }
+        },
+        {
+          "uid": "error-logs",
+          "title": "Error logs",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "loki",
+              "model": {
+                "refId": "A",
+                "expr": "sum by (app) (count_over_time({namespace=\"portfolio\"} | json | __error__=\"\" | level=~\"error|fatal\" [10m]))",
+                "queryType": "instant",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [5]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "warning",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "{{ $labels.app }} logged more than 5 errors in 10 minutes.",
+            "description": "Open the Logs dashboard for {{ $labels.app }}; each line's requestId links to that request's lines.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-error-logs",
+            "dashboard": "/d/portfolio-logs"
+          }
+        },
+        {
+          "uid": "monitoring-broken",
+          "title": "Monitoring broken",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(1 - min(up{job=~\"loki|alloy|kube-state-metrics\"})) + (sum(rate(loki_distributor_lines_received_total[15m])) == bool 0) + ((sum(prometheus_tsdb_storage_blocks_bytes) + sum(prometheus_tsdb_head_chunks_storage_size_bytes) + sum(prometheus_tsdb_wal_storage_size_bytes)) > bool 4831838208)",
+                "instant": true,
+                "range": false,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Alerting",
+          "for": "15m",
+          "isPaused": false,
+          "labels": {
+            "severity": "warning",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "The monitoring stack itself is failing.",
+            "description": "Loki, Alloy, or kube-state-metrics is down, Loki has received no log lines for 15 minutes, or Prometheus's storage is above 4.5 GiB (90% of its 5 GiB volume, beyond the 4 GiB its retention allows).",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-monitoring-broken",
+            "dashboard": "/d/portfolio-workloads"
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "portfolio-hourly",
+      "folder": "Portfolio alerts",
+      "interval": "1h",
+      "rules": [
+        {
+          "uid": "argocd-token",
+          "title": "Argo CD token expiring",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 90000,
+                "to": 0
+              },
+              "datasourceUid": "loki",
+              "model": {
+                "refId": "A",
+                "expr": "sum(count_over_time({namespace=\"portfolio\", app=\"api\"} |~ \"Argo CD explorer token (expires soon|has expired)\" [25h]))",
+                "queryType": "instant",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "warning",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "The Argo CD explorer token expires soon or has expired (P6-05).",
+            "description": "Rotate it as P6-05 describes. The API logs this warning daily from 14 days before expiry, and the rule looks back 25 hours, so it stays firing until a day passes without one.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-argocd-token",
+            "dashboard": "/d/portfolio-logs"
+          }
+        }
+      ]
+    }
+  ]
+}

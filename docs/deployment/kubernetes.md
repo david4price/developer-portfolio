@@ -544,6 +544,28 @@ Argo CD keeps each in sync with `main`.
      - The four dashboards are in the Portfolio folder, and a save is refused.
      - A `requestId` in a log line opens the Logs dashboard filtered to that request.
 
+5. **Alerts (P9-06).**
+   - **Rules** in `infrastructure/helm/monitoring/alerts/` reach Grafana through the `monitoring`
+     chart's `grafana-alert-rules-<hash>` ConfigMap.
+   - **Contact point:** the `grafana-alerting-<n>` SealedSecret holds the contact point and the
+     notification policy, sealed by the owner from a local file outside the repository (the
+     private register says how). Grafana's HTTPS egress (`alertEgress`) is on in production.
+   - **Restart on change:** Grafana reads both at startup, so their names follow their content.
+     - **After changing a rule:** put the new `grafana-alert-rules-<hash>` in Grafana's values
+       (`pnpm helm:check` prints it).
+     - **After re-sealing the contact point:** seal it as `grafana-alerting-<n+1>` and name it in
+       the values. Delete the old sealed file in a later commit, once Grafana runs with the new
+       one and its contact point shows in Grafana.
+     - **Effect:** Argo CD restarts Grafana, and a Grafana pod that syncs before the new rules
+       ConfigMap exists waits for it. The Secret is optional: if Grafana starts first, it runs
+       without a contact point until `kubectl -n monitoring rollout restart deploy/grafana`.
+     - **Cleanup:** old `grafana-alert-rules-<hash>` ConfigMaps aren't pruned. Delete them by
+       hand once no pod mounts them.
+   - **Validate:**
+     - Grafana lists the nine rules in "Portfolio alerts".
+     - A test notification from the contact point reaches the owner.
+     - Each rule has fired and resolved once in a drill.
+
 **Rollback:**
 
 - `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no

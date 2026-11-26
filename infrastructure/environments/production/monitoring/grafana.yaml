@@ -101,3 +101,25 @@ dashboardProviders:
           path: /var/lib/grafana/dashboards/portfolio
 dashboardsConfigMaps:
   portfolio: grafana-dashboards
+# P9-06: alert rules and the contact point with its notification policy, in one read-only
+# provisioning directory. Grafana reads it only at startup, so both names change with their
+# content (pnpm helm:check keeps them current and prints the expected rules name):
+# - grafana-alert-rules-<hash>: the monitoring chart's ConfigMap, named after a hash of alerts/*.json;
+# - grafana-alerting-<n>: the SealedSecret, renamed on each re-seal.
+# A changed name changes this pod spec, so Argo CD restarts Grafana. A pod that syncs before the
+# new rules ConfigMap waits for it; old ConfigMaps aren't pruned (a running pod may still use one).
+extraContainerVolumes:
+  - name: alerting
+    projected:
+      sources:
+        - configMap:
+            name: grafana-alert-rules-672834d066
+        - secret:
+            name: grafana-alerting-1
+            # Optional, so Grafana (and every other alert) still starts if the Secret is missing
+            # or can't be unsealed; it then runs without a contact point until it is restarted.
+            optional: true
+extraVolumeMounts:
+  - name: alerting
+    mountPath: /etc/grafana/provisioning/alerting
+    readOnly: true

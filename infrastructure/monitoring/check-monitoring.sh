@@ -295,6 +295,41 @@ else
   fail "the production portfolio NetworkPolicies $api_policy"
 fi
 
+# Grafana reads alerting provisioning only at startup (P9-06), so the objects it mounts are named
+# after their content: the rules ConfigMap after a hash of the rule files (as the monitoring chart
+# computes it), the contact point Secret by its sealed version. Grafana's values must name both.
+echo "== alerting object names"
+rule_files=("$own_chart"/alerts/*.json)
+if ((${#rule_files[@]} == 0)); then
+  rules_name=""
+else
+  rules_name="grafana-alert-rules-$(cat "${rule_files[@]}" | sha256sum | cut -c1-10)"
+fi
+if rules_render="$(render monitoring "$own_chart" -f "$values_dir/monitoring.yaml" \
+  -s templates/grafana-alert-rules.yaml 2>/dev/null)" || [[ -z "$rules_name" ]]; then
+  rendered_rules_name="$(yq '.metadata.name // ""' <<<"$rules_render" 2>/dev/null || true)"
+  [[ "$rendered_rules_name" == "$rules_name" ]] ||
+    fail "the monitoring chart names the rules ConfigMap '$rendered_rules_name', expected '$rules_name'"
+else
+  fail "the rules ConfigMap $rules_render"
+fi
+projected="$(yq -o=json '[.extraContainerVolumes[]? | select(.name == "alerting") | .projected.sources[]]' \
+  "$values_dir/grafana.yaml")"
+[[ "$(jq -r '[.[] | .configMap.name // empty] | join(",")' <<<"$projected")" == "$rules_name" ]] ||
+  fail "grafana.yaml must mount the rules ConfigMap '$rules_name' (the rule files changed)"
+mounted_secret="$(jq -r '[.[] | .secret.name // empty] | join(",")' <<<"$projected")"
+sealed_names=""
+for sealed in "$values_dir"/secrets/grafana-alerting-*.sealedsecret.yaml; do
+  sealed_names+="$(yq '.metadata.name' "$sealed")"$'\n'
+done
+if [[ -n "$mounted_secret" ]]; then
+  # A fork without the owner's Secret drops this source and keeps the rules.
+  grep -qxF "$mounted_secret" <<<"$sealed_names" ||
+    fail "grafana.yaml mounts the contact point Secret '$mounted_secret', which isn't sealed in secrets/"
+  [[ "$(jq -r '.[] | select(.secret) | .secret.optional // false' <<<"$projected")" == true ]] ||
+    fail "the contact point Secret must be optional, so Grafana starts without it"
+fi
+
 # The local stack (compose.observability.yaml, P9-08) runs exactly the cluster's images.
 echo "== local stack images"
 if ! compose_images="$(yq '.services[].image' "$root/compose.observability.yaml")"; then
