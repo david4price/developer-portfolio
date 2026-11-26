@@ -121,4 +121,4 @@ extraVolumeMounts:
 # sealed contact point changes with them, so Argo CD restarts Grafana. pnpm helm:check fails when
 # it is stale; the expected value is in its output.
 podAnnotations:
-  checksum/alerting: 04c1978ac0d123d743ddfad9c4da6b6e73e5866557b3186e7269bd857a050e7d
+  checksum/alerting: 563a2c9557657c4977b1e55a1b4a1a3216bbcc56e163bfa954cd47bb796e725a
