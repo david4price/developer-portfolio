@@ -451,7 +451,8 @@ Argo CD keeps each in sync with `main`.
      gives Alloy's account in `monitoring` one Role in `portfolio`: `get`/`list`/`watch` on pods
      and `get` on `pods/log`, nothing else (`pnpm helm:check` compares it exactly). Argo CD syncs
      it from `main`.
-   - **Alloy**, after that sync: `kubectl apply -f infrastructure/argocd/monitoring/alloy.yaml`.
+   - **Alloy** (applied 2026-11-25), after that sync:
+     `kubectl apply -f infrastructure/argocd/monitoring/alloy.yaml`.
    - **Validate:**
      - Alloy's account reads pods and their logs in `portfolio` and `monitoring`, and nothing
        more. Expect `yes` for the first two commands and `no` for the rest:
@@ -497,7 +498,7 @@ Argo CD keeps each in sync with `main`.
      - `monitoring.readers.metrics` gives Prometheus pod discovery (`list`/`watch` on pods) and
        kube-state-metrics `list`/`watch` on the kinds it reports, both in `portfolio`.
      - `pnpm helm:check` compares both Roles exactly.
-   - **Prometheus and kube-state-metrics**, after that sync:
+   - **Prometheus and kube-state-metrics** (applied 2026-11-26), after that sync:
      `kubectl apply -f infrastructure/argocd/monitoring/kube-state-metrics.yaml -f infrastructure/argocd/monitoring/prometheus.yaml`.
    - **Validate:**
      - Every target is up: `kubectl -n monitoring port-forward svc/prometheus-server 9090:80`,

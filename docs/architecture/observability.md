@@ -2,12 +2,25 @@
 
 **Status: Proposed.** The plan for [ADR 0004](adr-0004-observability-stack.md). Each section
 becomes **Confirmed** when the Phase 9 task that builds it is done
-([roadmap](../implementation-roadmap.md#phase-9-observability-19)).
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
-**Confirmed today:** JSON logs with request ids (P2-04), the API's Prometheus metrics on a loopback
-port (P7-01), and the K3s API audit log on the host (P7-06). The audit log stays root-only on the
-host and is not shipped to Loki. **In Git, not applied (P9-02):** the manifests described under
-[Layout](#layout), checked by `pnpm helm:check`.
+**Confirmed:**
+
+- **Before Phase 9:** JSON logs with request ids (P2-04), the API's Prometheus metrics (P7-01),
+  and the K3s API audit log on the host (P7-06). The audit log stays root-only on the host and is
+  not shipped to Loki.
+- **In the cluster (P9-04, 2026-11-26):** Prometheus and kube-state-metrics, with the API's metrics
+  opened to Prometheus alone. Applied so far: the `monitoring` project, its NetworkPolicies and
+  Roles, and the `loki`, `alloy`, `prometheus`, and `kube-state-metrics` Applications.
+  `grafana.yaml` is in Git but not applied.
+- **In CI (P9-08):** the local Compose stack (`compose.observability.yaml`), never started on
+  the reference host.
+
+**Live, not yet Confirmed:** Loki and Alloy (P9-03) collect logs; P9-03 is done once a day of
+collected logs passes its privacy check.
+
+**Proposed:** Grafana (P9-05), alerts (P9-06), capacity and failure checks (P9-07), and the
+runbooks and final documentation (P9-09).
 
 ## Shape
 
@@ -98,6 +111,9 @@ on purpose.
   (which reads Loki's own metrics), and other Loki pods (itself, through its Services).
 
 ## Metrics
+
+**Confirmed (P9-04, 2026-11-26):** live and validated
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
 - **Scrape path:** the chart gains `api.metrics.scrape.enabled`. When it is on, the API sets
   `API_METRICS_HOST` to `0.0.0.0` (no code change, since the setting is already a host string),
