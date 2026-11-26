@@ -297,11 +297,10 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Next up, in order**
 
-1. **P9-03** 🔒 (namespace, policies, and Loki are live): merge `feat/p9-03-logs` so Argo CD
-   syncs the portfolio chart's log reader Role, then apply Alloy and validate, including a day of
-   collected logs checked for private data
-   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). **P9-08**
-   (local stack) can run alongside P9-03 to P9-06.
+1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
+   a day of collected logs, scheduled for 2026-11-27
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). Then **P9-04**
+   (metrics).
 2. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
