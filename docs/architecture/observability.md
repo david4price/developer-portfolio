@@ -231,8 +231,12 @@ and dashboards are validated on the tailnet; the task ticks with P9-03
 
 ## Alerts
 
-Grafana-managed rules, evaluated every minute. Thresholds are starting points that P9-06 tunes
-against real traffic.
+Grafana-managed rules in `infrastructure/helm/monitoring/alerts/portfolio.json` (folder "Portfolio
+alerts", one group evaluated every minute), provisioned with UI edits disabled. Each has a
+severity, a summary, a link to its dashboard, and a runbook link (`docs/operations/runbooks.md`,
+written in P9-09). Thresholds are starting points that P9-06 tunes against real traffic. Without
+data, a rule stays OK, except API down and Monitoring broken, which treat silence (and query
+errors) as firing.
 
 | Alert                  | Source     | Condition (starting point)                                                                     |
 | ---------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
@@ -246,10 +250,16 @@ against real traffic.
 | Argo CD token expiring | Loki       | the P6-05 reminder's warning or error line appears (once a day)                                |
 | Monitoring broken      | Prometheus | Loki or Alloy not ingesting for 15 min, or Prometheus volume above 80%                         |
 
-- **Contact point:** the owner's choice (see the roadmap's "Waiting on the owner"). Its whole
-  definition, including its type, destination, and any token, comes from a SealedSecret mounted
-  as a provisioning file, so nothing about it is in Git. Forks get no contact point, and alerts
-  show in Grafana only.
+- **Contact point:** the owner's chat bot. Its whole definition (type, destination, token) and
+  the notification policy that routes every alert to it come from the `grafana-alerting`
+  SealedSecret, so nothing about it is in Git. Policy: grouped by alert, repeated every 4 hours
+  while firing, and resolved messages are sent. Forks get no contact point, and alerts show in
+  Grafana only.
+- **Loading:** Grafana mounts the rules ConfigMap and the optional Secret in one read-only
+  provisioning directory and reads it at startup. Its values carry a checksum of both, which
+  `pnpm helm:check` keeps current, so a changed rule restarts Grafana.
+- **Egress:** `networkPolicy.grafana.alertEgress` opens HTTPS (443) outside private ranges for
+  Grafana alone.
 - **Known gap:** if the node is down, nothing here can alert. An external uptime check is a
   separate decision.
 

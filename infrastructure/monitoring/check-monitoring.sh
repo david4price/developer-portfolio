@@ -295,6 +295,17 @@ else
   fail "the production portfolio NetworkPolicies $api_policy"
 fi
 
+# Grafana reads alerting provisioning only at startup (P9-06), so its values carry a checksum of the
+# rule files and the sealed contact point; a stale one would leave a changed rule unloaded.
+echo "== alerting checksum"
+alerting_files=("$own_chart"/alerts/*.json)
+alerting_secret="$values_dir/secrets/grafana-alerting.sealedsecret.yaml"
+[[ -f "$alerting_secret" ]] && alerting_files+=("$alerting_secret")
+expected_checksum="$(cat "${alerting_files[@]}" | sha256sum | cut -d' ' -f1)"
+actual_checksum="$(yq '.podAnnotations["checksum/alerting"] // ""' "$values_dir/grafana.yaml")"
+[[ "$actual_checksum" == "$expected_checksum" ]] ||
+  fail "grafana.yaml's podAnnotations checksum/alerting is '$actual_checksum'; the alert rules and contact point need '$expected_checksum'"
+
 # The local stack (compose.observability.yaml, P9-08) runs exactly the cluster's images.
 echo "== local stack images"
 if ! compose_images="$(yq '.services[].image' "$root/compose.observability.yaml")"; then

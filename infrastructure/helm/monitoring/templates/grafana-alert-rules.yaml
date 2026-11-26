@@ -1,0 +1,17 @@
+{{- /* P9-06: the alert rules in alerts/*.json, provisioned by Grafana from a projected volume that
+also holds the optional contact point Secret (grafana-alerting). Grafana reads them at startup, so
+its values carry a checksum of these files, which pnpm helm:check keeps current. */}}
+{{- $rules := .Files.Glob "alerts/*.json" }}
+{{- if $rules }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+data:
+  {{- range $path, $content := $rules }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -2,7 +2,10 @@
 
 Alert rule groups in Grafana's file-provisioning format, as JSON (one file per group or more),
 provisioned in the cluster (P9-06) and in the local stack (`compose.observability.yaml`, P9-08).
-Contact points never go here: the cluster's comes from a SealedSecret.
+Contact points never go here: the cluster's, with its notification policy, comes from the
+`grafana-alerting` SealedSecret. Grafana reads these files at startup, so after a change update
+`checksum/alerting` in `environments/production/monitoring/grafana.yaml` (`pnpm helm:check` prints
+the expected value).
 
 `pnpm check` runs `scripts/check-monitoring-files.mjs` on every file here. Files sit at the top level
 (Grafana doesn't read subdirectories here), and YAML is refused so every rule gets checked. A file

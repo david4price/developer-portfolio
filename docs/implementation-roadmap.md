@@ -316,9 +316,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `docs/p9-05-done` (records P9-05 as live; it ticks with P9-03). PRs #65 to #80 are merged; Loki, Alloy,
-Prometheus, kube-state-metrics, and Grafana are live, and P9-03's privacy check is scheduled for
-2026-11-27.
+**Branch in progress:** `feat/p9-06-alerts` (the nine rules, their wiring, and the chat bot contact
+point). PRs #65 to #81 are merged; P9-03's privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -330,8 +329,8 @@ Open every PR against `main`.
 - [x] `portfolio-api` and `portfolio-worker` GHCR packages are public (anonymous pull verified).
 - [x] Profile content for About and Experience (P2-12, 2026-11-19).
 - [x] K3s API audit logging applied with `sudo` (P7-06, 2026-11-19).
-- [ ] Phase 9 alert contact point (P9-06): the owner's chat bot, email, or another Grafana
-      contact point. It goes in a SealedSecret; nothing about it is committed.
+- [x] Phase 9 alert contact point (P9-06): the owner's chat bot (chosen 2026-11-26); its token
+      and chat go in a SealedSecret from a local file, never committed.
 - [x] Phase 9 Grafana access (P9-05): `tailscale serve --https=8444` (2026-11-26).
 - [ ] Phase 9 retention: confirm 30 days for logs and metrics (configured that way).
 

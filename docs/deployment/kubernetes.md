@@ -544,6 +544,20 @@ Argo CD keeps each in sync with `main`.
      - The four dashboards are in the Portfolio folder, and a save is refused.
      - A `requestId` in a log line opens the Logs dashboard filtered to that request.
 
+5. **Alerts (P9-06).**
+   - **Rules** in `infrastructure/helm/monitoring/alerts/` reach Grafana through the `monitoring`
+     chart's `grafana-alert-rules` ConfigMap.
+   - **Contact point:** the `grafana-alerting` SealedSecret holds the contact point and the
+     notification policy, sealed by the owner from a local file outside the repository (the
+     private register says how). Grafana's HTTPS egress (`alertEgress`) is on in production.
+   - **Restart on change:** after changing a rule or re-sealing the contact point, update
+     `checksum/alerting` in Grafana's values. `pnpm helm:check` prints the expected value, and
+     Argo CD then restarts Grafana.
+   - **Validate:**
+     - Grafana lists the nine rules in "Portfolio alerts".
+     - A test notification from the contact point reaches the owner.
+     - Each rule has fired and resolved once in a drill.
+
 **Rollback:**
 
 - `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no

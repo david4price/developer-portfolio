@@ -101,3 +101,24 @@ dashboardProviders:
           path: /var/lib/grafana/dashboards/portfolio
 dashboardsConfigMaps:
   portfolio: grafana-dashboards
+# P9-06: alert rules (the monitoring chart's grafana-alert-rules ConfigMap) and the contact point
+# with its notification policy (the grafana-alerting SealedSecret; optional, so a fork without it
+# still gets the rules, shown in Grafana only), in one read-only provisioning directory.
+extraContainerVolumes:
+  - name: alerting
+    projected:
+      sources:
+        - configMap:
+            name: grafana-alert-rules
+        - secret:
+            name: grafana-alerting
+            optional: true
+extraVolumeMounts:
+  - name: alerting
+    mountPath: /etc/grafana/provisioning/alerting
+    readOnly: true
+# Grafana reads alerting provisioning only at startup: this checksum of the rule files and the
+# sealed contact point changes with them, so Argo CD restarts Grafana. pnpm helm:check fails when
+# it is stale; the expected value is in its output.
+podAnnotations:
+  checksum/alerting: 04c1978ac0d123d743ddfad9c4da6b6e73e5866557b3186e7269bd857a050e7d

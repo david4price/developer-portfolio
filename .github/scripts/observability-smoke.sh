@@ -116,6 +116,14 @@ found="$(grafana_get /api/search --data-urlencode type=dash-db | jq length)"
 [[ "$found" == "$expected" ]] || fail "Grafana shows $found dashboard(s), the repository has $expected"
 echo "ok: $found dashboard(s) provisioned"
 
+# P9-06: every alert rule in the repository is provisioned (the local stack has no contact point).
+expected_rules="$(jq -s '[.[].groups[].rules[]] | length' infrastructure/helm/monitoring/alerts/*.json)"
+found_rules="$(grafana_get /api/v1/provisioning/alert-rules | jq length)" ||
+  fail "Grafana's provisioned alert rules didn't load"
+[[ "$found_rules" == "$expected_rules" ]] ||
+  fail "Grafana provisioned $found_rules alert rule(s), the repository has $expected_rules"
+echo "ok: $found_rules alert rule(s) provisioned"
+
 # Read-only and private: provisioned dashboards refuse saves, and nothing answers anonymously.
 api_dashboard="$(grafana_get /api/dashboards/uid/portfolio-api)" ||
   fail "the Portfolio API dashboard didn't load"
