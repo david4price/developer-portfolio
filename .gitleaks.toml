@@ -6,4 +6,6 @@ useDefault = true
 
 [allowlist]
 description = "SealedSecret ciphertext (ADR 0001)"
-paths = ['''^infrastructure/environments/[^/]+/secrets/[^/]+\.sealedsecret\.yaml$''']
+# The portfolio namespace's in environments/<env>/secrets/, the monitoring namespace's (P9-05) in
+# environments/<env>/monitoring/secrets/.
+paths = ['''^infrastructure/environments/[^/]+/(monitoring/)?secrets/[^/]+\.sealedsecret\.yaml$''']
