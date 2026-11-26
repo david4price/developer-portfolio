@@ -2,16 +2,23 @@
 // stack (compose.observability.yaml, P9-08) provision from Git, so a broken file fails `pnpm check`
 // instead of a Grafana start. Rules: infrastructure/monitoring/{dashboards,alerts}/README.md.
 //   node scripts/check-monitoring-files.mjs
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The data sources both Grafanas provision, by uid. */
 export const DATASOURCE_UIDS = new Set(['prometheus', 'loki']);
+/** Grafana's built-in sources (annotations, mixed and dashboard panels), present in UI exports. */
+export const BUILT_IN_UIDS = new Set([
+  '-- Grafana --',
+  'grafana',
+  '-- Mixed --',
+  '-- Dashboard --',
+]);
 /** Grafana's server-side expressions (math, reduce, threshold) in alert rules. */
 const EXPRESSION_UID = '__expr__';
 const UID = /^[A-Za-z0-9_-]{1,40}$/;
-const VARIABLE = /^\$\{?[A-Za-z0-9_]+\}?$/;
+const VARIABLE = /^\$\{?([A-Za-z0-9_]+)\}?$/;
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -52,8 +59,27 @@ export function dashboardProblems(dashboard) {
   if (dashboard.id !== undefined && dashboard.id !== null) {
     problems.push('must have no id (Grafana assigns its own)');
   }
+  if (dashboard.__inputs !== undefined) {
+    problems.push(
+      'is an "export for sharing externally" (__inputs); export it without that option',
+    );
+  }
+  // A `${name}` data source must be one of the dashboard's own data source variables.
+  const variables = new Set(
+    (isObject(dashboard.templating) && Array.isArray(dashboard.templating.list)
+      ? dashboard.templating.list
+      : []
+    )
+      .filter((variable) => isObject(variable) && variable.type === 'datasource')
+      .map((variable) => variable.name),
+  );
   for (const uid of new Set(datasourceUids(dashboard))) {
-    if (!DATASOURCE_UIDS.has(uid) && !VARIABLE.test(uid)) {
+    const variable = VARIABLE.exec(uid)?.[1];
+    if (variable !== undefined) {
+      if (!variables.has(variable)) {
+        problems.push(`uses "${uid}", which isn't one of its data source variables`);
+      }
+    } else if (!DATASOURCE_UIDS.has(uid) && !BUILT_IN_UIDS.has(uid)) {
       problems.push(`uses data source "${uid}", which isn't provisioned`);
     }
   }
@@ -124,13 +150,20 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
     if (first) problems.push(`${file}: ${kind} uid "${uid}" is also used in ${first}`);
     else seen[kind].set(uid, file);
   };
-  const jsonFiles = (dir) =>
+  // Every file below a directory, as Grafana's dashboard provider walks subdirectories too.
+  const filesIn = (dir) =>
     readdirSync(dir)
-      .filter((name) => name.endsWith('.json'))
-      .sort();
+      .sort()
+      .flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? filesIn(path) : [path];
+      });
+  // Grafana also loads YAML alert rules; this repository keeps them JSON so they are checked.
+  for (const file of filesIn(alertsDir).filter((path) => /\.ya?ml$/.test(path))) {
+    problems.push(`${file}: alert rules here are JSON; convert it to .json`);
+  }
 
-  for (const name of jsonFiles(dashboardsDir)) {
-    const file = join(dashboardsDir, name);
+  for (const file of filesIn(dashboardsDir).filter((path) => path.endsWith('.json'))) {
     const parsed = parseJson(readFileSync(file, 'utf8'));
     if (parsed.error) {
       problems.push(`${file}: ${parsed.error}`);
@@ -139,8 +172,7 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
     problems.push(...dashboardProblems(parsed.value).map((problem) => `${file}: ${problem}`));
     if (isObject(parsed.value)) remember('dashboard', parsed.value.uid, file);
   }
-  for (const name of jsonFiles(alertsDir)) {
-    const file = join(alertsDir, name);
+  for (const file of filesIn(alertsDir).filter((path) => path.endsWith('.json'))) {
     const parsed = parseJson(readFileSync(file, 'utf8'));
     if (parsed.error) {
       problems.push(`${file}: ${parsed.error}`);

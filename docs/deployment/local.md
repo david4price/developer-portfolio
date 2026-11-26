@@ -223,10 +223,13 @@ docker compose -f compose.full.yaml -f compose.observability.yaml down   # add -
   - **Kept for 7 days.**
 - **Only Grafana is published,** on `127.0.0.1:${GRAFANA_PORT}` (3300). Loki and Prometheus are
   reached through it (Explore).
-- **`GRAFANA_ADMIN_PASSWORD`** is required. `pnpm bootstrap` generates it with the database
-  password; with an older `.env`, add it by hand (see `.env.example`).
+- **`GRAFANA_ADMIN_PASSWORD`** is required. `pnpm bootstrap` generates its own value; with an
+  older `.env`, add it by hand (see `.env.example`). Grafana keeps the password it was first
+  started with in its data volume: after changing it, run `down -v` (which also drops the logs
+  and metrics) or reset it from Grafana.
 - **The Docker socket is root-equivalent** on your machine, even mounted read-only. Use this on
-  your own computer, never on a shared host.
+  your own computer, never on a shared host. With rootless Docker, Colima, or another socket
+  path, set `DOCKER_SOCKET`.
 - **Not included:** kube-state-metrics (there is no Kubernetes), and so the pod restart and Job
   panels stay empty.
 - **Dashboards and alert rules** live in `infrastructure/monitoring/dashboards/` and

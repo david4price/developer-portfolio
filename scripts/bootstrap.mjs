@@ -54,8 +54,14 @@ async function main() {
       );
     }
     copyFileSync(join(root, '.env.example'), envPath);
-    const password = generatePassword();
-    writeFileSync(envPath, readFileSync(envPath, 'utf8').replaceAll(PLACEHOLDER, password));
+    // Grafana's admin password gets its own value, then the database's fills the rest.
+    const env = readFileSync(envPath, 'utf8')
+      .replace(
+        `GRAFANA_ADMIN_PASSWORD=${PLACEHOLDER}`,
+        `GRAFANA_ADMIN_PASSWORD=${generatePassword()}`,
+      )
+      .replaceAll(PLACEHOLDER, generatePassword());
+    writeFileSync(envPath, env);
     ok('.env created from .env.example with generated database and Grafana passwords');
   }
   const env = readEnvFile(envPath) ?? {};

@@ -36,13 +36,57 @@ const alertFile = (rules = [rule()]) => ({
 });
 
 describe('dashboards', () => {
-  it('accepts a dashboard on the provisioned data sources and template variables', () => {
+  it('accepts a dashboard on the provisioned data sources and its own data source variables', () => {
     assert.deepEqual(dashboardProblems(dashboard()), []);
     assert.deepEqual(
       dashboardProblems(
-        dashboard({ id: null, templating: { list: [{ datasource: { uid: '${datasource}' } }] } }),
+        dashboard({
+          id: null,
+          templating: { list: [{ name: 'logs', type: 'datasource', query: 'loki' }] },
+          panels: [{ datasource: { uid: '${logs}' } }, { datasource: { uid: '$logs' } }],
+        }),
       ),
       [],
+    );
+  });
+
+  it("accepts what Grafana's UI export adds: built-in annotations, mixed and dashboard panels", () => {
+    const exported = dashboard({
+      id: null,
+      annotations: {
+        list: [
+          {
+            builtIn: 1,
+            datasource: { type: 'grafana', uid: '-- Grafana --' },
+            name: 'Annotations & Alerts',
+          },
+        ],
+      },
+      panels: [
+        {
+          datasource: { type: 'datasource', uid: '-- Mixed --' },
+          targets: [{ datasource: { uid: 'loki' } }],
+        },
+        { datasource: { type: 'datasource', uid: '-- Dashboard --' } },
+        { datasource: { type: 'datasource', uid: 'grafana' } },
+      ],
+    });
+    assert.deepEqual(dashboardProblems(exported), []);
+  });
+
+  it('rejects an external-sharing export and variables the dashboard does not define', () => {
+    assert.deepEqual(
+      dashboardProblems(
+        dashboard({
+          __inputs: [{ name: 'DS_PROMETHEUS', type: 'datasource' }],
+          panels: [{ datasource: { uid: '${DS_PROMETHEUS}' } }],
+          templating: { list: [{ name: 'DS_PROMETHEUS', type: 'query' }] },
+        }),
+      ),
+      [
+        'is an "export for sharing externally" (__inputs); export it without that option',
+        'uses "${DS_PROMETHEUS}", which isn\'t one of its data source variables',
+      ],
     );
   });
 
@@ -120,6 +164,23 @@ describe('checkMonitoringFiles', () => {
       dashboards: 0,
       rules: 0,
     });
+  });
+
+  it('checks dashboards in subdirectories and refuses YAML alert rules', () => {
+    const { dashboardsDir, alertsDir } = dirs('nested');
+    mkdirSync(join(dashboardsDir, 'api'));
+    writeFileSync(
+      join(dashboardsDir, 'api', 'overview.json'),
+      JSON.stringify(dashboard({ uid: '' })),
+    );
+    writeFileSync(join(alertsDir, 'rules.yaml'), 'apiVersion: 1');
+    const { problems } = checkMonitoringFiles({ dashboardsDir, alertsDir });
+    assert.equal(problems.length, 2);
+    assert.match(
+      problems[0],
+      /alerts\/rules\.yaml: alert rules here are JSON; convert it to \.json$/,
+    );
+    assert.match(problems[1], /dashboards\/api\/overview\.json: needs a uid/);
   });
 
   it('counts valid files and reports invalid JSON and duplicate uids by file', () => {

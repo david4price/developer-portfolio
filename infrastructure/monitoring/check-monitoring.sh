@@ -268,7 +268,12 @@ else
   for image in $compose_images; do
     digest="${image##*@}"
     [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { fail "local stack image $image has no digest"; continue; }
-    grep -qF "@$digest" "$work/images" ||
+    # Repository and digest must match (the digest is what runs). The tag isn't compared: some
+    # charts render the image by digest alone, without one.
+    repository="${image%@*}"
+    repository="${repository%:*}"
+    repository="${repository#docker.io/}"
+    grep -qxE "(docker\.io/)?${repository//./\\.}(:[^@]+)?@$digest" "$work/images" ||
       fail "local stack image $image isn't one the cluster's charts render"
   done
 fi

@@ -1,6 +1,7 @@
 # Opt-in local observability (P9-08): the cluster's Grafana, Loki, Prometheus, and Alloy images
 # (same digests) beside the fully containerized stack. Grafana on http://localhost:3300 (admin,
-# GRAFANA_ADMIN_PASSWORD from .env); nothing else is published.
+# GRAFANA_ADMIN_PASSWORD from .env, as it was when grafana-data was created); nothing else is
+# published.
 #   docker compose -f compose.full.yaml -f compose.observability.yaml up -d --build
 #   docker compose -f compose.full.yaml -f compose.observability.yaml down      # -v drops the data
 #
@@ -34,10 +35,11 @@ services:
       - --disable-reporting
     environment:
       # Only this Compose project's containers are collected.
-      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:?Compose 2.20 or newer sets COMPOSE_PROJECT_NAME}
     volumes:
       - ./infrastructure/monitoring/local/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Rootless Docker, Colima, and others keep the socket elsewhere: set DOCKER_SOCKET.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - alloy-data:/var/lib/alloy/data
     depends_on:
       - loki
@@ -57,7 +59,11 @@ services:
     <<: *observability
     image: docker.io/grafana/grafana:13.3.1-distroless@sha256:54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
     environment:
+      # Applied when grafana-data is first created; a later change needs `down -v` (or
+      # `grafana cli admin reset-admin-password` in the container).
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      # Console only: the root filesystem is read-only.
+      GF_LOG_MODE: console
       GF_USERS_ALLOW_SIGN_UP: 'false'
       GF_USERS_ALLOW_ORG_CREATE: 'false'
       GF_AUTH_ANONYMOUS_ENABLED: 'false'

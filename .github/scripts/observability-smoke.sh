@@ -11,19 +11,34 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 compose=(docker compose -f compose.full.yaml -f compose.observability.yaml)
 [[ -f .env ]] || { echo ".env is missing (copy .env.example)" >&2; exit 1; }
-env_value() { sed -n "s/^$1=//p" .env | tail -1; }
-api="http://127.0.0.1:$(env_value API_PORT)"
-grafana="http://127.0.0.1:$(env_value GRAFANA_PORT)"
-password="$(env_value GRAFANA_ADMIN_PASSWORD)"
+# setting <name> <default>: as Compose resolves it: the shell's value, then .env's, then the default.
+setting() {
+  local value="${!1:-}"
+  [[ -n "$value" ]] || value="$(sed -n "s/^$1=//p" .env | tail -1)"
+  echo "${value:-$2}"
+}
+api="http://127.0.0.1:$(setting API_PORT 3001)"
+grafana="http://127.0.0.1:$(setting GRAFANA_PORT 3300)"
+password="$(setting GRAFANA_ADMIN_PASSWORD '')"
 [[ -n "$password" && "$password" != change-me-local-only ]] ||
   { echo "set GRAFANA_ADMIN_PASSWORD in .env" >&2; exit 1; }
 
-on_failure() {
-  echo "--- observability logs" >&2
-  "${compose[@]}" ps -a >&2 || true
-  "${compose[@]}" logs --no-color --tail=60 loki alloy prometheus grafana >&2 || true
+started=false
+# On any failure once the stack is up: the observability containers' state and logs.
+on_exit() {
+  local status=$?
+  if ((status != 0)) && [[ "$started" == true ]]; then
+    echo "--- observability logs" >&2
+    "${compose[@]}" ps -a >&2 || true
+    "${compose[@]}" logs --no-color --tail=60 loki alloy prometheus grafana >&2 || true
+  fi
 }
-trap on_failure ERR
+trap on_exit EXIT
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
 
 # wait_for <seconds> <description> <command…>: retries the command every 3 s until it succeeds.
 wait_for() {
@@ -46,15 +61,19 @@ grafana_get() {
   curl -fsS -G -u "admin:$password" "$grafana$path" "$@"
 }
 
+started=true
 "${compose[@]}" up -d --build
 
 wait_for 180 "API ready" curl -fsS "$api/api/v1/health/ready"
 request_id="$(curl -fsS -D - -o /dev/null "$api/api/v1/health" |
   tr -d '\r' | awk 'tolower($1) == "x-request-id:" { print $2 }')"
-[[ -n "$request_id" ]] || { echo "FAIL: the API returned no x-request-id" >&2; exit 1; }
+[[ -n "$request_id" ]] || fail "the API returned no x-request-id"
 echo "ok: request $request_id"
 
 wait_for 90 "Grafana healthy" curl -fsS "$grafana/api/health"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:$password" "$grafana/api/user")"
+[[ "$status" == 200 ]] || fail "Grafana answered $status to admin login. The password is set when \
+grafana-data is created; after changing GRAFANA_ADMIN_PASSWORD, run down -v (or reset it in Grafana)"
 
 prometheus_has_api() {
   grafana_get /api/datasources/proxy/uid/prometheus/api/v1/query \
@@ -78,12 +97,12 @@ loki_has_monitoring() {
 wait_for 60 "Loki labels the stack's own logs namespace=monitoring" loki_has_monitoring
 
 # Provisioned files load: data sources are read-only, and every committed dashboard is present.
-grafana_get /api/datasources | jq -e '[.[] | .uid] | sort == ["loki", "prometheus"]' >/dev/null
+grafana_get /api/datasources | jq -e '[.[] | .uid] | sort == ["loki", "prometheus"]' >/dev/null ||
+  fail "Grafana's data sources aren't exactly the provisioned loki and prometheus"
 echo "ok: exactly the two provisioned data sources"
 expected="$(find infrastructure/monitoring/dashboards -name '*.json' | wc -l)"
 found="$(grafana_get /api/search --data-urlencode type=dash-db | jq length)"
-[[ "$found" == "$expected" ]] ||
-  { echo "FAIL: Grafana shows $found dashboard(s), the repository has $expected" >&2; exit 1; }
+[[ "$found" == "$expected" ]] || fail "Grafana shows $found dashboard(s), the repository has $expected"
 echo "ok: $found dashboard(s) provisioned"
 
 echo "observability smoke test passed"
