@@ -195,7 +195,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m])))",
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m]))) and on () (sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m])) > 0)",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -253,7 +253,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "(sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 3) or ((sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1)) or (max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{namespace=~\"portfolio|monitoring\", reason=\"CrashLoopBackOff\"}) == 1)",
+                "expr": "(sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 3) or ((sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1)) or (count_over_time((max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{namespace=~\"portfolio|monitoring\", reason=\"CrashLoopBackOff\"}) == 1)[5m:1m]) >= 5)",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -292,7 +292,7 @@
           },
           "annotations": {
             "summary": "{{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is restarting.",
-            "description": "Waiting in CrashLoopBackOff, more than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
+            "description": "Waiting in CrashLoopBackOff for 5 minutes, more than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-crash-loop",
             "__dashboardUid__": "portfolio-workloads"
           }
@@ -413,63 +413,6 @@
           }
         },
         {
-          "uid": "argocd-token",
-          "title": "Argo CD token expiring",
-          "condition": "C",
-          "data": [
-            {
-              "refId": "A",
-              "relativeTimeRange": {
-                "from": 90000,
-                "to": 0
-              },
-              "datasourceUid": "loki",
-              "model": {
-                "refId": "A",
-                "expr": "sum(count_over_time({namespace=\"portfolio\", app=\"api\"} |~ \"Argo CD explorer token (expires soon|has expired)\" [25h]))",
-                "queryType": "instant",
-                "intervalMs": 60000,
-                "maxDataPoints": 43200
-              }
-            },
-            {
-              "refId": "C",
-              "relativeTimeRange": {
-                "from": 0,
-                "to": 0
-              },
-              "datasourceUid": "__expr__",
-              "model": {
-                "refId": "C",
-                "type": "threshold",
-                "expression": "A",
-                "conditions": [
-                  {
-                    "evaluator": {
-                      "type": "gt",
-                      "params": [0]
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "noDataState": "OK",
-          "execErrState": "Error",
-          "for": "0s",
-          "isPaused": false,
-          "labels": {
-            "severity": "warning",
-            "service": "portfolio"
-          },
-          "annotations": {
-            "summary": "The Argo CD explorer token expires soon or has expired (P6-05).",
-            "description": "Rotate it as P6-05 describes. The API logs this warning daily from 14 days before expiry, and the rule looks back 25 hours, so it stays firing until a day passes without one.",
-            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-argocd-token",
-            "__dashboardUid__": "portfolio-logs"
-          }
-        },
-        {
           "uid": "monitoring-broken",
           "title": "Monitoring broken",
           "condition": "C",
@@ -525,6 +468,71 @@
             "description": "Loki, Alloy, or kube-state-metrics is down, Loki has received no log lines for 15 minutes, or Prometheus's storage is above 4.5 GiB (90% of its 5 GiB volume, beyond the 4 GiB its retention allows).",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-monitoring-broken",
             "__dashboardUid__": "portfolio-workloads"
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "portfolio-hourly",
+      "folder": "Portfolio alerts",
+      "interval": "1h",
+      "rules": [
+        {
+          "uid": "argocd-token",
+          "title": "Argo CD token expiring",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 90000,
+                "to": 0
+              },
+              "datasourceUid": "loki",
+              "model": {
+                "refId": "A",
+                "expr": "sum(count_over_time({namespace=\"portfolio\", app=\"api\"} |~ \"Argo CD explorer token (expires soon|has expired)\" [25h]))",
+                "queryType": "instant",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [0]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "isPaused": false,
+          "labels": {
+            "severity": "warning",
+            "service": "portfolio"
+          },
+          "annotations": {
+            "summary": "The Argo CD explorer token expires soon or has expired (P6-05).",
+            "description": "Rotate it as P6-05 describes. The API logs this warning daily from 14 days before expiry, and the rule looks back 25 hours, so it stays firing until a day passes without one.",
+            "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-argocd-token",
+            "__dashboardUid__": "portfolio-logs"
           }
         }
       ]

@@ -259,9 +259,11 @@ errors) as firing.
   provisioning directory and reads it at startup, so both are named after their content:
   `grafana-alert-rules-<hash of the rule files>` and `grafana-alerting-<n>`, renamed on each
   re-seal. Grafana's values name both (`pnpm helm:check` checks them), so a change restarts
-  Grafana. A Grafana pod that syncs before the new object exists waits for it rather than loading
-  stale content. The Secret is required in production; a fork without it drops the secret source
-  and keeps the rules.
+  Grafana.
+  - **New rules ConfigMap:** a Grafana pod that syncs before it exists waits for it rather than
+    loading stale rules. Old ConfigMaps aren't pruned, because a running pod may still mount one.
+  - **Contact point Secret:** optional, so Grafana and every alert still start if it's missing or
+    can't be unsealed (then without a contact point, until a restart). A fork drops the source.
 - **Egress:** `networkPolicy.grafana.alertEgress` opens HTTPS (443) outside private ranges for
   Grafana alone.
 - **Known gap:** if the node is down, nothing here can alert. An external uptime check is a

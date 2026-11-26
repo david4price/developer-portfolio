@@ -299,25 +299,36 @@ fi
 # after their content: the rules ConfigMap after a hash of the rule files (as the monitoring chart
 # computes it), the contact point Secret by its sealed version. Grafana's values must name both.
 echo "== alerting object names"
-rules_name="grafana-alert-rules-$( (cd "$own_chart/alerts" && LC_ALL=C ls ./*.json 2>/dev/null | LC_ALL=C sort |
-  xargs -r cat) </dev/null | sha256sum | cut -c1-10)"
-rendered_rules_name="$(helm template monitoring "$own_chart" --namespace "$namespace" \
-  -f "$values_dir/monitoring.yaml" -s templates/grafana-alert-rules.yaml 2>/dev/null | yq '.metadata.name')"
-[[ "$rendered_rules_name" == "$rules_name" ]] ||
-  fail "the monitoring chart names the rules ConfigMap '$rendered_rules_name', expected '$rules_name'"
-projected="$(yq -o=json '.extraContainerVolumes[] | select(.name == "alerting") | .projected.sources' \
+rule_files=("$own_chart"/alerts/*.json)
+if ((${#rule_files[@]} == 0)); then
+  rules_name=""
+else
+  rules_name="grafana-alert-rules-$(cat "${rule_files[@]}" | sha256sum | cut -c1-10)"
+fi
+if rules_render="$(render monitoring "$own_chart" -f "$values_dir/monitoring.yaml" \
+  -s templates/grafana-alert-rules.yaml 2>/dev/null)" || [[ -z "$rules_name" ]]; then
+  rendered_rules_name="$(yq '.metadata.name // ""' <<<"$rules_render" 2>/dev/null || true)"
+  [[ "$rendered_rules_name" == "$rules_name" ]] ||
+    fail "the monitoring chart names the rules ConfigMap '$rendered_rules_name', expected '$rules_name'"
+else
+  fail "the rules ConfigMap $rules_render"
+fi
+projected="$(yq -o=json '[.extraContainerVolumes[]? | select(.name == "alerting") | .projected.sources[]]' \
   "$values_dir/grafana.yaml")"
-[[ "$(jq -r '.[] | .configMap.name // empty' <<<"$projected")" == "$rules_name" ]] ||
+[[ "$(jq -r '[.[] | .configMap.name // empty] | join(",")' <<<"$projected")" == "$rules_name" ]] ||
   fail "grafana.yaml must mount the rules ConfigMap '$rules_name' (the rule files changed)"
-sealed_names="$(for f in "$values_dir"/secrets/grafana-alerting-*.sealedsecret.yaml; do yq '.metadata.name' "$f"; done)"
-mounted_secret="$(jq -r '.[] | .secret.name // empty' <<<"$projected")"
-[[ -n "$mounted_secret" ]] && grep -qxF "$mounted_secret" <<<"$sealed_names" ||
-  fail "grafana.yaml must mount a contact point Secret that is sealed in secrets/ (found '$mounted_secret')"
-[[ "$(jq -r '.[] | select(.secret) | .secret.optional // false' <<<"$projected")" == false ]] ||
-  fail "production's contact point Secret must be required, so Grafana waits for a re-sealed one"
-sealed_files=("$values_dir"/secrets/grafana-alerting-*.sealedsecret.yaml)
-((${#sealed_files[@]} == 1)) ||
-  fail "secrets/ must hold exactly one grafana-alerting-<n> (delete the old one after a re-seal)"
+mounted_secret="$(jq -r '[.[] | .secret.name // empty] | join(",")' <<<"$projected")"
+sealed_names=""
+for sealed in "$values_dir"/secrets/grafana-alerting-*.sealedsecret.yaml; do
+  sealed_names+="$(yq '.metadata.name' "$sealed")"$'\n'
+done
+if [[ -n "$mounted_secret" ]]; then
+  # A fork without the owner's Secret drops this source and keeps the rules.
+  grep -qxF "$mounted_secret" <<<"$sealed_names" ||
+    fail "grafana.yaml mounts the contact point Secret '$mounted_secret', which isn't sealed in secrets/"
+  [[ "$(jq -r '.[] | select(.secret) | .secret.optional // false' <<<"$projected")" == true ]] ||
+    fail "the contact point Secret must be optional, so Grafana starts without it"
+fi
 
 # The local stack (compose.observability.yaml, P9-08) runs exactly the cluster's images.
 echo "== local stack images"

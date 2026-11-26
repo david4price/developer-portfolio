@@ -553,10 +553,14 @@ Argo CD keeps each in sync with `main`.
    - **Restart on change:** Grafana reads both at startup, so their names follow their content.
      - **After changing a rule:** put the new `grafana-alert-rules-<hash>` in Grafana's values
        (`pnpm helm:check` prints it).
-     - **After re-sealing the contact point:** seal it as `grafana-alerting-<n+1>`, name it in
-       the values, and delete the old file.
-     - **Effect:** Argo CD restarts Grafana, and a Grafana pod that syncs before the new object
-       exists waits for it.
+     - **After re-sealing the contact point:** seal it as `grafana-alerting-<n+1>` and name it in
+       the values. Delete the old sealed file in a later commit, once Grafana runs with the new
+       one and its contact point shows in Grafana.
+     - **Effect:** Argo CD restarts Grafana, and a Grafana pod that syncs before the new rules
+       ConfigMap exists waits for it. The Secret is optional: if Grafana starts first, it runs
+       without a contact point until `kubectl -n monitoring rollout restart deploy/grafana`.
+     - **Cleanup:** old `grafana-alert-rules-<hash>` ConfigMaps aren't pruned. Delete them by
+       hand once no pod mounts them.
    - **Validate:**
      - Grafana lists the nine rules in "Portfolio alerts".
      - A test notification from the contact point reaches the owner.
