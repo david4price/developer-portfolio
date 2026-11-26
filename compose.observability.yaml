@@ -30,7 +30,9 @@ services:
     command:
       - run
       - /etc/alloy/config.alloy
-      - --storage.path=/var/lib/alloy/data
+      # A path the image doesn't have, so the volume belongs to root: the image's /var/lib/alloy
+      # belongs to its alloy user, which root can't write to with every capability dropped.
+      - --storage.path=/alloy-data
       - --server.http.listen-addr=0.0.0.0:12345
       - --disable-reporting
     environment:
@@ -40,7 +42,7 @@ services:
       - ./infrastructure/monitoring/local/config.alloy:/etc/alloy/config.alloy:ro
       # Rootless Docker, Colima, and others keep the socket elsewhere: set DOCKER_SOCKET.
       - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
-      - alloy-data:/var/lib/alloy/data
+      - alloy-data:/alloy-data
     depends_on:
       - loki
 
