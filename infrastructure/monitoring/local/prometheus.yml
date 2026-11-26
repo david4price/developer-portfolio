@@ -1,0 +1,22 @@
+# Prometheus for the opt-in local stack (compose.observability.yaml, P9-08). The job names and
+# labels match the cluster's (infrastructure/environments/production/monitoring/prometheus.yaml),
+# so the same queries and dashboards work. There is no kube-state-metrics locally.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 1m
+scrape_configs:
+  - job_name: portfolio-api
+    static_configs:
+      - targets: [api:9464]
+        labels:
+          namespace: portfolio
+          pod: api
+  - job_name: loki
+    static_configs:
+      - targets: [loki:3100]
+  - job_name: alloy
+    static_configs:
+      - targets: [alloy:12345]
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]

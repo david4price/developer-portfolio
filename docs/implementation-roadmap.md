@@ -15,6 +15,11 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-08 built** (`feat/p9-08-local-observability`):
+  - `compose.observability.yaml` runs the cluster's monitoring images beside `compose.full.yaml`.
+  - `pnpm check` validates dashboards and alert rules.
+  - CI's new `observability` job finds a request's log line in Loki and the API's metrics in
+    Prometheus through Grafana. Never started on the reference host.
 - **P9-03 started** (2026-11-25): the `monitoring` namespace, project, default-deny policies,
   Roles, and Loki are live (Synced/Healthy, 5 GiB volume). Alloy follows once the portfolio
   chart's log reader Role (`feat/p9-03-logs`) is merged and synced.
@@ -304,8 +309,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-03-logs` (the portfolio chart's log reader for Alloy). PRs #65 to
-#74 are merged; the `monitoring` namespace, project, policies, and Loki are live (2026-11-25).
+**Branch in progress:** `feat/p9-08-local-observability` (the opt-in local stack; ticked once CI's
+new `observability` job passes). PRs #65 to #75 are merged; Loki and Alloy are live
+(2026-11-25), and P9-03's privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.

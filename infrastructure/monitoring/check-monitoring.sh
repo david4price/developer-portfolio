@@ -146,6 +146,8 @@ check_manifests() {
   [[ -z "$found" ]] || fail "$name renders an image without a sha256 digest: $found"
   found="$(q "$containers"' | select(.resources.requests == null) | .name')"
   [[ -z "$found" ]] || fail "$name renders a container without resource requests: $found"
+  # Remembered for the local stack's check below.
+  q "$containers"' | .image' >>"$work/images"
 
   check_contract "$name" "$json"
 }
@@ -256,6 +258,19 @@ if reader="$(render portfolio "$root/infrastructure/helm/portfolio" "${productio
     fail "production's portfolio log reader must bind only the $namespace namespace's Alloy account"
 else
   fail "the production portfolio log reader $reader"
+fi
+
+# The local stack (compose.observability.yaml, P9-08) runs exactly the cluster's images.
+echo "== local stack images"
+if ! compose_images="$(yq '.services[].image' "$root/compose.observability.yaml")"; then
+  fail "can't read compose.observability.yaml"
+else
+  for image in $compose_images; do
+    digest="${image##*@}"
+    [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { fail "local stack image $image has no digest"; continue; }
+    grep -qF "@$digest" "$work/images" ||
+      fail "local stack image $image isn't one the cluster's charts render"
+  done
 fi
 
 # Prometheus reaches the API pods by the labels the portfolio chart gives them.

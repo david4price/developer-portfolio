@@ -1,0 +1,90 @@
+# Opt-in local observability (P9-08): the cluster's Grafana, Loki, Prometheus, and Alloy images
+# (same digests) beside the fully containerized stack. Grafana on http://localhost:3300 (admin,
+# GRAFANA_ADMIN_PASSWORD from .env); nothing else is published.
+#   docker compose -f compose.full.yaml -f compose.observability.yaml up -d --build
+#   docker compose -f compose.full.yaml -f compose.observability.yaml down      # -v drops the data
+#
+# Alloy reads container logs through the Docker socket. Access to it is root-equivalent on the
+# host, even mounted read-only, so this file is for your own machine only, never a shared host.
+# docs/architecture/observability.md#local-development
+
+x-observability: &observability
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+services:
+  loki:
+    <<: *observability
+    image: docker.io/grafana/loki:3.7.10@sha256:b43c257ccfc925d4a50b8717cac61a3b51df8c48d01847936057e5c4075a24a7
+    command: [-config.file=/etc/loki/local.yaml]
+    volumes:
+      - ./infrastructure/monitoring/local/loki.yaml:/etc/loki/local.yaml:ro
+      - loki-data:/loki
+
+  alloy:
+    <<: *observability
+    image: docker.io/grafana/alloy:v1.22.0@sha256:9acc2529bc1edb7f5b2bd801dd8334ebc80c158e3a9e5526ecd7c9a273d43189
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --disable-reporting
+    environment:
+      # Only this Compose project's containers are collected.
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ./infrastructure/monitoring/local/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      - loki
+
+  prometheus:
+    <<: *observability
+    image: quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./infrastructure/monitoring/local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    <<: *observability
+    image: docker.io/grafana/grafana:13.3.1-distroless@sha256:54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_USERS_ALLOW_ORG_CREATE: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: 'false'
+      GF_PUBLIC_DASHBOARDS_ENABLED: 'false'
+      GF_SECURITY_DISABLE_GRAVATAR: 'true'
+    ports:
+      - 127.0.0.1:${GRAFANA_PORT:-3300}:3000
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./infrastructure/monitoring/local/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infrastructure/monitoring/local/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/alerts:/etc/grafana/provisioning/alerting:ro
+      - ./infrastructure/monitoring/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+      - prometheus
+
+volumes:
+  loki-data:
+  alloy-data:
+  prometheus-data:
+  grafana-data:

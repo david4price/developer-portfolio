@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -b --pretty false && pnpm --filter @portfolio/web build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm monitoring:files",
     "bootstrap": "node scripts/bootstrap.mjs",
     "dev": "tsc -b --pretty false && concurrently --kill-others-on-fail --names api,worker,web --prefix-colors blue,magenta,green \"pnpm dev:api\" \"pnpm dev:worker\" \"pnpm dev:web\"",
     "dev:api": "pnpm --filter @portfolio/api dev",
@@ -21,6 +21,7 @@
     "db:reset": "node scripts/db-reset.mjs",
     "new:project": "node scripts/new-project.mjs",
     "format": "prettier --write .",
+    "monitoring:files": "node scripts/check-monitoring-files.mjs",
     "helm:check": "bash infrastructure/helm/check-chart.sh && bash infrastructure/monitoring/check-monitoring.sh",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",

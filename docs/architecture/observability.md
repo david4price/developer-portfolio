@@ -206,14 +206,27 @@ against real traffic.
 
 ## Local development
 
-Rule 5 asks for every feature to run locally. An opt-in `compose.observability.yaml` adds the same
-Grafana, Loki, Prometheus, and Alloy images with the same provisioned dashboards and rules:
+**Confirmed (P9-08)** in CI on every push. Rule 5 asks for every feature to run locally. The opt-in
+`compose.observability.yaml` runs the cluster's Grafana, Loki, Prometheus, and Alloy images (same
+digests, which `pnpm helm:check` enforces) beside `compose.full.yaml`
+([how to use it](../deployment/local.md#local-observability-optional)):
 
-- Prometheus scrapes the API's metrics port on the Compose network.
-- Alloy reads container logs through `loki.source.docker`. Mounting the Docker socket is
-  root-equivalent even read-only, so it is opt-in, bound to `127.0.0.1`, documented, and meant
-  for contributors' own machines, never a shared host.
-- `pnpm check` validates the dashboards and rules, so a broken JSON or rule fails CI for everyone.
+- **Same names:** the data source uids (`prometheus`, `loki`), Prometheus job names, and log
+  labels (`namespace`, `app`, `container`, `pod`) match the cluster's, so dashboards, alert rules,
+  and queries work in both.
+- **Prometheus** scrapes the API's metrics port on the Compose network; that port is published
+  only on the host's loopback.
+- **Alloy** reads this Compose project's container logs through `loki.source.docker`. Mounting the
+  Docker socket is root-equivalent even read-only, so the file is opt-in, documented, and meant
+  for contributors' own machines, never a shared host. Alloy runs as the image's root user for
+  the socket, with no capabilities and a read-only root filesystem.
+- **Exposure:** only Grafana is published, on `127.0.0.1`; its admin password is required
+  (`GRAFANA_ADMIN_PASSWORD`).
+- **Retention:** 7 days.
+- **Files:** `pnpm check` validates the dashboards and alert rules (`scripts/check-monitoring-files.mjs`),
+  so a broken JSON or rule fails CI for everyone.
+- **CI:** the `observability` job starts both files and checks, through Grafana's data sources,
+  that the API's metrics reach Prometheus and a request's log line reaches Loki.
 
 ## Capacity
 
