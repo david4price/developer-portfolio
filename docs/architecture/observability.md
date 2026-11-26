@@ -238,26 +238,30 @@ written in P9-09). Thresholds are starting points that P9-06 tunes against real 
 data, a rule stays OK, except API down and Monitoring broken, which treat silence (and query
 errors) as firing.
 
-| Alert                  | Source     | Condition (starting point)                                                                     |
-| ---------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| API down               | Prometheus | no API scrape target `up` for 5 min                                                            |
-| Dependency down        | Prometheus | `readiness_dependency_up == 0` for 3 min                                                       |
-| Server errors          | Prometheus | 5xx above 5% of requests over 10 min, with at least 20 requests                                |
-| Slow API               | Prometheus | p95 of `http_request_duration_seconds` above 1 s for 15 min (P7-02 measured 2.8 ms at 200 rps) |
-| Crash loop / OOM       | KSM        | more than 3 restarts in 15 min, or last termination `OOMKilled`                                |
-| Backup failed          | KSM        | the PostgreSQL backup Job failed, or no successful run in 26 h                                 |
-| Error logs             | Loki       | more than 5 `error`/`fatal` lines from one component in 10 min                                 |
-| Argo CD token expiring | Loki       | the P6-05 reminder's warning or error line appears (once a day)                                |
-| Monitoring broken      | Prometheus | Loki or Alloy not ingesting for 15 min, or Prometheus volume above 80%                         |
+| Alert                  | Source     | Condition (starting point)                                                                                                                                                                            |
+| ---------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API down               | Prometheus | no API scrape target `up` for 5 min                                                                                                                                                                   |
+| Dependency down        | Prometheus | `readiness_dependency_up == 0` for 3 min                                                                                                                                                              |
+| Server errors          | Prometheus | 5xx above 5% of visitor requests (health probes excluded) over 10 min, with at least 20 requests                                                                                                      |
+| Slow API               | Prometheus | p95 of visitor requests (health probes excluded) above 1 s for 15 min (P7-02 measured 2.8 ms at 200 rps)                                                                                              |
+| Crash loop / OOM       | KSM        | waiting in `CrashLoopBackOff`, more than 3 restarts in 15 min, or a restart after an `OOMKilled`                                                                                                      |
+| Backup failed          | KSM        | the latest backup Job failed (newer than the last success), or no successful run in 26 h                                                                                                              |
+| Error logs             | Loki       | more than 5 `error`/`fatal` lines from one component in 10 min                                                                                                                                        |
+| Argo CD token expiring | Loki       | the P6-05 reminder's warning or error line within the last 25 h (it logs once a day)                                                                                                                  |
+| Monitoring broken      | Prometheus | Loki, Alloy, or kube-state-metrics down, Loki ingesting nothing for 15 min, or Prometheus storage above 4.5 GiB (90% of its volume; retention keeps it at 4 GiB); silence or a query error also fires |
 
 - **Contact point:** the owner's chat bot. Its whole definition (type, destination, token) and
-  the notification policy that routes every alert to it come from the `grafana-alerting`
+  the notification policy that routes every alert to it come from the `grafana-alerting-<n>`
   SealedSecret, so nothing about it is in Git. Policy: grouped by alert, repeated every 4 hours
   while firing, and resolved messages are sent. Forks get no contact point, and alerts show in
   Grafana only.
-- **Loading:** Grafana mounts the rules ConfigMap and the optional Secret in one read-only
-  provisioning directory and reads it at startup. Its values carry a checksum of both, which
-  `pnpm helm:check` keeps current, so a changed rule restarts Grafana.
+- **Loading:** Grafana mounts the rules ConfigMap and the contact point Secret in one read-only
+  provisioning directory and reads it at startup, so both are named after their content:
+  `grafana-alert-rules-<hash of the rule files>` and `grafana-alerting-<n>`, renamed on each
+  re-seal. Grafana's values name both (`pnpm helm:check` checks them), so a change restarts
+  Grafana. A Grafana pod that syncs before the new object exists waits for it rather than loading
+  stale content. The Secret is required in production; a fork without it drops the secret source
+  and keeps the rules.
 - **Egress:** `networkPolicy.grafana.alertEgress` opens HTTPS (443) outside private ranges for
   Grafana alone.
 - **Known gap:** if the node is down, nothing here can alert. An external uptime check is a

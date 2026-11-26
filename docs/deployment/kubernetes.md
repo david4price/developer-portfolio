@@ -546,13 +546,17 @@ Argo CD keeps each in sync with `main`.
 
 5. **Alerts (P9-06).**
    - **Rules** in `infrastructure/helm/monitoring/alerts/` reach Grafana through the `monitoring`
-     chart's `grafana-alert-rules` ConfigMap.
-   - **Contact point:** the `grafana-alerting` SealedSecret holds the contact point and the
+     chart's `grafana-alert-rules-<hash>` ConfigMap.
+   - **Contact point:** the `grafana-alerting-<n>` SealedSecret holds the contact point and the
      notification policy, sealed by the owner from a local file outside the repository (the
      private register says how). Grafana's HTTPS egress (`alertEgress`) is on in production.
-   - **Restart on change:** after changing a rule or re-sealing the contact point, update
-     `checksum/alerting` in Grafana's values. `pnpm helm:check` prints the expected value, and
-     Argo CD then restarts Grafana.
+   - **Restart on change:** Grafana reads both at startup, so their names follow their content.
+     - **After changing a rule:** put the new `grafana-alert-rules-<hash>` in Grafana's values
+       (`pnpm helm:check` prints it).
+     - **After re-sealing the contact point:** seal it as `grafana-alerting-<n+1>`, name it in
+       the values, and delete the old file.
+     - **Effect:** Argo CD restarts Grafana, and a Grafana pod that syncs before the new object
+       exists waits for it.
    - **Validate:**
      - Grafana lists the nine rules in "Portfolio alerts".
      - A test notification from the contact point reaches the owner.

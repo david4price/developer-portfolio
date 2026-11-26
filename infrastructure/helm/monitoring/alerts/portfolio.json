@@ -137,7 +137,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "(sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", status_class=\"5xx\"}[10m])) / sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\"}[10m]))) and on() (sum(increase(http_request_duration_seconds_count{job=\"portfolio-api\"}[10m])) >= 20)",
+                "expr": "(sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\", status_class=\"5xx\"}[10m])) / sum(rate(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[10m]))) and on() (sum(increase(http_request_duration_seconds_count{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[10m])) >= 20)",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -176,7 +176,7 @@
           },
           "annotations": {
             "summary": "More than 5% of API requests failed with a 5xx over 10 minutes.",
-            "description": "The 5xx share was {{ humanizePercentage $values.A.Value }} (at least 20 requests). Follow a request id from the API dashboard's server error panel to its log lines.",
+            "description": "The 5xx share of visitor requests (health probes excluded) was {{ humanizePercentage $values.A.Value }} (at least 20 requests). Follow a request id from the API dashboard's server error panel to its log lines.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-server-errors",
             "__dashboardUid__": "portfolio-api"
           }
@@ -195,7 +195,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"portfolio-api\"}[5m])))",
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"portfolio-api\", route!~\"/api/v1/health.*\"}[5m])))",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -234,7 +234,7 @@
           },
           "annotations": {
             "summary": "API p95 latency has been above 1 s for 15 minutes.",
-            "description": "p95 was {{ humanizeDuration $values.A.Value }} (P7-02 measured 2.8 ms at 200 requests a second).",
+            "description": "p95 of visitor requests (health probes excluded) was {{ humanizeDuration $values.A.Value }} (P7-02 measured 2.8 ms at 200 requests a second).",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-slow-api",
             "__dashboardUid__": "portfolio-api"
           }
@@ -253,7 +253,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "(sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 3) or ((sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1))",
+                "expr": "(sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 3) or ((sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"portfolio|monitoring\"}[15m])) > 0) and on (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"} == 1)) or (max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{namespace=~\"portfolio|monitoring\", reason=\"CrashLoopBackOff\"}) == 1)",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -292,7 +292,7 @@
           },
           "annotations": {
             "summary": "{{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is restarting.",
-            "description": "More than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
+            "description": "Waiting in CrashLoopBackOff, more than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-crash-loop",
             "__dashboardUid__": "portfolio-workloads"
           }
@@ -311,7 +311,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "((time() - (kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"} or kube_cronjob_created{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"})) > 93600) or (max(kube_job_failed{namespace=\"portfolio\", job_name=~\"portfolio-postgres-backup-.*\", condition=\"true\"}) == 1)",
+                "expr": "((time() - (kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"} or kube_cronjob_created{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"})) > 93600) or (max(kube_job_status_start_time{namespace=\"portfolio\", job_name=~\"portfolio-postgres-backup-.*\"} * on (namespace, job_name) group_left () (kube_job_failed{namespace=\"portfolio\", job_name=~\"portfolio-postgres-backup-.*\", condition=\"true\"} == 1)) > on () (max(kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"}) or on () vector(0)))",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -349,8 +349,8 @@
             "service": "portfolio"
           },
           "annotations": {
-            "summary": "The nightly PostgreSQL backup failed, or none has succeeded for 26 hours.",
-            "description": "Check the backup Job's logs (Logs dashboard, app postgres-backup) and the backup directory on the host.",
+            "summary": "The latest PostgreSQL backup failed, or none has succeeded for 26 hours.",
+            "description": "A failed run counts only while it is newer than the last success, so a later good backup resolves it. Check the backup Job's logs (Logs dashboard, app postgres-backup) and the backup directory on the host.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-backup-failed",
             "__dashboardUid__": "portfolio-workloads"
           }
@@ -420,13 +420,13 @@
             {
               "refId": "A",
               "relativeTimeRange": {
-                "from": 3600,
+                "from": 90000,
                 "to": 0
               },
               "datasourceUid": "loki",
               "model": {
                 "refId": "A",
-                "expr": "sum(count_over_time({namespace=\"portfolio\", app=\"api\"} |~ \"Argo CD explorer token (expires soon|has expired)\" [1h]))",
+                "expr": "sum(count_over_time({namespace=\"portfolio\", app=\"api\"} |~ \"Argo CD explorer token (expires soon|has expired)\" [25h]))",
                 "queryType": "instant",
                 "intervalMs": 60000,
                 "maxDataPoints": 43200
@@ -464,7 +464,7 @@
           },
           "annotations": {
             "summary": "The Argo CD explorer token expires soon or has expired (P6-05).",
-            "description": "Rotate it as P6-05 describes; the API logs this warning daily from 14 days before expiry.",
+            "description": "Rotate it as P6-05 describes. The API logs this warning daily from 14 days before expiry, and the rule looks back 25 hours, so it stays firing until a day passes without one.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-argocd-token",
             "__dashboardUid__": "portfolio-logs"
           }
@@ -483,7 +483,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "(1 - min(up{job=~\"loki|alloy|kube-state-metrics\"})) + (sum(rate(loki_distributor_lines_received_total[15m])) == bool 0) + ((sum(prometheus_tsdb_storage_blocks_bytes) + sum(prometheus_tsdb_head_chunks_storage_size_bytes) + sum(prometheus_tsdb_wal_storage_size_bytes)) > bool 4294967296)",
+                "expr": "(1 - min(up{job=~\"loki|alloy|kube-state-metrics\"})) + (sum(rate(loki_distributor_lines_received_total[15m])) == bool 0) + ((sum(prometheus_tsdb_storage_blocks_bytes) + sum(prometheus_tsdb_head_chunks_storage_size_bytes) + sum(prometheus_tsdb_wal_storage_size_bytes)) > bool 4831838208)",
                 "instant": true,
                 "range": false,
                 "intervalMs": 60000,
@@ -522,7 +522,7 @@
           },
           "annotations": {
             "summary": "The monitoring stack itself is failing.",
-            "description": "Loki, Alloy, or kube-state-metrics is down, Loki has received no log lines for 15 minutes, or Prometheus's storage is above 4 GiB (80% of its volume).",
+            "description": "Loki, Alloy, or kube-state-metrics is down, Loki has received no log lines for 15 minutes, or Prometheus's storage is above 4.5 GiB (90% of its 5 GiB volume, beyond the 4 GiB its retention allows).",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-monitoring-broken",
             "__dashboardUid__": "portfolio-workloads"
           }

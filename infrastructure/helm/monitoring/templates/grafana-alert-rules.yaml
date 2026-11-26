@@ -1,12 +1,19 @@
-{{- /* P9-06: the alert rules in alerts/*.json, provisioned by Grafana from a projected volume that
-also holds the optional contact point Secret (grafana-alerting). Grafana reads them at startup, so
-its values carry a checksum of these files, which pnpm helm:check keeps current. */}}
+{{- /* P9-06: the alert rules in alerts/*.json. Grafana reads alerting provisioning only at
+startup, so the ConfigMap is named after a hash of the files: Grafana's values reference that
+exact name, a changed rule changes it and so restarts Grafana, and a Grafana pod that syncs
+before this ConfigMap waits for it rather than loading stale rules. pnpm helm:check compares the
+name in Grafana's values with this hash (the first 10 hex digits of the sha256 of the files'
+contents, joined in file name order). */}}
 {{- $rules := .Files.Glob "alerts/*.json" }}
 {{- if $rules }}
+{{- $joined := "" }}
+{{- range $path, $content := $rules }}
+{{- $joined = print $joined ($.Files.Get $path) }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-alert-rules
+  name: grafana-alert-rules-{{ sha256sum $joined | trunc 10 }}
   labels:
     {{- include "monitoring.labels" . | nindent 4 }}
 data:
