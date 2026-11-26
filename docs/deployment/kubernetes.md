@@ -574,9 +574,13 @@ Argo CD keeps each in sync with `main`.
        - **The rest:** copies with a flipped threshold, created through
          `/api/v1/provisioning/alert-rules` (header `X-Disable-Provenance: true`) in a temporary
          folder, flipped back once they fired, then deleted.
-       - **Timing:** resolved messages follow at each group's next 5-minute interval. Error logs
-         clears 10 minutes after the last line, and Crash loop up to 15 minutes after the pod
-         is gone.
+       - **Timing:** a rule clears at its next evaluation once its condition is false (every
+         minute, or hourly for the Argo CD token rule). The resolved message then follows at the
+         notification policy's 5-minute group interval.
+         - **Error logs** clears once its 10-minute count drops to 5 or fewer lines.
+         - **Crash loop** clears up to 15 minutes after the pod is gone (its restart window).
+         - **Argo CD token** clears at the first hourly evaluation more than 25 hours after the
+           last reminder line.
        - **Counting:** `grafana_alerting_notifications_total` on Grafana's `/metrics` counts the
          sends; a failed send shows in `grafana_alerting_notifications_failed_total`.
 

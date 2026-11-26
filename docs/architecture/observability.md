@@ -15,15 +15,17 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
 - **In CI (P9-08):** the local Compose stack (`compose.observability.yaml`), never started on
   the reference host.
 
-**Proposed until P9-03 is done** (applied and validated, but not yet Confirmed):
+**Proposed until its task is done** (applied and validated, but not yet Confirmed):
 
 - **Loki and Alloy (P9-03)** collect logs. P9-03 is done once a day of collected logs passes its
   privacy check.
 - **Grafana (P9-05)** is on the tailnet with its dashboards, validated (following a 5xx to its
   log lines in CI). It ticks with P9-03.
+- **Alerts (P9-06)** are provisioned and page the owner; each rule fired and resolved once in a
+  drill. P9-06 is done after a quiet week (2026-12-03).
 
 **Proposed:** capacity and failure checks (P9-07), and the runbooks and final documentation
-(P9-09). Alerts (P9-06) are live and drilled, waiting on a quiet week.
+(P9-09).
 
 ## Shape
 
@@ -41,7 +43,7 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
   chart repositories, listed one by one. Its only destination is the `monitoring` namespace,
   and it allows no cluster-scoped kinds. There is one Application per upstream chart, plus one
   for this repository's own manifests (NetworkPolicies and Roles; since P9-05 Grafana's
-  dashboards and admin SealedSecret; the alert rules and contact point come in P9-06).
+  dashboards and admin SealedSecret; since P9-06 the alert rules and the contact point).
 
 ## Layout
 
@@ -84,8 +86,8 @@ is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
   - has no host namespaces, host paths, or privileged containers;
   - pins every image by digest and gives every container resource requests.
 - **This repository's chart:** it refuses to render without the API server range. Grafana gets
-  no pod ingress (the node, which K3s always admits, needs none) and no internet until P9-06
-  opens HTTPS egress for alerts.
+  no pod ingress (the node, which K3s always admits, needs none), and internet only as HTTPS
+  egress for alerts (`alertEgress`, on in production since P9-06; off in the CI values).
 - **Selectors:** the pod labels, ports, and ServiceAccounts the policies and Roles name in
   `infrastructure/helm/monitoring/values.yaml` must match what the upstream charts (and the
   portfolio chart's API pods) actually render. A chart upgrade that renames one fails CI, so a
@@ -187,8 +189,8 @@ on purpose.
 
 **Confirmed in part (P9-05, 2026-11-26):** access, the admin password, storage, data sources,
 and dashboards are validated on the tailnet; the task ticks with P9-03
-([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules (P9-06) are
-**Proposed**.
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules: see
+[Alerts](#alerts).
 
 - **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve` on HTTPS
   port 8444, the same way as Argo CD on 8443. There is no Ingress, tunnel, or public hostname.
@@ -202,19 +204,19 @@ and dashboards are validated on the tailnet; the task ticks with P9-03
 - **No phoning home:** usage reporting, update checks, and plugin update checks are off, and no
   plugins are installed at runtime (`plugins.preinstall_disabled`). Grafana otherwise downloads a
   few app plugins from grafana.com at startup; on its first start in the cluster the
-  NetworkPolicy blocked each with an error line, but once P9-06 opens HTTPS egress for alerts
-  only this setting stops them.
+  NetworkPolicy blocked each with an error line. Since P9-06 opened HTTPS egress for alerts, only
+  this setting stops them.
   - **Trade-off:** those apps include the Logs and Metrics Drilldown views, so logs and metrics
     are browsed with queries (Explore, and the provisioned dashboards) rather than point and
     click. Adding one later is a deliberate change: choose the install route for the pinned
-    Grafana version (preinstall is off as a whole here), pin its version in Git, and note that
-    Grafana reaches grafana.com only once P9-06 opens HTTPS egress.
+    Grafana version (preinstall is off as a whole here) and pin its version in Git.
 - **As code:** everything is provisioned from Git with UI edits disabled; a change made in the UI
   is exported and committed.
   - **Data sources** (in Grafana's values): Prometheus and Loki by Service name, not editable.
   - **Dashboards:** `infrastructure/helm/monitoring/dashboards/*.json`, in a "Portfolio" folder;
     saves are refused.
-  - **Alert rules** (P9-06).
+  - **Alert rules:** `infrastructure/helm/monitoring/alerts/*.json`, in a "Portfolio alerts"
+    folder ([Alerts](#alerts)).
 - **Dashboards** (the local stack mounts the same files):
   - **Portfolio API:** requests, the 5xx share, p95 overall and by route, errors by code, client
     disconnects, readiness per dependency, and the server errors' log lines.
@@ -231,8 +233,9 @@ and dashboards are validated on the tailnet; the task ticks with P9-03
 
 ## Alerts
 
-**Confirmed in part (P9-06, 2026-11-26):** live, and each rule fired and resolved once in a drill
-(18 notifications reached the owner). Thresholds are confirmed after a quiet week.
+**Proposed until P9-06 is done** (applied and drilled, 2026-11-26): each rule fired and resolved
+once in a drill, and all 18 notifications reached the owner. The thresholds are confirmed after a
+quiet week.
 
 Grafana-managed rules in `infrastructure/helm/monitoring/alerts/portfolio.json` (folder "Portfolio
 alerts": eight rules in a group evaluated every minute, the Argo CD token rule hourly), provisioned with UI edits disabled. Each has a
