@@ -18,7 +18,7 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 - **P9-05 live** (PRs #79, #80, 2026-11-26): Grafana on the tailnet (port 8444) with four
   read-only dashboards, request ids that link to their log lines, and its admin password sealed.
-  It ticks once P9-03's privacy check passes and a real 5xx has been followed in production.
+  It ticks with P9-03.
 - **P9-04 done** (PR #77, 2026-11-26): Prometheus and kube-state-metrics are live, scraping
   the API (its metrics opened to Prometheus alone), Loki, and Alloy; isolation and the public
   404 are verified.
@@ -306,8 +306,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
    a day of collected logs, scheduled for 2026-11-27
-   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). Then P9-05 can
-   be ticked, once a real production 5xx has also been followed to its log lines.
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). P9-05 ticks
+   with it (Grafana is live and validated).
 2. **P9-06** 🔒 Alerts: needs the owner's choice of contact point (chat bot, email, or another).
 3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
@@ -316,7 +316,7 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `docs/p9-05-done` (records P9-05 as live). PRs #65 to #80 are merged; Loki, Alloy,
+**Branch in progress:** `docs/p9-05-done` (records P9-05 as live; it ticks with P9-03). PRs #65 to #80 are merged; Loki, Alloy,
 Prometheus, kube-state-metrics, and Grafana are live, and P9-03's privacy check is scheduled for
 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
@@ -886,13 +886,11 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       public hostname); data sources and the four dashboards (API, chat and AI, workloads, logs)
       are provisioned from Git with UI saves disabled; and a request id can be followed from a
       5xx on the API dashboard to its log lines.
-      Live and validated 2026-11-26 (PRs #79, #80; the owner ran `tailscale serve`). **Not ticked
-      yet**, for two reasons:
-
-      - **Its prerequisite:** P9-03 isn't done until its privacy check of a day of logs passes
-        (2026-11-27), and the Logs dashboard already shows those logs on the tailnet.
-      - **A real 5xx:** production has had none, so following one to its log lines is proven in
-        CI only. Forcing one live would mean an outage, so it waits for the first real one.
+      Live and validated 2026-11-26 (PRs #79, #80; the owner ran `tailscale serve`). **Ticks once
+      its prerequisite P9-03 is done** (its privacy check of a day of logs, 2026-11-27), since the
+      Logs dashboard already shows those logs on the tailnet. Following a 5xx to its log lines is
+      proven in CI, as the done-when asks. Production has had no 5xx and forcing one would mean an
+      outage, so following the first real one is a spot check for later, not a gate.
 
       What was validated:
 

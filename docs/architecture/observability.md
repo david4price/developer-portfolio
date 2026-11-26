@@ -9,17 +9,18 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
 - **Before Phase 9:** JSON logs with request ids (P2-04), the API's Prometheus metrics (P7-01),
   and the K3s API audit log on the host (P7-06). The audit log stays root-only on the host and is
   not shipped to Loki.
-- **In the cluster (P9-04):** Prometheus and kube-state-metrics, with the API's metrics opened to
-  Prometheus alone.
+- **In the cluster:** every Application in `infrastructure/argocd/monitoring/` is applied.
+  Prometheus and kube-state-metrics, with the API's metrics opened to Prometheus alone, are
+  validated (P9-04).
 - **In CI (P9-08):** the local Compose stack (`compose.observability.yaml`), never started on
   the reference host.
 
-**Live, not yet Confirmed:** every Application in `infrastructure/argocd/monitoring/` is applied.
+**Proposed until P9-03 is done** (applied and validated, but not yet Confirmed):
 
 - **Loki and Alloy (P9-03)** collect logs. P9-03 is done once a day of collected logs passes its
   privacy check.
-- **Grafana (P9-05)** is on the tailnet with its dashboards, validated except following a real
-  production 5xx (CI covers it). It also waits on P9-03.
+- **Grafana (P9-05)** is on the tailnet with its dashboards, validated (following a 5xx to its
+  log lines in CI). It ticks with P9-03.
 
 **Proposed:** alerts (P9-06), capacity and failure checks (P9-07), and the runbooks and final
 documentation (P9-09).
@@ -184,8 +185,8 @@ on purpose.
 
 ## Grafana
 
-**Live (P9-05, 2026-11-26):** access, the admin password, storage, data sources, and dashboards
-are validated on the tailnet; the task ticks after P9-03 and a real production 5xx
+**Confirmed in part (P9-05, 2026-11-26):** access, the admin password, storage, data sources,
+and dashboards are validated on the tailnet; the task ticks with P9-03
 ([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules (P9-06) are
 **Proposed**.
 
