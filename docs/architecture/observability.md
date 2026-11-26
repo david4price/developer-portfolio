@@ -206,7 +206,7 @@ against real traffic.
 
 ## Local development
 
-**Proposed (P9-08)**: built, and confirmed once CI's `observability` job passes. Rule 5 asks for every feature to run locally. The opt-in
+**Confirmed (P9-08)** by CI's `observability` job on every push. Rule 5 asks for every feature to run locally. The opt-in
 `compose.observability.yaml` runs the cluster's Grafana, Loki, Prometheus, and Alloy images (same
 digests, which `pnpm helm:check` enforces) beside `compose.full.yaml`
 ([how to use it](../deployment/local.md#local-observability-optional)):
