@@ -2,21 +2,24 @@
 
 **Status: Proposed.** The plan for [ADR 0004](adr-0004-observability-stack.md). Each section
 becomes **Confirmed** when the Phase 9 task that builds it is done
-([roadmap](../implementation-roadmap.md#phase-9-observability-59)).
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
 **Confirmed:**
 
 - **Before Phase 9:** JSON logs with request ids (P2-04), the API's Prometheus metrics (P7-01),
   and the K3s API audit log on the host (P7-06). The audit log stays root-only on the host and is
   not shipped to Loki.
-- **In the cluster:** Prometheus and kube-state-metrics, with the API's metrics opened to
-  Prometheus alone (P9-04); Grafana on the tailnet with its dashboards (P9-05). Every
-  Application in `infrastructure/argocd/monitoring/` is applied.
+- **In the cluster (P9-04):** Prometheus and kube-state-metrics, with the API's metrics opened to
+  Prometheus alone.
 - **In CI (P9-08):** the local Compose stack (`compose.observability.yaml`), never started on
   the reference host.
 
-**Live, not yet Confirmed:** Loki and Alloy (P9-03) collect logs; P9-03 is done once a day of
-collected logs passes its privacy check.
+**Live, not yet Confirmed:** every Application in `infrastructure/argocd/monitoring/` is applied.
+
+- **Loki and Alloy (P9-03)** collect logs. P9-03 is done once a day of collected logs passes its
+  privacy check.
+- **Grafana (P9-05)** is on the tailnet with its dashboards, validated except following a real
+  production 5xx (CI covers it). It also waits on P9-03.
 
 **Proposed:** alerts (P9-06), capacity and failure checks (P9-07), and the runbooks and final
 documentation (P9-09).
@@ -36,8 +39,8 @@ documentation (P9-09).
 - **Argo CD:** a new `monitoring` AppProject. Its sources are this repository and the upstream
   chart repositories, listed one by one. Its only destination is the `monitoring` namespace,
   and it allows no cluster-scoped kinds. There is one Application per upstream chart, plus one
-  for this repository's own manifests (NetworkPolicies and Roles now; SealedSecrets and
-  provisioning ConfigMaps in P9-05 and P9-06).
+  for this repository's own manifests (NetworkPolicies and Roles; since P9-05 Grafana's
+  dashboards and admin SealedSecret; the alert rules and contact point come in P9-06).
 
 ## Layout
 
@@ -79,8 +82,9 @@ is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
   - stays in the namespace, with no NodePort or LoadBalancer;
   - has no host namespaces, host paths, or privileged containers;
   - pins every image by digest and gives every container resource requests.
-- **This repository's chart:** it refuses to render without the API server range, and Grafana
-  gets no ingress or internet until P9-05 and P9-06 set them.
+- **This repository's chart:** it refuses to render without the API server range. Grafana gets
+  no pod ingress (the node, which K3s always admits, needs none) and no internet until P9-06
+  opens HTTPS egress for alerts.
 - **Selectors:** the pod labels, ports, and ServiceAccounts the policies and Roles name in
   `infrastructure/helm/monitoring/values.yaml` must match what the upstream charts (and the
   portfolio chart's API pods) actually render. A chart upgrade that renames one fails CI, so a
@@ -113,7 +117,7 @@ on purpose.
 ## Metrics
 
 **Confirmed (P9-04, 2026-11-26):** live and validated
-([roadmap](../implementation-roadmap.md#phase-9-observability-59)).
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
 - **Scrape path:** the chart gains `api.metrics.scrape.enabled`. When it is on, the API sets
   `API_METRICS_HOST` to `0.0.0.0` (no code change, since the setting is already a host string),
@@ -180,8 +184,10 @@ on purpose.
 
 ## Grafana
 
-**Confirmed (P9-05, 2026-11-26):** live on the tailnet and validated
-([roadmap](../implementation-roadmap.md#phase-9-observability-59)).
+**Live (P9-05, 2026-11-26):** access, the admin password, storage, data sources, and dashboards
+are validated on the tailnet; the task ticks after P9-03 and a real production 5xx
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules (P9-06) are
+**Proposed**.
 
 - **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve` on HTTPS
   port 8444, the same way as Argo CD on 8443. There is no Ingress, tunnel, or public hostname.

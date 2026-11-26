@@ -548,7 +548,8 @@ Argo CD keeps each in sync with `main`.
 
 - `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no
   resources finalizer). `kubectl delete namespace monitoring` then removes everything, including
-  the logs and metrics volumes.
+  the logs and metrics volumes and Grafana's volume (which only Argo CD's pruning spares).
+- Grafana's tailnet address: `sudo tailscale serve --https=8444 off`.
 - Turning `monitoring.readers.logs.enabled` or `.metrics.enabled` off removes those portfolio
   Roles on the next sync. Turning `api.metrics.scrape.enabled` off puts the metrics back on
   loopback and removes their NetworkPolicy rule (the API rolls once).

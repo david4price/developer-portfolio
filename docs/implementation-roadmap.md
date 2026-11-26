@@ -16,8 +16,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
-- **P9-05 done** (PRs #79, #80, 2026-11-26): Grafana on the tailnet (port 8444) with four
+- **P9-05 live** (PRs #79, #80, 2026-11-26): Grafana on the tailnet (port 8444) with four
   read-only dashboards, request ids that link to their log lines, and its admin password sealed.
+  It ticks once P9-03's privacy check passes and a real 5xx has been followed in production.
 - **P9-04 done** (PR #77, 2026-11-26): Prometheus and kube-state-metrics are live, scraping
   the API (its metrics opened to Prometheus alone), Loki, and Alloy; isolation and the public
   404 are verified.
@@ -305,7 +306,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
    a day of collected logs, scheduled for 2026-11-27
-   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)).
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). Then P9-05 can
+   be ticked, once a real production 5xx has also been followed to its log lines.
 2. **P9-06** 🔒 Alerts: needs the owner's choice of contact point (chat bot, email, or another).
 3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
@@ -314,7 +316,7 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `docs/p9-05-done` (ticks P9-05). PRs #65 to #80 are merged; Loki, Alloy,
+**Branch in progress:** `docs/p9-05-done` (records P9-05 as live). PRs #65 to #80 are merged; Loki, Alloy,
 Prometheus, kube-state-metrics, and Grafana are live, and P9-03's privacy check is scheduled for
 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
@@ -804,7 +806,7 @@ Read-only inventory of the reference host. Findings:
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
 
-## Phase 9: Observability (5/9)
+## Phase 9: Observability (4/9)
 
 Keep logs, keep metric history, and alert the owner, with Grafana's open-source stack in a
 `monitoring` namespace ([ADR 0004](architecture/adr-0004-observability-stack.md),
@@ -878,13 +880,21 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
         so the bind is `0.0.0.0` ([ADR 0004](architecture/adr-0004-observability-stack.md),
         amended).
 
-- [x] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
+- [ ] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
       its admin password from a SealedSecret, anonymous access and sign-up off, usage reporting and
       update checks off; it is published only through `tailscale serve` (no Ingress, tunnel, or
       public hostname); data sources and the four dashboards (API, chat and AI, workloads, logs)
       are provisioned from Git with UI saves disabled; and a request id can be followed from a
       5xx on the API dashboard to its log lines.
-      Done 2026-11-26 (PRs #79, #80; the owner ran `tailscale serve`):
+      Live and validated 2026-11-26 (PRs #79, #80; the owner ran `tailscale serve`). **Not ticked
+      yet**, for two reasons:
+
+      - **Its prerequisite:** P9-03 isn't done until its privacy check of a day of logs passes
+        (2026-11-27), and the Logs dashboard already shows those logs on the tailnet.
+      - **A real 5xx:** production has had none, so following one to its log lines is proven in
+        CI only. Forcing one live would mean an outage, so it waits for the first real one.
+
+      What was validated:
 
       - **Live:** Grafana 13.3.1 is Synced/Healthy, a ClusterIP Service only, with its volume
         protected from pruning.
@@ -896,8 +906,8 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
         reporting, update checks, and plugin preinstall are off.
       - **Dashboards:** the four are in the Portfolio folder, their panels return data, and a
         save is refused (400). Both data sources are read-only and healthy.
-      - **From a 5xx to its log lines:** production has had no 5xx, so CI forces a real 503 and
-        finds it through the API dashboard's own query; the request-id link is configured live.
+      - **From a 5xx to its log lines (CI):** CI forces a real 503 and finds it through the API
+        dashboard's own query; the request-id link is configured live.
       - **Found:** Grafana's own startup download of plugins from grafana.com (blocked by the
         NetworkPolicy, now off, PR #80), and that `tailscale serve` on the node needs no ingress
         rule (K3s admits the node's own traffic).
@@ -921,7 +931,7 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       the API's metrics in Prometheus and a request's log line (by `x-request-id`) in Loki. It
       also found the stack's own logs labelled `monitoring` and exactly the two data sources.
       Its first run caught Alloy unable to write its data volume with every capability dropped
-      (fixed). `pnpm check` validates dashboards and alert rules (none yet; P9-05, P9-06).
+      (fixed). `pnpm check` validates dashboards (four since P9-05) and alert rules (P9-06).
 
 - [ ] **P9-09** Documentation. _Needs:_ P9-06. _Done when:_ runbooks cover "an alert fired"
       (per rule: what it means, the first query, the likely fix) and "find a request by id";
