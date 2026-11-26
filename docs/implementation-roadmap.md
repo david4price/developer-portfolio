@@ -312,9 +312,15 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). P9-05 ticks
    with it (Grafana is live and validated).
 2. **P9-06** 🔒 Alerts: live and drilled (2026-11-26); ticks after a quiet week (2026-12-03).
-   **P9-07** (_Needs:_ P9-06) follows. Its passive memory and disk readings can run during the
-   quiet week (Prometheus records them anyway), but its k6 run and its Loki or Prometheus stop
-   test would page the owner, so they wait until P9-06 ticks.
+   **P9-07** (_Needs:_ P9-06) follows, after the quiet week.
+   - **Measurement source first:** Prometheus records no container memory or volume usage (no
+     cAdvisor scrape, by design: it needs `nodes/proxy`), so P9-07 picks its source first, for
+     example metrics-server samples (`kubectl top`) and the volumes' sizes on the host.
+   - **Load test:** P7-02's load stayed far below every alert threshold, but any page or OOM kill
+     during the quiet week would void it, so the k6 run waits too.
+   - **Stop test:** stopping Prometheus fires API down as well as Monitoring broken (API down
+     treats a failed query as firing), so that test must expect both, or API down's
+     `execErrState` changes first.
 3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
@@ -941,7 +947,8 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
         - **Before merge,** CI's smoke test caught Grafana refusing to start on a rule with
           `__dashboardUid__` but no `__panelId__` (fixed; the file checker now refuses it).
         - **Resolved messages** come at the notification policy's 5-minute group interval after a
-          rule clears. Crash loop clears up to 15 minutes after the pod is gone (its restart
+          rule clears. A rule whose series disappears clears a couple of evaluations after it
+          does: Crash loop up to about 17 minutes after the pod is gone (its 15-minute restart
           window).
         - **Grafana 13** retired the old receiver test endpoint (`410 Gone`); the replacement is
           `/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<uid>/test`.

@@ -87,7 +87,9 @@ is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
   - pins every image by digest and gives every container resource requests.
 - **This repository's chart:** it refuses to render without the API server range. Grafana gets
   no pod ingress (the node, which K3s always admits, needs none), and internet only as HTTPS
-  egress for alerts (`alertEgress`, on in production since P9-06; off in the CI values).
+  egress for alerts (`alertEgress`). It is on in production since P9-06; off by default and in
+  `ci/default-values.yaml`; and on in `ci/grafana-access-values.yaml`, so CI renders and checks
+  that rule.
 - **Selectors:** the pod labels, ports, and ServiceAccounts the policies and Roles name in
   `infrastructure/helm/monitoring/values.yaml` must match what the upstream charts (and the
   portfolio chart's API pods) actually render. A chart upgrade that renames one fails CI, so a
@@ -187,8 +189,8 @@ on purpose.
 
 ## Grafana
 
-**Confirmed in part (P9-05, 2026-11-26):** access, the admin password, storage, data sources,
-and dashboards are validated on the tailnet; the task ticks with P9-03
+**Proposed until P9-05 is done** (validated 2026-11-26): access, the admin password, storage,
+data sources, and dashboards are validated on the tailnet; the task ticks with P9-03
 ([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules: see
 [Alerts](#alerts).
 
