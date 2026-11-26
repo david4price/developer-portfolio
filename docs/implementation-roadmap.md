@@ -308,9 +308,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-08-local-observability` (PR #76, CI green). PRs #65 to #75 are
-merged; Loki and Alloy are live (2026-11-25), and P9-03's privacy check is scheduled for
-2026-11-27.
+**Branch in progress:** `feat/p9-04-metrics` (the API's metrics opened to Prometheus alone, and the
+metrics readers). PRs #65 to #76 are merged; Loki and Alloy are live (2026-11-25), and P9-03's
+privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -846,7 +846,7 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       Explorer account still can't read logs; a pod in another namespace can't reach Loki; and a
       day of collected logs holds no client IPs, cookies, tokens, or chat text.
 - [ ] **P9-04** 🔒 Metrics: Prometheus and kube-state-metrics. _Needs:_ P9-02. _Done when:_
-      `api.metrics.scrape.enabled` binds the API's metrics to the pod IP, with ingress on 9464
+      `api.metrics.scrape.enabled` opens the API's metrics beyond loopback, with ingress on 9464
       from Prometheus only, `check-chart.sh` accepts that render and still fails any other host,
       Service port, or wider rule (tests for both), Prometheus scrapes every API replica and
       kube-state-metrics (limited to `portfolio` and `monitoring`), `/metrics` on the public host

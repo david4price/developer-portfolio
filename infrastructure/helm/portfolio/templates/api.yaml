@@ -3,6 +3,14 @@
 {{- if and .Values.api.trustCloudflareClientIp (not (and .Values.cloudflared.enabled .Values.networkPolicy.enabled)) }}
 {{- fail "api.trustCloudflareClientIp requires cloudflared.enabled and networkPolicy.enabled (otherwise clients could forge CF-Connecting-IP)" }}
 {{- end }}
+{{- with .Values.api.metrics.scrape }}
+{{- if and .enabled (not $.Values.networkPolicy.enabled) }}
+{{- fail "api.metrics.scrape.enabled requires networkPolicy.enabled (otherwise every pod could read the metrics port)" }}
+{{- end }}
+{{- if and .enabled (not (and .from.namespace .from.podLabels)) }}
+{{- fail "api.metrics.scrape.from.namespace and .podLabels are required" }}
+{{- end }}
+{{- end }}
 {{- if not (has .Values.api.messageGuard.mode (list "rules" "classifier")) }}
 {{- fail "api.messageGuard.mode must be rules or classifier" }}
 {{- end }}
@@ -97,9 +105,12 @@ spec:
               value: 0.0.0.0
             - name: API_PORT
               value: {{ .port | quote }}
-            # Loopback only, set here so an envFrom source can't widen it (env wins over envFrom).
+            # Set here so an envFrom source can't widen it (env wins over envFrom): loopback, or with
+            # scraping on (P9-04) every pod interface, so `kubectl port-forward` (which connects to
+            # the pod's loopback) still works while one NetworkPolicy rule opens the pod IP to
+            # Prometheus alone. The pod never uses the host network (helm:check enforces it).
             - name: API_METRICS_HOST
-              value: 127.0.0.1
+              value: {{ ternary "0.0.0.0" "127.0.0.1" .metrics.scrape.enabled | quote }}
             - name: API_METRICS_PORT
               value: {{ .metricsPort | quote }}
             {{- include "portfolio.databaseEnv" $ | nindent 12 }}

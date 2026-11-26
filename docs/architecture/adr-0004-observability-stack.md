@@ -54,9 +54,13 @@ over them. Grafana is reachable on the tailnet only, like Argo CD.
   and updated by hand ([ADR 0002](adr-0002-dependency-updates.md)). Loki's and Grafana's charts
   moved to the `grafana-community` repository in 2026 (confirmed and pinned in P9-02). CI checks
   each chart archive's sha256, which Argo CD doesn't.
-- **The metrics port opens to one pod.** The API binds metrics to its pod IP instead of loopback,
-  and a NetworkPolicy lets only Prometheus reach it. It stays out of the Service, the tunnel, and
-  every other policy; `pnpm helm:check` enforces the new rule in place of the loopback one.
+- **The metrics port opens to one pod.** The API binds metrics to every pod interface
+  (`0.0.0.0`) instead of loopback alone, and a NetworkPolicy lets only Prometheus reach the pod
+  IP. It stays out of the Service, the tunnel, and every other policy; `pnpm helm:check` enforces
+  the new rule in place of the loopback one. _Amended 2026-11-26 (P9-04 review):_ the plan bound
+  the pod IP alone (`status.podIP`), which would break `kubectl port-forward`, since it connects
+  to the pod's loopback. `0.0.0.0` keeps it working; the check now also refuses the host network,
+  where that bind would mean every node interface. This assumes IPv4 pods.
 - **Reads are granted by the namespace that owns them.** The portfolio chart, not the monitoring
   Applications, creates the Role that lets the monitoring ServiceAccounts list pods and read their
   logs, so the `portfolio` AppProject still owns everything in `portfolio` and no ClusterRole is

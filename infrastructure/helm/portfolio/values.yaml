@@ -31,9 +31,22 @@ api:
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
   port: 3001
-  # Prometheus metrics (P7-01) listen on this port on the pod's loopback only: not in the
-  # Service, the tunnel, or any NetworkPolicy. Read them with `kubectl port-forward`.
+  # Prometheus metrics (P7-01) on their own port, never in the Service or the tunnel. Off (the
+  # default), they listen on the pod's loopback only: read them with `kubectl port-forward`.
   metricsPort: 9464
+  metrics:
+    # P9-04: listen on every pod interface (0.0.0.0: loopback keeps `kubectl port-forward`
+    # working), with one NetworkPolicy rule letting only the Prometheus pods below reach the pod
+    # IP. Requires networkPolicy.enabled. Assumes IPv4 pods (K3s's default): 0.0.0.0 doesn't
+    # listen on an IPv6 pod address.
+    scrape:
+      enabled: false
+      from:
+        namespace: monitoring
+        podLabels:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/instance: prometheus
+          app.kubernetes.io/component: server
   logLevel: log
   # Comma-separated browser origins allowed by CORS, e.g. https://portfolio.example.com. Leave
   # empty to supply CORS_ORIGINS through `envConfigMap` instead.
@@ -229,6 +242,13 @@ monitoring:
       enabled: false
       namespace: monitoring
       serviceAccount: alloy
+    # P9-04: Prometheus discovers the API pods (list/watch pods), and kube-state-metrics lists
+    # and watches the kinds it reports (restarts, Jobs, replicas, volumes).
+    metrics:
+      enabled: false
+      namespace: monitoring
+      prometheusServiceAccount: prometheus-server
+      stateServiceAccount: kube-state-metrics
 
 networkPolicy:
   # Default-deny for every pod in the namespace plus the explicit allows in

@@ -100,12 +100,14 @@ on purpose.
 ## Metrics
 
 - **Scrape path:** the chart gains `api.metrics.scrape.enabled`. When it is on, the API sets
-  `API_METRICS_HOST` to the pod's IP (Downward API `status.podIP`; no code change, since the
-  setting is already a host string), and a NetworkPolicy allows ingress on 9464 only from pods
-  labelled as Prometheus in the `monitoring` namespace. The port stays out of the Service, the
+  `API_METRICS_HOST` to `0.0.0.0` (no code change, since the setting is already a host string),
+  and a NetworkPolicy allows ingress on 9464 only from pods labelled as Prometheus in the
+  `monitoring` namespace. Every pod interface rather than the pod IP alone, because
+  `kubectl port-forward` connects to the pod's loopback. The port stays out of the Service, the
   tunnel, and cloudflared's policy. When it is off, it stays on loopback as in P7-01.
-  `check-chart.sh` accepts exactly these two renders and still fails any other host, any
-  Service port, or any wider rule.
+  `check-chart.sh` accepts exactly these two renders. It fails any other host, the host network,
+  any Service or container port, and any wider rule, including a rule that admits every port of
+  the API pods. Refusal cases cover each of these.
 - **Discovery:** Prometheus uses Kubernetes pod discovery in `portfolio`, keeping only API pods
   on the metrics port. Each replica is scraped on its own, so the HPA's 1–3 pods add up
   correctly with `sum()`.

@@ -36,3 +36,74 @@ subjects:
     namespace: {{ .namespace }}
 {{- end }}
 {{- end }}
+{{- with .Values.monitoring.readers.metrics }}
+{{- if .enabled }}
+{{- if or (not .namespace) (not .prometheusServiceAccount) (not .stateServiceAccount) }}
+{{- fail "monitoring.readers.metrics requires namespace, prometheusServiceAccount, and stateServiceAccount" }}
+{{- end }}
+{{- $fullname := include "portfolio.fullname" $ }}
+---
+# P9-04: Prometheus discovers this namespace's API pods to scrape their metrics port.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-monitoring-pod-discovery
+  labels:
+    {{- include "portfolio.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-monitoring-pod-discovery
+  labels:
+    {{- include "portfolio.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-monitoring-pod-discovery
+subjects:
+  - kind: ServiceAccount
+    name: {{ .prometheusServiceAccount }}
+    namespace: {{ .namespace }}
+---
+# P9-04: kube-state-metrics lists and watches exactly the kinds it reports (its --resources).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-monitoring-state-reader
+  labels:
+    {{- include "portfolio.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ['']
+    resources: [pods, persistentvolumeclaims]
+    verbs: [list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-monitoring-state-reader
+  labels:
+    {{- include "portfolio.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-monitoring-state-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .stateServiceAccount }}
+    namespace: {{ .namespace }}
+{{- end }}
+{{- end }}

@@ -2,6 +2,11 @@
 # The api and worker image digests live in images.yaml, which the release workflow rewrites on
 # every release from main. Don't edit images.yaml by hand.
 api:
+  # P9-04: metrics on every pod interface; the pod IP is open to the monitoring namespace's
+  # Prometheus only.
+  metrics:
+    scrape:
+      enabled: true
   # CORS_ORIGINS comes from the sealed Secret below (secrets/portfolio-api-env.sealedsecret.yaml),
   # so the domain stays out of plain Git.
   corsOrigins: ''
@@ -59,8 +64,11 @@ cloudflared:
   image:
     # cloudflare/cloudflared:2026.10.7, multi-arch index digest
     digest: sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
-# Phase 9: Alloy (monitoring namespace) reads this namespace's pod logs (P9-03).
+# Phase 9: Alloy (monitoring namespace) reads this namespace's pod logs (P9-03); Prometheus
+# discovers the API pods and kube-state-metrics reads workload state (P9-04).
 monitoring:
   readers:
     logs:
+      enabled: true
+    metrics:
       enabled: true

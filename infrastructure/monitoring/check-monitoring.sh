@@ -246,18 +246,36 @@ fi
 # The portfolio chart binds its log reader to Alloy's account by name. As production renders it
 # (the values Argo CD layers), it must be the account the monitoring chart binds, which
 # check_contract compared with the pod Alloy actually runs as.
-echo "== portfolio log reader subject (production)"
+echo "== portfolio readers and metrics rule (production)"
 production="$root/infrastructure/environments/production"
 production_args=(-f "$root/infrastructure/helm/portfolio/ci/digests-values.yaml" -f "$production/values.yaml")
 [[ -f "$production/images.yaml" ]] && production_args+=(-f "$production/images.yaml")
 if reader="$(render portfolio "$root/infrastructure/helm/portfolio" "${production_args[@]}" \
   -s templates/monitoring-readers.yaml)"; then
-  [[ "$(to_json <<<"$reader" | jq -r '[.[] | select(.kind == "RoleBinding") | .subjects[] |
-    .kind + " " + .namespace + "/" + .name] | join(",")')" == \
-    "ServiceAccount $namespace/$(jq -r '.readers.serviceAccounts.alloy' <<<"$own_values")" ]] ||
-    fail "production's portfolio log reader must bind only the $namespace namespace's Alloy account"
+  # Each binding's subject, by binding: the accounts the monitoring chart names, which
+  # check_contract compared with the pods' own accounts.
+  [[ "$(to_json <<<"$reader" | jq -c '[.[] | select(.kind == "RoleBinding") |
+    {(.metadata.name): [.subjects[] | .kind + " " + .namespace + "/" + .name]}] | add')" == \
+    "$(jq -c --arg ns "$namespace" '.readers.serviceAccounts as $sa | {
+      "portfolio-monitoring-log-reader": ["ServiceAccount \($ns)/\($sa.alloy)"],
+      "portfolio-monitoring-pod-discovery": ["ServiceAccount \($ns)/\($sa.prometheus)"],
+      "portfolio-monitoring-state-reader": ["ServiceAccount \($ns)/\($sa.kubeStateMetrics)"]}' \
+      <<<"$own_values")" ]] ||
+    fail "production's portfolio readers must bind exactly the $namespace namespace's Alloy, Prometheus, and kube-state-metrics accounts"
 else
-  fail "the production portfolio log reader $reader"
+  fail "the production portfolio readers $reader"
+fi
+# The API's metrics port admits the pods the monitoring chart calls Prometheus, in this namespace.
+if api_policy="$(render portfolio "$root/infrastructure/helm/portfolio" "${production_args[@]}" \
+  -s templates/networkpolicies.yaml)"; then
+  [[ "$(to_json <<<"$api_policy" | jq -c --argjson own "$own_values" --arg ns "$namespace" '
+    [.[] | select(.metadata.name == "portfolio-api") | .spec.ingress[] |
+      select(any(.ports[]?; .port == $own.networkPolicy.portfolio.metricsPort)) | .from] ==
+    [[{namespaceSelector: {matchLabels: {"kubernetes.io/metadata.name": $ns}},
+       podSelector: {matchLabels: $own.pods.prometheus}}]]')" == true ]] ||
+    fail "production's API metrics rule must admit exactly the $namespace namespace's Prometheus pods"
+else
+  fail "the production portfolio NetworkPolicies $api_policy"
 fi
 
 # The local stack (compose.observability.yaml, P9-08) runs exactly the cluster's images.

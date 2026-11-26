@@ -1,0 +1,20 @@
+# CI rendering only: P9-04 metrics scraping on (0.0.0.0, one NetworkPolicy rule) and the metrics
+# readers, so their manifests render and the guardrails can check them.
+api:
+  image:
+    tag: ci
+  metrics:
+    scrape:
+      enabled: true
+worker:
+  image:
+    tag: ci
+monitoring:
+  readers:
+    metrics:
+      enabled: true
+# The backup CronJob renders too, so the guardrail is tested on CronJob containers.
+postgres:
+  backup:
+    enabled: true
+    hostPath: /srv/portfolio-backups/postgres
