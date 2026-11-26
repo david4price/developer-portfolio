@@ -134,6 +134,19 @@ describe('alert rules', () => {
     ]);
   });
 
+  it('rejects a dashboard link without a panel, which stops Grafana from starting', () => {
+    assert.deepEqual(
+      alertFileProblems(alertFile([rule({ annotations: { __dashboardUid__: 'portfolio-api' } })])),
+      ['group "api": rule "api-down" needs both __dashboardUid__ and __panelId__, or neither'],
+    );
+    assert.deepEqual(
+      alertFileProblems(
+        alertFile([rule({ annotations: { __dashboardUid__: 'portfolio-api', __panelId__: '2' } })]),
+      ),
+      [],
+    );
+  });
+
   it('rejects a dangling condition, an unknown data source, and a missing uid or title', () => {
     assert.deepEqual(
       alertFileProblems(

@@ -15,4 +15,6 @@ must:
 - give each group a `name`, `folder`, and `interval`, and at least one rule;
 - give each rule a unique `uid` of 1–40 letters, digits, `-`, or `_`, a `title`, a `condition`
   that names one of its `data` queries, and only the provisioned data sources (`prometheus`,
-  `loki`) or Grafana's expressions (`__expr__`) as `datasourceUid`.
+  `loki`) or Grafana's expressions (`__expr__`) as `datasourceUid`;
+- set `__dashboardUid__` and `__panelId__` together or not at all (Grafana refuses to start
+  otherwise); a plain `dashboard` annotation with a `/d/<uid>` link is simpler.
