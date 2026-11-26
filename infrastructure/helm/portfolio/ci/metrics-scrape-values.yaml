@@ -1,0 +1,15 @@
+# CI rendering only: P9-04 metrics scraping on (pod IP, one NetworkPolicy rule) and the metrics
+# readers, so their manifests render and the guardrails can check them.
+api:
+  image:
+    tag: ci
+  metrics:
+    scrape:
+      enabled: true
+worker:
+  image:
+    tag: ci
+monitoring:
+  readers:
+    metrics:
+      enabled: true

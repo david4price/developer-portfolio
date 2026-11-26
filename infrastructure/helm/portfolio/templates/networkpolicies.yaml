@@ -62,6 +62,21 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.api.port }}
+    {{- with .Values.api.metrics.scrape }}
+    {{- if .enabled }}
+    # P9-04: the metrics port, from the monitoring namespace's Prometheus pods only.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .from.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .from.podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.api.metricsPort }}
+    {{- end }}
+    {{- end }}
   egress:
     - to:
         - podSelector:

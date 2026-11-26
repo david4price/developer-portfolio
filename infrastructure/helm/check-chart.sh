@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Lints and renders the portfolio chart, validates the manifests against Kubernetes schemas, and
-# checks the chart's guardrails. Needs `helm` and `kubeconform` on PATH; touches no cluster.
+# checks the chart's guardrails. Needs `helm`, `kubeconform`, `yq`, and `jq` on PATH; touches no
+# cluster.
 #   pnpm helm:check
 set -euo pipefail
 
@@ -16,28 +17,64 @@ render() {
   helm template portfolio "$chart" --namespace portfolio "$@"
 }
 
-# env_value <manifests> <name>: the value of a container environment variable in the render.
-env_value() {
-  # A missing variable prints nothing (and must not trip `set -e`), so the caller reports it.
-  { grep -A1 -E "^ *- name: $2\$" <<<"$1" || true; } |
-    awk '$1 == "value:" { gsub(/"/, "", $2); print $2 }'
-}
-
-# API metrics stay on the pod's loopback (P7-01): the chart pins API_METRICS_HOST to 127.0.0.1 in
-# `env`, which wins over `envFrom`, and the port (as rendered) is never a port, containerPort, or
-# targetPort of a container, Service, or NetworkPolicy. Not covered: URLs such as a tunnel
-# ingress service, and NetworkPolicy port ranges (`endPort`).
-check_metrics_private() {
-  local host port
-  host="$(env_value "$2" API_METRICS_HOST)"
-  port="$(env_value "$2" API_METRICS_PORT)"
-  if [[ "$host" != "127.0.0.1" ]]; then
-    fail "$1 renders API_METRICS_HOST='$host', not 127.0.0.1"
-  elif ! [[ "$port" =~ ^[0-9]+$ ]]; then
-    fail "$1 renders no numeric API_METRICS_PORT"
-  elif grep -qiE "port: \"?${port}\"?\$" <<<"$2"; then
-    fail "$1 exposes the API metrics port ($port)"
+# API metrics (P7-01, P9-04) are never in a Service, a container port, or the tunnel, and only two
+# renders are accepted:
+#   - loopback: API_METRICS_HOST is 127.0.0.1 and no NetworkPolicy rule names the port;
+#   - scrape: API_METRICS_HOST is the pod's IP (Downward API) and exactly one rule names the port:
+#     ingress to the API from the monitoring namespace's Prometheus pods, on that port alone.
+# The host is set in `env`, which wins over `envFrom`. Needs yq and jq.
+check_metrics() {
+  local name="$1" json port mode problems
+  json="$(yq ea -o=json '[.] | map(select(. != null))' <<<"$2")" || { fail "$name: render isn't YAML"; return; }
+  port="$(jq -r '[.[] | select(.kind == "Deployment" and .metadata.name == "portfolio-api") |
+    .spec.template.spec.containers[] | select(.name == "api") | .env[]? |
+    select(.name == "API_METRICS_PORT") | .value] | first // ""' <<<"$json")"
+  if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    fail "$name renders no numeric API_METRICS_PORT"
+    return
   fi
+  mode="$(jq -r '[.[] | select(.kind == "Deployment" and .metadata.name == "portfolio-api") |
+    .spec.template.spec.containers[] | select(.name == "api") | .env[]? |
+    select(.name == "API_METRICS_HOST")] |
+    if length != 1 then "missing"
+    elif .[0].value == "127.0.0.1" and .[0].valueFrom == null then "loopback"
+    elif .[0].value == null and .[0].valueFrom == {fieldRef: {fieldPath: "status.podIP"}} then "scrape"
+    else "other" end' <<<"$json")"
+  problems="$(jq -r --argjson port "$port" --arg mode "$mode" '
+    def is_port: (. == $port) or (. == ($port | tostring));
+    # Every NetworkPolicy rule that names the metrics port, or a range that could include it.
+    [.[] | select(.kind == "NetworkPolicy") as $policy |
+      (($policy.spec.ingress // [] | map({dir: "ingress", rule: .})) +
+       ($policy.spec.egress // [] | map({dir: "egress", rule: .})))[] |
+      select(any(.rule.ports[]?; (.port | is_port) or .endPort != null)) |
+      . + {policy: $policy.metadata.name}] as $rules
+    | (.[] | select(.kind == "Service") | .spec.ports[]? |
+        select((.port | is_port) or (.targetPort | is_port)) | "a Service exposes the metrics port"),
+      (.[] | (.spec.template.spec // {}) | ((.containers // []) + (.initContainers // []))[] |
+        .ports[]? | select(.containerPort | is_port) | "a container declares the metrics port"),
+      (if $mode == "loopback" then
+         ($rules[] | "\(.policy) names the metrics port with loopback metrics")
+       elif $mode == "scrape" then
+         (if ($rules | length) != 1 then "\($rules | length) NetworkPolicy rules name the metrics port, not 1"
+          else $rules[0] as $r |
+            (if $r.policy != "portfolio-api" or $r.dir != "ingress" then
+               "the metrics port rule must be ingress in portfolio-api" else empty end),
+            (if $r.rule.ports != [{protocol: "TCP", port: $port}] then
+               "the metrics port rule must allow TCP \($port) alone" else empty end),
+            (if $r.rule.from != [{
+                  namespaceSelector: {matchLabels: {"kubernetes.io/metadata.name": "monitoring"}},
+                  podSelector: {matchLabels: {"app.kubernetes.io/name": "prometheus",
+                    "app.kubernetes.io/instance": "prometheus", "app.kubernetes.io/component": "server"}}}]
+             then "the metrics port rule must admit only the monitoring namespace'"'"'s Prometheus pods"
+             else empty end)
+          end),
+         # A rule with no ports admits every port, the metrics port included.
+         (.[] | select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-api") |
+           .spec.ingress[]? | select((.ports // []) | length == 0) |
+           "an API ingress rule without ports would admit the metrics port")
+       else "API_METRICS_HOST must be 127.0.0.1 or the pod IP from status.podIP (got \($mode))" end)
+    ' <<<"$json")" || { fail "$name: metrics check couldn't run"; return; }
+  [[ -z "$problems" ]] || while read -r problem; do fail "$name: $problem"; done <<<"$problems"
 }
 
 for values in "$chart"/ci/*-values.yaml; do
@@ -52,7 +89,7 @@ for values in "$chart"/ci/*-values.yaml; do
   if grep -qE '^kind: Secret$' <<<"$manifests"; then
     fail "$name renders a Secret"
   fi
-  check_metrics_private "$name" "$manifests"
+  check_metrics "$name" "$manifests"
 done
 
 # Production values on top of CI placeholders; images.yaml exists after the first release.
@@ -65,7 +102,7 @@ fi
 helm lint --strict "$chart" "${production_args[@]}"
 production_manifests="$(render "${production_args[@]}")"
 kubeconform -strict -summary -output text <<<"$production_manifests"
-check_metrics_private "environments/production" "$production_manifests"
+check_metrics "environments/production" "$production_manifests"
 
 # expect_failure <expected error text> <render args…>: rendering must fail with that message.
 expect_failure() {
@@ -186,9 +223,44 @@ expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
 expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
   -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.namespace=
 
+# Metrics readers (P9-04): pod discovery (list/watch pods) for Prometheus, and exactly the kinds
+# kube-state-metrics reports for it; each bound to its own account in monitoring alone.
+echo "== monitoring metrics reader Roles"
+if ! readers="$(render -f "$chart/ci/metrics-scrape-values.yaml" -s templates/monitoring-readers.yaml 2>&1)"; then
+  fail "metrics readers don't render: $readers"
+else
+  readers_json="$(yq ea -o=json '[.] | map(select(. != null))' <<<"$readers")"
+  expected='[
+    {"kind":"Role","name":"portfolio-monitoring-pod-discovery",
+     "rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["list","watch"]}]},
+    {"kind":"RoleBinding","name":"portfolio-monitoring-pod-discovery",
+     "roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"portfolio-monitoring-pod-discovery"},
+     "subjects":[{"kind":"ServiceAccount","name":"prometheus-server","namespace":"monitoring"}]},
+    {"kind":"Role","name":"portfolio-monitoring-state-reader",
+     "rules":[{"apiGroups":[""],"resources":["pods","persistentvolumeclaims"],"verbs":["list","watch"]},
+              {"apiGroups":["apps"],"resources":["deployments","statefulsets"],"verbs":["list","watch"]},
+              {"apiGroups":["batch"],"resources":["jobs","cronjobs"],"verbs":["list","watch"]},
+              {"apiGroups":["autoscaling"],"resources":["horizontalpodautoscalers"],"verbs":["list","watch"]}]},
+    {"kind":"RoleBinding","name":"portfolio-monitoring-state-reader",
+     "roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"portfolio-monitoring-state-reader"},
+     "subjects":[{"kind":"ServiceAccount","name":"kube-state-metrics","namespace":"monitoring"}]}]'
+  # Exactly these four objects (the log reader is off in this fixture): any added verb, resource,
+  # subject, or ClusterRole fails.
+  [[ "$(jq -c 'map({kind, name: .metadata.name, rules, roleRef, subjects} |
+      with_entries(select(.value != null))) | sort_by(.kind, .name)' <<<"$readers_json")" == \
+    "$(jq -c 'sort_by(.kind, .name)' <<<"$expected")" ]] ||
+    fail "the metrics readers must be exactly the pod discovery and state reader Roles and bindings"
+fi
+expect_failure 'monitoring.readers.metrics requires namespace, prometheusServiceAccount, and stateServiceAccount' \
+  -f "$chart/ci/metrics-scrape-values.yaml" --set monitoring.readers.metrics.stateServiceAccount=
+expect_failure 'api.metrics.scrape.enabled requires networkPolicy.enabled' \
+  -f "$chart/ci/metrics-scrape-values.yaml" --set networkPolicy.enabled=false
+expect_failure 'api.metrics.scrape.from.namespace and .podLabels are required' \
+  -f "$chart/ci/metrics-scrape-values.yaml" --set api.metrics.scrape.from.namespace=
+
 # No template anywhere may render cluster-wide RBAC, with the view on or off.
 for values in "$chart/ci/infrastructure-values.yaml" "$chart/ci/digests-values.yaml" \
-  "$chart/ci/monitoring-values.yaml"; do
+  "$chart/ci/monitoring-values.yaml" "$chart/ci/metrics-scrape-values.yaml"; do
   if render -f "$values" | grep -qE '^kind: (ClusterRole|ClusterRoleBinding)$'; then
     fail "$(basename "$values") renders cluster-wide RBAC"
   fi

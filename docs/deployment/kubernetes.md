@@ -402,14 +402,21 @@ calm). While it's on, the Deployment omits `replicas`, so the HPA alone sets the
 Application additionally ignores `/spec/replicas` on `portfolio-api` (`RespectIgnoreDifferences`).
 Chat limits (P5-03) live in Redis, so they hold across replicas. metrics-server ships with K3s.
 
-### API metrics (P7-01)
+### API metrics (P7-01, P9-04)
 
-Each API pod serves Prometheus metrics on `api.metricsPort` (9464), bound to the pod's loopback.
-The port isn't in the Service, the tunnel, or any NetworkPolicy, so no other pod and no visitor
-can reach it. The chart sets `API_METRICS_HOST=127.0.0.1` in the container's `env`, so a value in
-`envSecret` or `envConfigMap` is ignored, and `pnpm helm:check` fails if a render widens the host
-or exposes the port. Operators read one pod at a time
-over the private kubeconfig; no Prometheus runs in the cluster:
+Each API pod serves Prometheus metrics on `api.metricsPort` (9464). The port is never in the
+Service, the tunnel, or a container port, so no visitor can reach it. The chart sets
+`API_METRICS_HOST` in the container's `env`, so a value in `envSecret` or `envConfigMap` is
+ignored. `pnpm helm:check` accepts exactly two renders:
+
+- **Loopback** (the default): `127.0.0.1`, and no NetworkPolicy rule names the port.
+- **Scraped** (`api.metrics.scrape.enabled`, production since P9-04): the pod's own IP (Downward
+  API `status.podIP`). Exactly one rule names the port: ingress to the API from the
+  `monitoring` namespace's Prometheus pods, on TCP 9464 alone. It requires NetworkPolicies, so
+  no other pod (cloudflared included) can reach it.
+
+Prometheus keeps the history (see [Monitoring stack](#monitoring-stack-phase-9-approval-required)).
+To read one pod directly, over the private kubeconfig:
 
 ```bash
 kubectl -n portfolio port-forward deploy/portfolio-api 9464:9464
@@ -483,7 +490,33 @@ Argo CD keeps each in sync with `main`.
        - values rather than words: `|~ "(?i)bearer [a-z0-9._-]{10,}|cookie:\\s*\\S+|set-cookie"`.
 
        A real leak is fixed at its source before retention is relied on.
-3. **Metrics** (P9-04): Prometheus and kube-state-metrics.
+3. **Metrics (P9-04).**
+   - **The portfolio chart** (production: on):
+     - `api.metrics.scrape.enabled` moves the API's metrics to its pod IP and opens 9464 to
+       Prometheus alone. The API rolls once.
+     - `monitoring.readers.metrics` gives Prometheus pod discovery (`list`/`watch` on pods) and
+       kube-state-metrics `list`/`watch` on the kinds it reports, both in `portfolio`.
+     - `pnpm helm:check` compares both Roles exactly.
+   - **Prometheus and kube-state-metrics**, after that sync:
+     `kubectl apply -f infrastructure/argocd/monitoring/kube-state-metrics.yaml -f infrastructure/argocd/monitoring/prometheus.yaml`.
+   - **Validate:**
+     - Every target is up: `kubectl -n monitoring port-forward svc/prometheus-server 9090:80`,
+       then `up` on `/api/v1/query` shows `portfolio-api` (one per API pod), `kube-state-metrics`,
+       `loki`, `alloy`, and `prometheus` at 1.
+     - kube-state-metrics sees only its two namespaces: `count by (namespace) (kube_pod_info)`
+       shows `portfolio` and `monitoring`.
+     - `/metrics` on the public API host returns 404.
+     - A pod in another namespace, and cloudflared in `portfolio`, can't connect to an API pod's
+       IP on 9464.
+     - The new accounts can't read Secrets:
+
+       ```bash
+       kubectl auth can-i list pods -n portfolio --as=system:serviceaccount:monitoring:prometheus-server              # yes
+       kubectl auth can-i get secrets -n portfolio --as=system:serviceaccount:monitoring:prometheus-server            # no
+       kubectl auth can-i list deployments -n portfolio --as=system:serviceaccount:monitoring:kube-state-metrics      # yes
+       kubectl auth can-i get secrets -n portfolio --as=system:serviceaccount:monitoring:kube-state-metrics           # no
+       kubectl auth can-i list pods -n kube-system --as=system:serviceaccount:monitoring:kube-state-metrics           # no
+       ```
 4. **Grafana** (P9-05), after its admin SealedSecret.
 
 **Rollback:**
@@ -491,7 +524,9 @@ Argo CD keeps each in sync with `main`.
 - `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no
   resources finalizer). `kubectl delete namespace monitoring` then removes everything, including
   the logs and metrics volumes.
-- Turning `monitoring.readers.logs.enabled` off removes the portfolio Role on the next sync.
+- Turning `monitoring.readers.logs.enabled` or `.metrics.enabled` off removes those portfolio
+  Roles on the next sync. Turning `api.metrics.scrape.enabled` off puts the metrics back on
+  loopback and removes their NetworkPolicy rule (the API rolls once).
 - Nothing in `portfolio` depends on monitoring.
 
 ### Infrastructure Explorer reader (P6-01, approval required)

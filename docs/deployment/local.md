@@ -76,7 +76,8 @@ status class, error responses by code, abandoned requests (`http_client_disconne
 counted as errors), readiness per dependency, AI inference time by outcome, the
 AI wait queue, and process and Node.js runtime metrics. Nothing scrapes them by default; read them
 with `curl`. In `compose.full.yaml` the API binds them inside its container, so other containers on
-the Compose network can reach `api:9464` too; in Kubernetes they stay on the pod's loopback.
+the Compose network can reach `api:9464` too. In Kubernetes they stay on the pod's loopback unless
+`api.metrics.scrape.enabled` opens them to Prometheus alone (production, P9-04).
 
 `GET /api/v1/projects` returns `{ items, nextCursor }`, ordered featured first, then by title.
 `limit` is 1–50 (default 20). To get the next page, pass the returned `nextCursor` back as

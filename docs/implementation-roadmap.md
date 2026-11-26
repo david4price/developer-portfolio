@@ -308,9 +308,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-08-local-observability` (PR #76, CI green). PRs #65 to #75 are
-merged; Loki and Alloy are live (2026-11-25), and P9-03's privacy check is scheduled for
-2026-11-27.
+**Branch in progress:** `feat/p9-04-metrics` (the API's metrics opened to Prometheus alone, and the
+metrics readers). PRs #65 to #76 are merged; Loki and Alloy are live (2026-11-25), and P9-03's
+privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
