@@ -846,7 +846,7 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       Explorer account still can't read logs; a pod in another namespace can't reach Loki; and a
       day of collected logs holds no client IPs, cookies, tokens, or chat text.
 - [ ] **P9-04** 🔒 Metrics: Prometheus and kube-state-metrics. _Needs:_ P9-02. _Done when:_
-      `api.metrics.scrape.enabled` binds the API's metrics to the pod IP, with ingress on 9464
+      `api.metrics.scrape.enabled` opens the API's metrics beyond loopback, with ingress on 9464
       from Prometheus only, `check-chart.sh` accepts that render and still fails any other host,
       Service port, or wider rule (tests for both), Prometheus scrapes every API replica and
       kube-state-metrics (limited to `portfolio` and `monitoring`), `/metrics` on the public host

@@ -35,8 +35,9 @@ api:
   # default), they listen on the pod's loopback only: read them with `kubectl port-forward`.
   metricsPort: 9464
   metrics:
-    # P9-04: listen on the pod's IP instead, with one NetworkPolicy rule letting only the
-    # Prometheus pods below reach the port. Requires networkPolicy.enabled.
+    # P9-04: listen on every pod interface (0.0.0.0: loopback keeps `kubectl port-forward`
+    # working), with one NetworkPolicy rule letting only the Prometheus pods below reach the pod
+    # IP. Requires networkPolicy.enabled.
     scrape:
       enabled: false
       from:

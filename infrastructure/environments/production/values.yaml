@@ -2,7 +2,8 @@
 # The api and worker image digests live in images.yaml, which the release workflow rewrites on
 # every release from main. Don't edit images.yaml by hand.
 api:
-  # P9-04: metrics on the pod IP, open to the monitoring namespace's Prometheus only.
+  # P9-04: metrics on every pod interface; the pod IP is open to the monitoring namespace's
+  # Prometheus only.
   metrics:
     scrape:
       enabled: true

@@ -410,10 +410,10 @@ Service, the tunnel, or a container port, so no visitor can reach it. The chart 
 ignored. `pnpm helm:check` accepts exactly two renders:
 
 - **Loopback** (the default): `127.0.0.1`, and no NetworkPolicy rule names the port.
-- **Scraped** (`api.metrics.scrape.enabled`, production since P9-04): the pod's own IP (Downward
-  API `status.podIP`). Exactly one rule names the port: ingress to the API from the
-  `monitoring` namespace's Prometheus pods, on TCP 9464 alone. It requires NetworkPolicies, so
-  no other pod (cloudflared included) can reach it.
+- **Scraped** (`api.metrics.scrape.enabled`, production since P9-04): `0.0.0.0`. Loopback still
+  serves `kubectl port-forward`, and exactly one rule names the port: ingress to the API from
+  the `monitoring` namespace's Prometheus pods, on TCP 9464 alone. It requires NetworkPolicies
+  and a pod off the host network, so no other pod (cloudflared included) can reach it.
 
 Prometheus keeps the history (see [Monitoring stack](#monitoring-stack-phase-9-approval-required)).
 To read one pod directly, over the private kubeconfig:
@@ -492,8 +492,8 @@ Argo CD keeps each in sync with `main`.
        A real leak is fixed at its source before retention is relied on.
 3. **Metrics (P9-04).**
    - **The portfolio chart** (production: on):
-     - `api.metrics.scrape.enabled` moves the API's metrics to its pod IP and opens 9464 to
-       Prometheus alone. The API rolls once.
+     - `api.metrics.scrape.enabled` binds the API's metrics to `0.0.0.0` and opens the pod IP's
+       9464 to Prometheus alone. The API rolls once.
      - `monitoring.readers.metrics` gives Prometheus pod discovery (`list`/`watch` on pods) and
        kube-state-metrics `list`/`watch` on the kinds it reports, both in `portfolio`.
      - `pnpm helm:check` compares both Roles exactly.

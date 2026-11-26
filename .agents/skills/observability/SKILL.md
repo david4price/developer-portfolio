@@ -37,8 +37,8 @@ metric labels low-cardinality so Loki and Prometheus stay small.
 - `main.ts` serves `GET /metrics` on `API_METRICS_HOST:API_METRICS_PORT` (default
   `127.0.0.1:9464`), apart from the public port. In Kubernetes it is never in the Service or
   tunnel. It stays on the pod's loopback, or, with `api.metrics.scrape.enabled` (production,
-  P9-04), the pod IP opened to the monitoring namespace's Prometheus alone by one NetworkPolicy
-  rule. `pnpm helm:check` accepts only those two renders.
+  P9-04), `0.0.0.0`, with the pod IP opened to the monitoring namespace's Prometheus alone by
+  one NetworkPolicy rule. `pnpm helm:check` accepts only those two renders.
 - What's measured: `http_request_duration_seconds` (method, route pattern, status class, from
   `configureApp()`), `api_errors_total` (code, from `ApiExceptionFilter`),
   `http_client_disconnects_total` (abandoned requests, kept out of the error count),

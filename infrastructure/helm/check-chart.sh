@@ -20,8 +20,10 @@ render() {
 # API metrics (P7-01, P9-04) are never in a Service, a container port, or the tunnel, and only two
 # renders are accepted:
 #   - loopback: API_METRICS_HOST is 127.0.0.1 and no NetworkPolicy rule names the port;
-#   - scrape: API_METRICS_HOST is the pod's IP (Downward API) and exactly one rule names the port:
-#     ingress to the API from the monitoring namespace's Prometheus pods, on that port alone.
+#   - scrape: API_METRICS_HOST is 0.0.0.0 (the pod's loopback, for port-forward, and its pod IP),
+#     the pod isn't on the host network, and exactly one rule names the port: ingress to the API
+#     from the monitoring namespace's Prometheus pods, on that port alone. No rule that applies to
+#     the API pods may admit every port.
 # The host is set in `env`, which wins over `envFrom`. Needs yq and jq.
 check_metrics() {
   local name="$1" json port mode problems
@@ -37,11 +39,18 @@ check_metrics() {
     .spec.template.spec.containers[] | select(.name == "api") | .env[]? |
     select(.name == "API_METRICS_HOST")] |
     if length != 1 then "missing"
-    elif .[0].value == "127.0.0.1" and .[0].valueFrom == null then "loopback"
-    elif .[0].value == null and .[0].valueFrom == {fieldRef: {fieldPath: "status.podIP"}} then "scrape"
+    elif .[0].valueFrom != null then "other"
+    elif .[0].value == "127.0.0.1" then "loopback"
+    elif .[0].value == "0.0.0.0" then "scrape"
     else "other" end' <<<"$json")"
   problems="$(jq -r --argjson port "$port" --arg mode "$mode" '
     def is_port: (. == $port) or (. == ($port | tostring));
+    # The API pods labels, to find every NetworkPolicy that applies to them.
+    ([.[] | select(.kind == "Deployment" and .metadata.name == "portfolio-api") |
+      .spec.template.metadata.labels] | first // {}) as $api_labels
+    | def selects_api: (.spec.podSelector.matchLabels // {}) as $want |
+        ($want | to_entries | all(.value == $api_labels[.key])) and
+        ((.spec.podSelector.matchExpressions // []) | length == 0);
     # Every NetworkPolicy rule that names the metrics port, or a range that could include it.
     [.[] | select(.kind == "NetworkPolicy") as $policy |
       (($policy.spec.ingress // [] | map({dir: "ingress", rule: .})) +
@@ -50,8 +59,10 @@ check_metrics() {
       . + {policy: $policy.metadata.name}] as $rules
     | (.[] | select(.kind == "Service") | .spec.ports[]? |
         select((.port | is_port) or (.targetPort | is_port)) | "a Service exposes the metrics port"),
-      (.[] | (.spec.template.spec // {}) | ((.containers // []) + (.initContainers // []))[] |
-        .ports[]? | select(.containerPort | is_port) | "a container declares the metrics port"),
+      # Containers anywhere: Deployments, StatefulSets, Jobs, and CronJobs alike.
+      ([.. | objects | (.containers?, .initContainers?) | arrays | .[]] | .[] |
+        .ports[]? | select((.containerPort | is_port) or (.hostPort != null and (.hostPort | is_port))) |
+        "a container declares the metrics port"),
       (if $mode == "loopback" then
          ($rules[] | "\(.policy) names the metrics port with loopback metrics")
        elif $mode == "scrape" then
@@ -68,11 +79,14 @@ check_metrics() {
              then "the metrics port rule must admit only the monitoring namespace'"'"'s Prometheus pods"
              else empty end)
           end),
-         # A rule with no ports admits every port, the metrics port included.
-         (.[] | select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-api") |
-           .spec.ingress[]? | select((.ports // []) | length == 0) |
-           "an API ingress rule without ports would admit the metrics port")
-       else "API_METRICS_HOST must be 127.0.0.1 or the pod IP from status.podIP (got \($mode))" end)
+         # A rule with no ports, or a ports entry without a port, admits every port.
+         (.[] | select(.kind == "NetworkPolicy" and selects_api) | .metadata.name as $policy |
+           .spec.ingress[]? | select(((.ports // []) | length == 0) or any(.ports[]; .port == null)) |
+           "\($policy) has an ingress rule that admits every port of the API pods"),
+         # On the host network the bind would be every node interface, outside any NetworkPolicy.
+         (.[] | select(.kind == "Deployment" and .metadata.name == "portfolio-api") |
+           select(.spec.template.spec.hostNetwork == true) | "the API pod must not use the host network")
+       else "API_METRICS_HOST must be the value 127.0.0.1, or 0.0.0.0 with scraping (got \($mode))" end)
     ' <<<"$json")" || { fail "$name: metrics check couldn't run"; return; }
   [[ -z "$problems" ]] || while read -r problem; do fail "$name: $problem"; done <<<"$problems"
 }
@@ -222,6 +236,39 @@ expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
   -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.serviceAccount=
 expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
   -f "$chart/ci/monitoring-values.yaml" --set monitoring.readers.logs.namespace=
+
+# check_metrics must refuse widened renders (P9-04): each case edits a passing scrape render.
+echo "== metrics guardrail refusals"
+scrape_render="$(render -f "$chart/ci/metrics-scrape-values.yaml")"
+# expect_metrics_refused <description> <yq edit>: check_metrics must report at least one problem.
+expect_metrics_refused() {
+  local edited found
+  edited="$(yq "$2" <<<"$scrape_render")" || { fail "metrics refusal case '$1' doesn't apply"; return; }
+  found="$(failures=0; check_metrics probe "$edited" >/dev/null 2>&1; echo "$failures")"
+  ((found > 0)) || fail "check_metrics accepted $1"
+}
+api_policy='select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-api")'
+api_deploy='select(.kind == "Deployment" and .metadata.name == "portfolio-api")'
+expect_metrics_refused "a Service port on the metrics port" \
+  '(select(.kind == "Service" and .metadata.name == "portfolio-api") | .spec.ports) += [{"port": 9464}]'
+expect_metrics_refused "a CronJob container port on the metrics port" \
+  '(select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec.containers[0].ports) = [{"containerPort": 9464}]'
+expect_metrics_refused "the host network" "($api_deploy | .spec.template.spec.hostNetwork) = true"
+expect_metrics_refused "a cloudflared rule open to every TCP port" \
+  "($api_policy | .spec.ingress[0].ports) = [{\"protocol\": \"TCP\"}]"
+expect_metrics_refused "a second rule naming the metrics port" \
+  "($api_policy | .spec.ingress) += [{\"ports\": [{\"port\": 9464}]}]"
+expect_metrics_refused "the metrics rule from another namespace" \
+  "($api_policy | .spec.ingress[1].from[0].namespaceSelector.matchLabels) = {\"kubernetes.io/metadata.name\": \"default\"}"
+expect_metrics_refused "the metrics rule from any pod in monitoring" \
+  "del($api_policy | .spec.ingress[1].from[0].podSelector)"
+expect_metrics_refused "a port range" "($api_policy | .spec.ingress[1].ports[0].endPort) = 9500"
+expect_metrics_refused "a namespace-wide policy admitting every port" \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-default-deny") | .spec.ingress) = [{}]'
+expect_metrics_refused "loopback metrics with the rule still there" \
+  "($api_deploy | .spec.template.spec.containers[0].env[] | select(.name == \"API_METRICS_HOST\") | .value) = \"127.0.0.1\""
+expect_metrics_refused "a host other than the two" \
+  "($api_deploy | .spec.template.spec.containers[0].env[] | select(.name == \"API_METRICS_HOST\") | .value) = \"192.0.2.10\""
 
 # Metrics readers (P9-04): pod discovery (list/watch pods) for Prometheus, and exactly the kinds
 # kube-state-metrics reports for it; each bound to its own account in monitoring alone.

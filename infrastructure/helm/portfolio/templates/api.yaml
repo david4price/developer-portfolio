@@ -106,15 +106,11 @@ spec:
             - name: API_PORT
               value: {{ .port | quote }}
             # Set here so an envFrom source can't widen it (env wins over envFrom): loopback, or with
-            # scraping on (P9-04) the pod's own IP, which one NetworkPolicy rule opens to Prometheus.
+            # scraping on (P9-04) every pod interface, so `kubectl port-forward` (which connects to
+            # the pod's loopback) still works while one NetworkPolicy rule opens the pod IP to
+            # Prometheus alone. The pod never uses the host network (helm:check enforces it).
             - name: API_METRICS_HOST
-              {{- if .metrics.scrape.enabled }}
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-              {{- else }}
-              value: 127.0.0.1
-              {{- end }}
+              value: {{ ternary "0.0.0.0" "127.0.0.1" .metrics.scrape.enabled | quote }}
             - name: API_METRICS_PORT
               value: {{ .metricsPort | quote }}
             {{- include "portfolio.databaseEnv" $ | nindent 12 }}
