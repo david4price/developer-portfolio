@@ -22,8 +22,8 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
 - **Grafana (P9-05)** is on the tailnet with its dashboards, validated (following a 5xx to its
   log lines in CI). It ticks with P9-03.
 
-**Proposed:** alerts (P9-06), capacity and failure checks (P9-07), and the runbooks and final
-documentation (P9-09).
+**Proposed:** capacity and failure checks (P9-07), and the runbooks and final documentation
+(P9-09). Alerts (P9-06) are live and drilled, waiting on a quiet week.
 
 ## Shape
 
@@ -231,8 +231,11 @@ and dashboards are validated on the tailnet; the task ticks with P9-03
 
 ## Alerts
 
+**Confirmed in part (P9-06, 2026-11-26):** live, and each rule fired and resolved once in a drill
+(18 notifications reached the owner). Thresholds are confirmed after a quiet week.
+
 Grafana-managed rules in `infrastructure/helm/monitoring/alerts/portfolio.json` (folder "Portfolio
-alerts", one group evaluated every minute), provisioned with UI edits disabled. Each has a
+alerts": eight rules in a group evaluated every minute, the Argo CD token rule hourly), provisioned with UI edits disabled. Each has a
 severity, a summary, a link to its dashboard, and a runbook link (`docs/operations/runbooks.md`,
 written in P9-09). Thresholds are starting points that P9-06 tunes against real traffic. Without
 data, a rule stays OK, except API down and Monitoring broken, which treat silence (and query

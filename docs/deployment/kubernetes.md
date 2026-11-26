@@ -544,7 +544,7 @@ Argo CD keeps each in sync with `main`.
      - The four dashboards are in the Portfolio folder, and a save is refused.
      - A `requestId` in a log line opens the Logs dashboard filtered to that request.
 
-5. **Alerts (P9-06).**
+5. **Alerts (P9-06, applied 2026-11-26).**
    - **Rules** in `infrastructure/helm/monitoring/alerts/` reach Grafana through the `monitoring`
      chart's `grafana-alert-rules-<hash>` ConfigMap.
    - **Contact point:** the `grafana-alerting-<n>` SealedSecret holds the contact point and the
@@ -563,8 +563,22 @@ Argo CD keeps each in sync with `main`.
        hand once no pod mounts them.
    - **Validate:**
      - Grafana lists the nine rules in "Portfolio alerts".
-     - A test notification from the contact point reaches the owner.
-     - Each rule has fired and resolved once in a drill.
+     - A test notification reaches the owner. Grafana 13 serves this as
+       `POST /apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<uid>/test`,
+       with the receiver's integration as `{"integration": …}`. The receiver's uid is listed
+       under `…/receivers`; the old `/api/alertmanager/…/receivers/test` answers 410.
+     - Each rule has fired and resolved once in a drill, without an outage:
+       - **Real triggers** for three rules: a throwaway pod in `portfolio` logging JSON error
+         lines, a Job named `portfolio-postgres-backup-<x>` that exits 1, and a pod in
+         `monitoring` that crashes.
+       - **The rest:** copies with a flipped threshold, created through
+         `/api/v1/provisioning/alert-rules` (header `X-Disable-Provenance: true`) in a temporary
+         folder, flipped back once they fired, then deleted.
+       - **Timing:** resolved messages follow at each group's next 5-minute interval. Error logs
+         clears 10 minutes after the last line, and Crash loop up to 15 minutes after the pod
+         is gone.
+       - **Counting:** `grafana_alerting_notifications_total` on Grafana's `/metrics` counts the
+         sends; a failed send shows in `grafana_alerting_notifications_failed_total`.
 
 **Rollback:**
 
