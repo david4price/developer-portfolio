@@ -52,6 +52,11 @@ grafana.ini:
     external_enabled: false
   public_dashboards:
     enabled: false
+  # No plugin downloads from grafana.com at startup (Grafana preinstalls a few app plugins by
+  # default). This setting is what stops them: today's NetworkPolicy only happens to block them
+  # (with an error line each) until P9-06 opens HTTPS egress for alerts.
+  plugins:
+    preinstall_disabled: true
 datasources:
   datasources.yaml:
     apiVersion: 1

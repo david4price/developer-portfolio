@@ -3,7 +3,9 @@
 # GRAFANA_ADMIN_PASSWORD from .env, as it was when grafana-data was created); nothing else is
 # published.
 #   docker compose -f compose.full.yaml -f compose.observability.yaml up -d --build
-#   docker compose -f compose.full.yaml -f compose.observability.yaml down      # -v drops the data
+#   docker compose -f compose.full.yaml -f compose.observability.yaml down
+#   (down -v removes every volume in the project, the database and Redis included; to reset
+#   Grafana alone, see docs/deployment/local.md#local-observability-optional)
 #
 # Alloy reads container logs through the Docker socket. Access to it is root-equivalent on the
 # host, even mounted read-only, so this file is for your own machine only, never a shared host.
@@ -61,8 +63,8 @@ services:
     <<: *observability
     image: docker.io/grafana/grafana:13.3.1-distroless@sha256:54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
     environment:
-      # Applied when grafana-data is first created; a later change needs `down -v` (or
-      # `grafana cli admin reset-admin-password` in the container).
+      # Applied when grafana-data is first created; a later change needs Grafana's volume reset
+      # (docs/deployment/local.md) or `grafana cli admin reset-admin-password` in the container.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       # Console only: the root filesystem is read-only.
       GF_LOG_MODE: console
@@ -76,6 +78,8 @@ services:
       GF_NEWS_NEWS_FEED_ENABLED: 'false'
       GF_SNAPSHOTS_EXTERNAL_ENABLED: 'false'
       GF_PUBLIC_DASHBOARDS_ENABLED: 'false'
+      # No plugin downloads from grafana.com at startup.
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
       GF_SECURITY_DISABLE_GRAVATAR: 'true'
     ports:
       - 127.0.0.1:${GRAFANA_PORT:-3300}:3000

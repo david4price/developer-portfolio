@@ -191,7 +191,15 @@ on purpose.
   with the `Recreate` strategy (SQLite on a ReadWriteOnce volume), and the claim carries
   `Prune=false` and Helm's `keep`, so Argo CD never deletes it.
 - **No phoning home:** usage reporting, update checks, and plugin update checks are off, and no
-  plugins are installed at runtime.
+  plugins are installed at runtime (`plugins.preinstall_disabled`). Grafana otherwise downloads a
+  few app plugins from grafana.com at startup; on its first start in the cluster the
+  NetworkPolicy blocked each with an error line, but once P9-06 opens HTTPS egress for alerts
+  only this setting stops them.
+  - **Trade-off:** those apps include the Logs and Metrics Drilldown views, so logs and metrics
+    are browsed with queries (Explore, and the provisioned dashboards) rather than point and
+    click. Adding one later is a deliberate change: choose the install route for the pinned
+    Grafana version (preinstall is off as a whole here), pin its version in Git, and note that
+    Grafana reaches grafana.com only once P9-06 opens HTTPS egress.
 - **As code:** everything is provisioned from Git with UI edits disabled; a change made in the UI
   is exported and committed.
   - **Data sources** (in Grafana's values): Prometheus and Loki by Service name, not editable.
