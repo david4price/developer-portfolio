@@ -518,7 +518,7 @@ Argo CD keeps each in sync with `main`.
        kubectl auth can-i get secrets -n portfolio --as=system:serviceaccount:monitoring:kube-state-metrics           # no
        kubectl auth can-i list pods -n kube-system --as=system:serviceaccount:monitoring:kube-state-metrics           # no
        ```
-4. **Grafana (P9-05).**
+4. **Grafana (P9-05, applied 2026-11-26).**
    - **In Git:** the `grafana-admin` SealedSecret (in
      `environments/production/monitoring/secrets/`, synced by the `monitoring` Application) and
      the dashboards ConfigMap (the `monitoring` chart).
@@ -548,7 +548,9 @@ Argo CD keeps each in sync with `main`.
 
 - `kubectl -n argocd delete application <name>` stops management and leaves the workloads (no
   resources finalizer). `kubectl delete namespace monitoring` then removes everything, including
-  the logs and metrics volumes.
+  the logs and metrics volumes and Grafana's volume (protected from Argo CD pruning and Helm uninstall, but not from deleting the
+  namespace).
+- Grafana's tailnet address: `sudo tailscale serve --https=8444 off`.
 - Turning `monitoring.readers.logs.enabled` or `.metrics.enabled` off removes those portfolio
   Roles on the next sync. Turning `api.metrics.scrape.enabled` off puts the metrics back on
   loopback and removes their NetworkPolicy rule (the API rolls once).

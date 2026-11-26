@@ -9,18 +9,21 @@ becomes **Confirmed** when the Phase 9 task that builds it is done
 - **Before Phase 9:** JSON logs with request ids (P2-04), the API's Prometheus metrics (P7-01),
   and the K3s API audit log on the host (P7-06). The audit log stays root-only on the host and is
   not shipped to Loki.
-- **In the cluster (P9-04, 2026-11-26):** Prometheus and kube-state-metrics, with the API's metrics
-  opened to Prometheus alone. Applied so far: the `monitoring` project, its NetworkPolicies and
-  Roles, and the `loki`, `alloy`, `prometheus`, and `kube-state-metrics` Applications.
-  `grafana.yaml` is in Git but not applied.
+- **In the cluster:** every Application in `infrastructure/argocd/monitoring/` is applied.
+  Prometheus and kube-state-metrics, with the API's metrics opened to Prometheus alone, are
+  validated (P9-04).
 - **In CI (P9-08):** the local Compose stack (`compose.observability.yaml`), never started on
   the reference host.
 
-**Live, not yet Confirmed:** Loki and Alloy (P9-03) collect logs; P9-03 is done once a day of
-collected logs passes its privacy check.
+**Proposed until P9-03 is done** (applied and validated, but not yet Confirmed):
 
-**Proposed:** Grafana (P9-05), alerts (P9-06), capacity and failure checks (P9-07), and the
-runbooks and final documentation (P9-09).
+- **Loki and Alloy (P9-03)** collect logs. P9-03 is done once a day of collected logs passes its
+  privacy check.
+- **Grafana (P9-05)** is on the tailnet with its dashboards, validated (following a 5xx to its
+  log lines in CI). It ticks with P9-03.
+
+**Proposed:** alerts (P9-06), capacity and failure checks (P9-07), and the runbooks and final
+documentation (P9-09).
 
 ## Shape
 
@@ -37,8 +40,8 @@ runbooks and final documentation (P9-09).
 - **Argo CD:** a new `monitoring` AppProject. Its sources are this repository and the upstream
   chart repositories, listed one by one. Its only destination is the `monitoring` namespace,
   and it allows no cluster-scoped kinds. There is one Application per upstream chart, plus one
-  for this repository's own manifests (NetworkPolicies and Roles now; SealedSecrets and
-  provisioning ConfigMaps in P9-05 and P9-06).
+  for this repository's own manifests (NetworkPolicies and Roles; since P9-05 Grafana's
+  dashboards and admin SealedSecret; the alert rules and contact point come in P9-06).
 
 ## Layout
 
@@ -80,8 +83,9 @@ is pinned by its multi-arch index digest. Grafana uses its `-distroless` image.
   - stays in the namespace, with no NodePort or LoadBalancer;
   - has no host namespaces, host paths, or privileged containers;
   - pins every image by digest and gives every container resource requests.
-- **This repository's chart:** it refuses to render without the API server range, and Grafana
-  gets no ingress or internet until P9-05 and P9-06 set them.
+- **This repository's chart:** it refuses to render without the API server range. Grafana gets
+  no pod ingress (the node, which K3s always admits, needs none) and no internet until P9-06
+  opens HTTPS egress for alerts.
 - **Selectors:** the pod labels, ports, and ServiceAccounts the policies and Roles name in
   `infrastructure/helm/monitoring/values.yaml` must match what the upstream charts (and the
   portfolio chart's API pods) actually render. A chart upgrade that renames one fails CI, so a
@@ -180,6 +184,11 @@ on purpose.
   is trusted; other pods still need a rule.
 
 ## Grafana
+
+**Confirmed in part (P9-05, 2026-11-26):** access, the admin password, storage, data sources,
+and dashboards are validated on the tailnet; the task ticks with P9-03
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)). Alert rules (P9-06) are
+**Proposed**.
 
 - **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve` on HTTPS
   port 8444, the same way as Argo CD on 8443. There is no Ingress, tunnel, or public hostname.
