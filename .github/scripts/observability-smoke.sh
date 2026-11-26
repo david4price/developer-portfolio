@@ -5,7 +5,8 @@
 #
 # It starts containers and mounts the Docker socket: run it in CI or on your own machine, never on
 # a shared host. Needs a .env (from .env.example, placeholders replaced). Leaves the stack running;
-# stop it with: docker compose -f compose.full.yaml -f compose.observability.yaml down -v
+# stop it with: docker compose -f compose.full.yaml -f compose.observability.yaml down -v (CI's
+# throwaway stack: -v removes every volume in the project, the database included)
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -81,7 +82,8 @@ echo "ok: request $request_id"
 wait_for 90 "Grafana healthy" curl -fsS "$grafana/api/health"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:$password" "$grafana/api/user" || true)"
 [[ "$status" == 200 ]] || fail "Grafana answered $status to admin login. The password is set when \
-grafana-data is created; after changing GRAFANA_ADMIN_PASSWORD, run down -v (or reset it in Grafana)"
+grafana-data is created; after changing GRAFANA_ADMIN_PASSWORD, reset Grafana's volume alone \
+(docs/deployment/local.md) or the password in Grafana"
 
 prometheus_has_api() {
   grafana_get /api/datasources/proxy/uid/prometheus/api/v1/query \

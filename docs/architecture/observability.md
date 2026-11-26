@@ -197,7 +197,9 @@ on purpose.
   only this setting stops them.
   - **Trade-off:** those apps include the Logs and Metrics Drilldown views, so logs and metrics
     are browsed with queries (Explore, and the provisioned dashboards) rather than point and
-    click. Adding one later means pinning it in `plugins.preinstall` with a version, in Git.
+    click. Adding one later is a deliberate change: choose the install route for the pinned
+    Grafana version (preinstall is off as a whole here), pin its version in Git, and note that
+    Grafana reaches grafana.com only once P9-06 opens HTTPS egress.
 - **As code:** everything is provisioned from Git with UI edits disabled; a change made in the UI
   is exported and committed.
   - **Data sources** (in Grafana's values): Prometheus and Loki by Service name, not editable.

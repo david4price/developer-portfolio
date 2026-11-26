@@ -226,15 +226,26 @@ docker compose -f compose.full.yaml -f compose.observability.yaml down   # add -
   reached through it (Explore).
 - **`GRAFANA_ADMIN_PASSWORD`** is required. `pnpm bootstrap` generates its own value; with an
   older `.env`, add it by hand (see `.env.example`). Grafana keeps the password it was first
-  started with in its data volume: after changing it, run `down -v` (which also drops the logs
-  and metrics) or reset it from Grafana.
+  started with in its data volume: after changing it, reset Grafana's volume (below) or the
+  password from Grafana.
 - **The Docker socket is root-equivalent** on your machine, even mounted read-only. Use this on
   your own computer, never on a shared host. With rootless Docker, Colima, or another socket
   path, set `DOCKER_SOCKET`.
 - **No plugins are downloaded** from grafana.com (`GF_PLUGINS_PREINSTALL_DISABLED`). A Grafana
-  volume from before that setting keeps the plugins it already downloaded, so run
-  `docker compose -f compose.full.yaml -f compose.observability.yaml down -v` once to start
-  clean (this also drops the local logs and metrics).
+  volume from before that setting keeps the plugins it already downloaded: reset Grafana's
+  volume once (below).
+- **Resetting Grafana's volume alone** (its password, sessions, and any downloaded plugins; the
+  database, Redis, logs, and metrics stay):
+
+  ```bash
+  docker compose -f compose.full.yaml -f compose.observability.yaml rm -sf grafana
+  docker volume rm "${COMPOSE_PROJECT_NAME:-developer-portfolio}_grafana-data"
+  docker compose -f compose.full.yaml -f compose.observability.yaml up -d grafana
+  ```
+
+  `down -v` would instead remove every volume in the project, PostgreSQL's and Redis's
+  included.
+
 - **Not included:** kube-state-metrics (there is no Kubernetes), and so the pod restart and Job
   panels stay empty.
 - **Dashboards and alert rules** live in `infrastructure/helm/monitoring/dashboards/` and
