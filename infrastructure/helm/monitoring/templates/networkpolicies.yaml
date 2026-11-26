@@ -167,7 +167,8 @@ spec:
   egress:
     {{- include "monitoring.apiServer" . | nindent 4 }}
 ---
-# Grafana: reached only from the node's tailnet proxy; queries Loki and Prometheus, and sends
+# Grafana: no pod may reach it (the node's tailnet proxy needs no rule: K3s admits the node's own
+# traffic); queries Loki and Prometheus, and sends
 # alerts over HTTPS once a contact point exists.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

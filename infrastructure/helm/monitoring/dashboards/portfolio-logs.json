@@ -159,7 +159,7 @@
       },
       "targets": [
         {
-          "expr": "{namespace=~\"$namespace\", app=~\"$app\"} |= \"$request_id\" |~ \"$search\"",
+          "expr": "{namespace=~\"$namespace\", app=~\"$app\"} |= `$request_id` |~ `$search`",
           "queryType": "range",
           "refId": "A",
           "datasource": {

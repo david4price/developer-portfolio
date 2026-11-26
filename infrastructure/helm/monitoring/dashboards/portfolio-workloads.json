@@ -236,7 +236,7 @@
       "id": 5,
       "type": "stat",
       "title": "Since the last successful backup",
-      "description": "Red after 26 hours.",
+      "description": "Red after 26 hours. Before the first success it counts from the CronJob's creation.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -249,7 +249,7 @@
       },
       "targets": [
         {
-          "expr": "time() - kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"}",
+          "expr": "(time() - kube_cronjob_status_last_successful_time{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"}) or (time() - kube_cronjob_created{namespace=\"portfolio\", cronjob=\"portfolio-postgres-backup\"})",
           "range": true,
           "instant": false,
           "refId": "A",
@@ -274,7 +274,23 @@
                 "value": 93600
               }
             ]
-          }
+          },
+          "noValue": "no backup CronJob",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "no backup CronJob",
+                  "color": "red"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -292,7 +308,7 @@
       "id": 6,
       "type": "table",
       "title": "Failed Jobs",
-      "description": "",
+      "description": "Jobs whose final condition is Failed; a retry that succeeded isn't listed.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -305,7 +321,7 @@
       },
       "targets": [
         {
-          "expr": "kube_job_status_failed{namespace=~\"$namespace\"} > 0",
+          "expr": "kube_job_failed{namespace=~\"$namespace\", condition=\"true\"} == 1",
           "range": false,
           "instant": true,
           "refId": "A",

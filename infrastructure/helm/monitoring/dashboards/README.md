@@ -6,7 +6,8 @@ dashboard's JSON and commit it here.
 
 `pnpm check` runs `scripts/check-monitoring-files.mjs` on every file here. A dashboard must:
 
-- sit at the top level of this directory (the cluster ships dashboards as flat ConfigMap keys);
+- sit at the top level of this directory, named with letters, digits, `.`, `-`, and `_` only
+  (the cluster ships dashboards as flat ConfigMap keys);
 - be a JSON object with a `title` and a unique `uid` of 1–40 letters, digits, `-`, or `_`;
 - have `id` absent or `null`, so Grafana assigns its own;
 - name only the provisioned data sources by uid, `prometheus` or `loki`, Grafana's built-in ones

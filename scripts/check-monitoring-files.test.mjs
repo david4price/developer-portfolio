@@ -192,6 +192,14 @@ describe('checkMonitoringFiles', () => {
     assert.match(problems[1], /dashboards\/api: subdirectories aren't provisioned/);
   });
 
+  it('refuses dashboard file names that cannot be ConfigMap keys', () => {
+    const { dashboardsDir, alertsDir } = dirs('names');
+    writeFileSync(join(dashboardsDir, 'Portfolio API (copy).json'), JSON.stringify(dashboard()));
+    const { problems } = checkMonitoringFiles({ dashboardsDir, alertsDir });
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], /Portfolio API \(copy\)\.json: file names may use only letters/);
+  });
+
   it('counts valid files and reports invalid JSON and duplicate uids by file', () => {
     const { dashboardsDir, alertsDir } = dirs('mixed');
     writeFileSync(join(dashboardsDir, 'a.json'), JSON.stringify(dashboard()));

@@ -238,7 +238,7 @@ if output="$(helm template monitoring "$own_chart" --namespace "$namespace" 2>&1
 elif ! grep -qF 'networkPolicy.apiServerEgress.cidr and .port are required' <<<"$output"; then
   fail "expected the apiServerEgress error, got: $output"
 fi
-# Grafana: no ingress until P9-05 sets the tailnet proxy's range, no internet until alerts.
+# Grafana: no pod ingress (the node's tailnet proxy needs none), no internet until alerts.
 if policies="$(render monitoring "$own_chart" -f "$own_chart/ci/default-values.yaml" \
   -s templates/networkpolicies.yaml)"; then
   policies="$(to_json <<<"$policies")"

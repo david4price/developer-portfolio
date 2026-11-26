@@ -162,20 +162,21 @@ on purpose.
   root `chown` init container is off.
 - **NetworkPolicies in `monitoring`:**
 
-  | Pod                | Ingress from                        | Egress to                                                             |
-  | ------------------ | ----------------------------------- | --------------------------------------------------------------------- |
-  | Alloy              | Prometheus (12345, its metrics)     | API server (6443), Loki (3100), DNS                                   |
-  | Loki               | Alloy, Grafana, Prometheus; Loki    | Loki (3100, gRPC 9095, memberlist 7946), DNS                          |
-  | Prometheus         | Grafana                             | API pods (9464), kube-state-metrics, Loki, Alloy, API server, DNS     |
-  | kube-state-metrics | Prometheus                          | API server (6443), DNS                                                |
-  | Grafana            | the tailnet proxy's address (P9-05) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
+  | Pod                | Ingress from                      | Egress to                                                             |
+  | ------------------ | --------------------------------- | --------------------------------------------------------------------- |
+  | Alloy              | Prometheus (12345, its metrics)   | API server (6443), Loki (3100), DNS                                   |
+  | Loki               | Alloy, Grafana, Prometheus; Loki  | Loki (3100, gRPC 9095, memberlist 7946), DNS                          |
+  | Prometheus         | Grafana                           | API pods (9464), kube-state-metrics, Loki, Alloy, API server, DNS     |
+  | kube-state-metrics | Prometheus                        | API server (6443), DNS                                                |
+  | Grafana            | no pod (the node's tailnet proxy) | Loki, Prometheus, DNS, HTTPS 443 outside private ranges (alerts only) |
 
   Even as a single replica, Loki calls itself through its own Services: the compactor over gRPC
   (`common.compactor_grpc_address`) and the memberlist ring. So Loki pods may reach each other on
-  3100, 9095, and 7946. **Unknown:** the source address
-  of `tailscale serve`'s connection to Grafana's ClusterIP, as a NetworkPolicy sees it (the
-  node's private address, or its pod-network address). Until P9-05 measures it,
-  `networkPolicy.grafana.ingressCidrs` is empty and nothing can reach Grafana.
+  3100, 9095, and 7946. **Confirmed (measured 2026-11-26):** K3s's policy controller always admits traffic from the node
+  itself, which is also how kubelet probes reach pods behind a default deny: the host reached
+  Loki's ClusterIP and pod IP although Loki's policy has no rule for it. `tailscale serve` runs on
+  the node, so Grafana needs no ingress rule and `networkPolicy.grafana.ingressCidrs` stays
+  empty. The node itself is trusted; every other pod still needs a rule.
 
 ## Grafana
 

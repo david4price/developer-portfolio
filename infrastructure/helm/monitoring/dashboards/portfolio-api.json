@@ -492,7 +492,7 @@
       },
       "targets": [
         {
-          "expr": "{namespace=\"portfolio\", app=\"api\", container=\"api\"} | json | message_status >= 500",
+          "expr": "{namespace=\"portfolio\", app=\"api\", container=\"api\"} | json | __error__=\"\" | message_status >= 500",
           "queryType": "range",
           "refId": "A",
           "datasource": {

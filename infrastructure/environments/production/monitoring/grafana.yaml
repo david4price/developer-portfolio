@@ -1,7 +1,8 @@
 # Grafana 13.3.1, distroless (grafana-community/grafana 14.5.0). Tailnet-only, no public
 # hostname; data sources from Git. docs/architecture/observability.md#grafana
 # Image: docker.io/grafana/grafana:13.3.1-distroless (multi-arch index digest below).
-# The admin Secret (grafana-admin) arrives sealed in P9-05; until then the pod can't start.
+# The admin Secret (grafana-admin) comes from secrets/grafana-admin.sealedsecret.yaml through the
+# monitoring Application.
 image:
   sha: 54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
 rbac:
@@ -69,12 +70,13 @@ datasources:
         url: http://loki.monitoring.svc:3100
         editable: false
         jsonData:
-          # Every requestId in a log line links to the Logs dashboard filtered to that request
-          # ($$ keeps Grafana from reading ${…} as an environment variable).
+          # Every requestId in a log line links to the Logs dashboard filtered to that request,
+          # over all 30 days Loki keeps ($$ keeps Grafana from reading ${…} as an environment
+          # variable).
           derivedFields:
             - name: requestId
               matcherRegex: '"requestId":"([A-Za-z0-9._-]+)"'
-              url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}'
+              url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}&from=now-30d&to=now'
               urlDisplayLabel: All log lines for this request
 # P9-05: the dashboards from infrastructure/helm/monitoring/dashboards, as the monitoring chart's
 # grafana-dashboards ConfigMap; read-only (UI saves disabled, deletion refused).
