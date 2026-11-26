@@ -52,6 +52,10 @@ grafana.ini:
     external_enabled: false
   public_dashboards:
     enabled: false
+  # No plugin downloads from grafana.com at startup (Grafana preinstalls a few app plugins by
+  # default); the NetworkPolicy blocks them anyway, and each attempt logs an error.
+  plugins:
+    preinstall_disabled: true
 datasources:
   datasources.yaml:
     apiVersion: 1

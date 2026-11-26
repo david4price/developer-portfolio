@@ -191,7 +191,9 @@ on purpose.
   with the `Recreate` strategy (SQLite on a ReadWriteOnce volume), and the claim carries
   `Prune=false` and Helm's `keep`, so Argo CD never deletes it.
 - **No phoning home:** usage reporting, update checks, and plugin update checks are off, and no
-  plugins are installed at runtime.
+  plugins are installed at runtime (`plugins.preinstall_disabled`: Grafana otherwise downloads a
+  few app plugins from grafana.com at startup, which the NetworkPolicy blocks with an error each,
+  as seen on its first start in the cluster).
 - **As code:** everything is provisioned from Git with UI edits disabled; a change made in the UI
   is exported and committed.
   - **Data sources** (in Grafana's values): Prometheus and Loki by Service name, not editable.
