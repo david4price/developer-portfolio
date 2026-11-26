@@ -15,6 +15,11 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-08 done** (PR #76, 2026-11-26):
+  - `compose.observability.yaml` runs the cluster's monitoring images beside `compose.full.yaml`.
+  - `pnpm check` validates dashboards and alert rules.
+  - CI's new `observability` job finds a request's log line in Loki and the API's metrics in
+    Prometheus through Grafana. Never started on the reference host.
 - **P9-03 started** (2026-11-25): the `monitoring` namespace, project, default-deny policies,
   Roles, and Loki are live (Synced/Healthy, 5 GiB volume). Alloy follows once the portfolio
   chart's log reader Role (`feat/p9-03-logs`) is merged and synced.
@@ -292,11 +297,10 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Next up, in order**
 
-1. **P9-03** 🔒 (namespace, policies, and Loki are live): merge `feat/p9-03-logs` so Argo CD
-   syncs the portfolio chart's log reader Role, then apply Alloy and validate, including a day of
-   collected logs checked for private data
-   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). **P9-08**
-   (local stack) can run alongside P9-03 to P9-06.
+1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
+   a day of collected logs, scheduled for 2026-11-27
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). Then **P9-04**
+   (metrics).
 2. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
@@ -304,8 +308,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-03-logs` (the portfolio chart's log reader for Alloy). PRs #65 to
-#74 are merged; the `monitoring` namespace, project, policies, and Loki are live (2026-11-25).
+**Branch in progress:** `feat/p9-08-local-observability` (PR #76, CI green). PRs #65 to #75 are
+merged; Loki and Alloy are live (2026-11-25), and P9-03's privacy check is scheduled for
+2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -793,7 +798,7 @@ Read-only inventory of the reference host. Findings:
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
 
-## Phase 9: Observability (2/9)
+## Phase 9: Observability (3/9)
 
 Keep logs, keep metric history, and alert the owner, with Grafana's open-source stack in a
 `monitoring` namespace ([ADR 0004](architecture/adr-0004-observability-stack.md),
@@ -862,10 +867,17 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       measured over a week and under a k6 run like P7-02's, requests and limits are set from the
       measurements, and stopping Loki or Prometheus leaves the site, API, and chat working (only
       monitoring degrades, and the "monitoring broken" alert fires).
-- [ ] **P9-08** Local stack. _Needs:_ P9-02. _Done when:_ an opt-in `compose.observability.yaml`
+- [x] **P9-08** Local stack. _Needs:_ P9-02. _Done when:_ an opt-in `compose.observability.yaml`
       runs the same images, dashboards, and rules against the local API (ports on `127.0.0.1`, the
       Docker socket's risk documented), `pnpm check` validates the dashboard JSON and rule files,
       and local.md documents it. Never started on the shared reference host.
+      Done 2026-11-26 (PR #76): CI's `observability` job (run 45769901548) started `compose.full.yaml`
+      with `compose.observability.yaml` and found, through Grafana's provisioned data sources,
+      the API's metrics in Prometheus and a request's log line (by `x-request-id`) in Loki. It
+      also found the stack's own logs labelled `monitoring` and exactly the two data sources.
+      Its first run caught Alloy unable to write its data volume with every capability dropped
+      (fixed). `pnpm check` validates dashboards and alert rules (none yet; P9-05, P9-06).
+
 - [ ] **P9-09** Documentation. _Needs:_ P9-06. _Done when:_ runbooks cover "an alert fired"
       (per rule: what it means, the first query, the likely fix) and "find a request by id";
       the `observability` skill, the overview, networking, security, Kubernetes, cost review

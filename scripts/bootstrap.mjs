@@ -41,7 +41,7 @@ async function main() {
   if (existsSync(envPath)) {
     ok('.env exists; left as it is');
     if (readFileSync(envPath, 'utf8').includes(PLACEHOLDER)) {
-      warn(`.env still contains "${PLACEHOLDER}"; replace it in both places it appears`);
+      warn(`.env still contains "${PLACEHOLDER}"; replace it everywhere it appears`);
     }
   } else {
     // PostgreSQL keeps the password it was first created with: a new one wouldn't match old data.
@@ -54,9 +54,15 @@ async function main() {
       );
     }
     copyFileSync(join(root, '.env.example'), envPath);
-    const password = generatePassword();
-    writeFileSync(envPath, readFileSync(envPath, 'utf8').replaceAll(PLACEHOLDER, password));
-    ok('.env created from .env.example with a generated database password');
+    // Grafana's admin password gets its own value, then the database's fills the rest.
+    const env = readFileSync(envPath, 'utf8')
+      .replace(
+        `GRAFANA_ADMIN_PASSWORD=${PLACEHOLDER}`,
+        `GRAFANA_ADMIN_PASSWORD=${generatePassword()}`,
+      )
+      .replaceAll(PLACEHOLDER, generatePassword());
+    writeFileSync(envPath, env);
+    ok('.env created from .env.example with generated database and Grafana passwords');
   }
   const env = readEnvFile(envPath) ?? {};
   // The apps connect through DATABASE_URL and REDIS_URL; Compose publishes on the *_PORT values.

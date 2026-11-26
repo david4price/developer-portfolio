@@ -1,0 +1,17 @@
+# The cluster's data sources (same uids, so dashboards and alert rules work in both), pointing at
+# the Compose services. Cluster copy: infrastructure/environments/production/monitoring/grafana.yaml.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false

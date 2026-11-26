@@ -45,7 +45,7 @@ jobs:
           node-version-file: .node-version
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: node --test scripts/new-project.test.mjs scripts/local.test.mjs
+      - run: node --test scripts/new-project.test.mjs scripts/local.test.mjs scripts/check-monitoring-files.test.mjs
       # Generates a mini-app and a full API + database project from the templates, then holds the
       # result to every check the repository has, so the templates can't drift out of date.
       - name: Generate sample projects
@@ -127,6 +127,18 @@ jobs:
       - run: bash infrastructure/helm/check-chart.sh
       - name: Monitoring charts (Phase 9)
         run: bash infrastructure/monitoring/check-monitoring.sh
+
+  observability:
+    name: Local observability stack (compose.observability.yaml)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Local .env with generated passwords
+        run: sed "s/change-me-local-only/ci-$(openssl rand -hex 12)/g" .env.example > .env
+      - run: bash .github/scripts/observability-smoke.sh
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f compose.full.yaml -f compose.observability.yaml down -v
 
   secrets:
     name: Secret scan

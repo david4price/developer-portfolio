@@ -1,0 +1,52 @@
+// Alloy for the opt-in local stack (compose.observability.yaml, P9-08). The cluster reads logs
+// through the Kubernetes API; here they come from the Docker socket, limited to this Compose
+// project's containers. Labels match the cluster's, so the same queries and dashboards work.
+discovery.docker "project" {
+  host = "unix:///var/run/docker.sock"
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=" + sys.env("COMPOSE_PROJECT")]
+  }
+}
+
+discovery.relabel "project" {
+  targets = discovery.docker.project.targets
+  // The cluster's namespaces: the observability services are "monitoring", the rest "portfolio".
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "loki|alloy|prometheus|grafana"
+    replacement   = "monitoring"
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["namespace"]
+    regex         = ""
+    replacement   = "portfolio"
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "app"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "pod"
+  }
+}
+
+loki.source.docker "project" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.project.output
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

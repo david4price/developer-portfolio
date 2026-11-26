@@ -177,7 +177,7 @@ query bugs and other unexpected failures stay a generic `500 internal_error`.
 ## Quality Checks
 
 ```bash
-pnpm check              # format:check, lint, typecheck, unit tests
+pnpm check              # format:check, lint, typecheck, unit tests, dashboard and alert files
 pnpm build              # TypeScript projects + static site in apps/web/out
 pnpm test:integration   # needs the Compose services, migrations, and seed
 ```
@@ -201,6 +201,43 @@ docker compose -f compose.full.yaml up -d --build
 
 Containers run with dropped Linux capabilities and `no-new-privileges`. The API, worker, and
 one-shot jobs also use a read-only root filesystem.
+
+## Local Observability (optional)
+
+`compose.observability.yaml` adds the cluster's monitoring stack (Phase 9) beside the
+containerized stack. It uses the same Grafana, Loki, Prometheus, and Alloy images, pinned by the
+same digests, and the same data source uids, dashboards, and alert rules. Queries written locally
+therefore work in the cluster.
+
+```bash
+docker compose -f compose.full.yaml -f compose.observability.yaml up -d --build
+# Grafana: http://localhost:3300, user admin, password GRAFANA_ADMIN_PASSWORD from .env
+docker compose -f compose.full.yaml -f compose.observability.yaml down   # add -v to drop the data
+```
+
+- **What it collects:**
+  - **Logs:** every container in this Compose project, through the Docker socket, labelled like
+    the cluster's: `namespace` is `portfolio` for the app and `monitoring` for the stack itself,
+    and `app` and `container` are the Compose service. Example: `{namespace="portfolio", app="api"}`.
+  - **Metrics:** the API's metrics (`job="portfolio-api"`), plus Loki's and Alloy's own.
+  - **Kept for 7 days.**
+- **Only Grafana is published,** on `127.0.0.1:${GRAFANA_PORT}` (3300). Loki and Prometheus are
+  reached through it (Explore).
+- **`GRAFANA_ADMIN_PASSWORD`** is required. `pnpm bootstrap` generates its own value; with an
+  older `.env`, add it by hand (see `.env.example`). Grafana keeps the password it was first
+  started with in its data volume: after changing it, run `down -v` (which also drops the logs
+  and metrics) or reset it from Grafana.
+- **The Docker socket is root-equivalent** on your machine, even mounted read-only. Use this on
+  your own computer, never on a shared host. With rootless Docker, Colima, or another socket
+  path, set `DOCKER_SOCKET`.
+- **Not included:** kube-state-metrics (there is no Kubernetes), and so the pod restart and Job
+  panels stay empty.
+- **Dashboards and alert rules** live in `infrastructure/monitoring/dashboards/` and
+  `infrastructure/monitoring/alerts/` (JSON). `pnpm check` validates them (`pnpm monitoring:files`);
+  each directory's README lists the rules. Changes made in Grafana's UI aren't saved: export the
+  JSON and commit it.
+- **CI** runs `.github/scripts/observability-smoke.sh` on every push. It finds an API request's log
+  line in Loki and the API's metrics in Prometheus, both through Grafana's data sources.
 
 ## Editing Content
 
