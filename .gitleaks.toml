@@ -6,6 +6,7 @@ useDefault = true
 
 [allowlist]
 description = "SealedSecret ciphertext (ADR 0001)"
-# The portfolio namespace's in environments/<env>/secrets/, the monitoring namespace's (P9-05) in
-# environments/<env>/monitoring/secrets/.
+# SealedSecrets for the portfolio namespace live in environments/<env>/secrets/, and those for the
+# monitoring namespace (P9-05) in environments/<env>/monitoring/secrets/. Skipped whole, so
+# pnpm helm:check refuses plaintext (stringData, template data) in them.
 paths = ['''^infrastructure/environments/[^/]+/(monitoring/)?secrets/[^/]+\.sealedsecret\.yaml$''']

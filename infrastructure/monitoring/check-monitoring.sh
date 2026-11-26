@@ -197,6 +197,11 @@ for app in "${app_files[@]}"; do
         jq -r --arg ns "$namespace" 'map(select(.kind != "SealedSecret" or .metadata.namespace != $ns or
           (.spec.template.metadata.namespace // $ns) != $ns)) | length')" == 0 ]] ||
         fail "$secret must hold only SealedSecrets for the $namespace namespace"
+      # Gitleaks skips these files, so no plaintext may ride along beside the ciphertext.
+      [[ "$(yq ea -o=json '[.] | map(select(. != null))' "$secret" |
+        jq '[.[] | select(.stringData != null or .data != null or .spec.template.data != null or
+          .spec.template.stringData != null)] | length')" == 0 ]] ||
+        fail "$secret holds plaintext (stringData or data) beside its encryptedData"
     done
     continue
   fi
