@@ -231,6 +231,10 @@ docker compose -f compose.full.yaml -f compose.observability.yaml down   # add -
 - **The Docker socket is root-equivalent** on your machine, even mounted read-only. Use this on
   your own computer, never on a shared host. With rootless Docker, Colima, or another socket
   path, set `DOCKER_SOCKET`.
+- **No plugins are downloaded** from grafana.com (`GF_PLUGINS_PREINSTALL_DISABLED`). A Grafana
+  volume from before that setting keeps the plugins it already downloaded, so run
+  `docker compose -f compose.full.yaml -f compose.observability.yaml down -v` once to start
+  clean (this also drops the local logs and metrics).
 - **Not included:** kube-state-metrics (there is no Kubernetes), and so the pod restart and Job
   panels stay empty.
 - **Dashboards and alert rules** live in `infrastructure/helm/monitoring/dashboards/` and
