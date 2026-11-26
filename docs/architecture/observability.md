@@ -176,7 +176,8 @@ on purpose.
   itself, which is also how kubelet probes reach pods behind a default deny: the host reached
   Loki's ClusterIP and pod IP although Loki's policy has no rule for it. `tailscale serve` runs on
   the node, so Grafana needs no ingress rule and `networkPolicy.grafana.ingressCidrs` stays
-  empty. The node itself is trusted; every other pod still needs a rule.
+  empty. The node, and anything in its network namespace (host processes, hostNetwork pods),
+  is trusted; other pods still need a rule.
 
 ## Grafana
 
@@ -207,7 +208,7 @@ on purpose.
   - **Logs:** errors and warnings by app, and log lines filtered by namespace, app, request id,
     and a regex.
 - **From a 5xx to its log lines:** the Loki data source turns every `requestId` in a log line
-  into a link to the Logs dashboard filtered to that request. The API dashboard's server-error
+  into a link to the Logs dashboard filtered to that request, over the last 7 days. The API dashboard's server-error
   panel lists those lines. CI forces a real 503 (Redis stopped) and finds it through that
   panel's own query.
 

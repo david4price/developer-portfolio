@@ -236,7 +236,7 @@
       "id": 5,
       "type": "stat",
       "title": "Since the last successful backup",
-      "description": "Red after 26 hours. Before the first success it counts from the CronJob's creation.",
+      "description": "Red after 26 hours. Before the CronJob's first success it counts from the CronJob's creation, so recreating the CronJob resets this clock.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -308,7 +308,7 @@
       "id": 6,
       "type": "table",
       "title": "Failed Jobs",
-      "description": "Jobs whose final condition is Failed; a retry that succeeded isn't listed.",
+      "description": "Jobs that ended Failed and are still kept (a later successful run doesn't remove them; Jobs still retrying aren't listed).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

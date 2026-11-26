@@ -65,7 +65,8 @@ networkPolicy:
     metricsPort: 9464
   grafana:
     # Extra ranges allowed to reach Grafana. Empty in production: `tailscale serve` runs on the
-    # node, and K3s always admits the node's own traffic (measured in P9-05), so no pod needs it.
+    # node, and K3s always admits traffic from the node's network namespace (host processes and
+    # hostNetwork pods; measured in P9-05), so no other rule is needed.
     ingressCidrs: []
     # HTTPS to the alert contact point (P9-06): port 443 anywhere outside private ranges.
     alertEgress:

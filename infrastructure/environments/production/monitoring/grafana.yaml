@@ -71,12 +71,13 @@ datasources:
         editable: false
         jsonData:
           # Every requestId in a log line links to the Logs dashboard filtered to that request,
-          # over all 30 days Loki keeps ($$ keeps Grafana from reading ${…} as an environment
-          # variable).
+          # over the last 7 days (widen the time picker for older ones; a 30-day default would
+          # parse every log line Loki keeps). $$ keeps Grafana from reading ${…} as an
+          # environment variable.
           derivedFields:
             - name: requestId
               matcherRegex: '"requestId":"([A-Za-z0-9._-]+)"'
-              url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}&from=now-30d&to=now'
+              url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}&from=now-7d&to=now'
               urlDisplayLabel: All log lines for this request
 # P9-05: the dashboards from infrastructure/helm/monitoring/dashboards, as the monitoring chart's
 # grafana-dashboards ConfigMap; read-only (UI saves disabled, deletion refused).

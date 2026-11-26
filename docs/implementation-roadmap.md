@@ -841,8 +841,9 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       - **Found:** Loki's chart by default gives Loki a ClusterRole that reads every Secret in
         the cluster; turned off. Review found that Prometheus would never apply a synced scrape
         config without the chart's reloader (now on) and that Loki's memberlist needed a policy.
-      - **Unknown, for P9-05:** the address `tailscale serve` reaches Grafana from, so Grafana
-        has no ingress yet.
+      - **Resolved in P9-05:** `tailscale serve` on the node needs no ingress rule, because K3s
+        admits the node's own traffic
+        ([measured](architecture/observability.md#least-privilege)).
 
 - [ ] **P9-03** 🔒 Logs: Loki and Alloy. _Needs:_ P9-02. _Done when:_ the portfolio chart's
       `monitoring.readers` Role (pods and `pods/log` reads in `portfolio`, bound to Alloy) is

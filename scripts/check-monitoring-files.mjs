@@ -180,9 +180,9 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
   }
 
   for (const file of filesIn(dashboardsDir).filter((path) => path.endsWith('.json'))) {
-    if (!CONFIGMAP_KEY.test(basename(file))) {
+    if (!CONFIGMAP_KEY.test(basename(file)) || basename(file).length > 253) {
       problems.push(
-        `${file}: file names may use only letters, digits, ".", "-", and "_" (ConfigMap keys)`,
+        `${file}: file names may use only letters, digits, ".", "-", and "_", at most 253 (ConfigMap keys)`,
       );
     }
     const parsed = parseJson(readFileSync(file, 'utf8'));

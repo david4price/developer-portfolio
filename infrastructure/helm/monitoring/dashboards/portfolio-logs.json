@@ -70,7 +70,8 @@
       },
       {
         "name": "search",
-        "label": "Search (regex)",
+        "label": "Search (regex, no quotes)",
+        "description": "A regex for the log lines. Quotes and backticks aren't supported.",
         "type": "textbox",
         "query": "",
         "current": {
