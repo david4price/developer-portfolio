@@ -113,7 +113,7 @@ extraContainerVolumes:
     projected:
       sources:
         - configMap:
-            name: grafana-alert-rules-a37e12565e
+            name: grafana-alert-rules-672834d066
         - secret:
             name: grafana-alerting-1
             # Optional, so Grafana (and every other alert) still starts if the Secret is missing

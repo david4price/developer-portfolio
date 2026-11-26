@@ -62,7 +62,7 @@
             "summary": "No API replica has answered Prometheus for 5 minutes.",
             "description": "up{job=\"portfolio-api\"} has had no healthy target for 5 minutes: the API pods are down, unready, or unreachable on their metrics port.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-api-down",
-            "__dashboardUid__": "portfolio-api"
+            "dashboard": "/d/portfolio-api"
           }
         },
         {
@@ -120,7 +120,7 @@
             "summary": "An API dependency has been down for 3 minutes.",
             "description": "readiness_dependency_up is 0 for {{ $labels.dependency }}: the API answers 503 on readiness and its requests fail.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-dependency-down",
-            "__dashboardUid__": "portfolio-api"
+            "dashboard": "/d/portfolio-api"
           }
         },
         {
@@ -178,7 +178,7 @@
             "summary": "More than 5% of API requests failed with a 5xx over 10 minutes.",
             "description": "The 5xx share of visitor requests (health probes excluded) was {{ humanizePercentage $values.A.Value }} (at least 20 requests). Follow a request id from the API dashboard's server error panel to its log lines.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-server-errors",
-            "__dashboardUid__": "portfolio-api"
+            "dashboard": "/d/portfolio-api"
           }
         },
         {
@@ -236,7 +236,7 @@
             "summary": "API p95 latency has been above 1 s for 15 minutes.",
             "description": "p95 of visitor requests (health probes excluded) was {{ humanizeDuration $values.A.Value }} (P7-02 measured 2.8 ms at 200 requests a second).",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-slow-api",
-            "__dashboardUid__": "portfolio-api"
+            "dashboard": "/d/portfolio-api"
           }
         },
         {
@@ -294,7 +294,7 @@
             "summary": "{{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is restarting.",
             "description": "Waiting in CrashLoopBackOff for 5 minutes, more than 3 restarts in 15 minutes, or a restart whose last termination was an out-of-memory kill.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-crash-loop",
-            "__dashboardUid__": "portfolio-workloads"
+            "dashboard": "/d/portfolio-workloads"
           }
         },
         {
@@ -352,7 +352,7 @@
             "summary": "The latest PostgreSQL backup failed, or none has succeeded for 26 hours.",
             "description": "A failed run counts only while it is newer than the last success, so a later good backup resolves it. Check the backup Job's logs (Logs dashboard, app postgres-backup) and the backup directory on the host.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-backup-failed",
-            "__dashboardUid__": "portfolio-workloads"
+            "dashboard": "/d/portfolio-workloads"
           }
         },
         {
@@ -409,7 +409,7 @@
             "summary": "{{ $labels.app }} logged more than 5 errors in 10 minutes.",
             "description": "Open the Logs dashboard for {{ $labels.app }}; each line's requestId links to that request's lines.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-error-logs",
-            "__dashboardUid__": "portfolio-logs"
+            "dashboard": "/d/portfolio-logs"
           }
         },
         {
@@ -467,7 +467,7 @@
             "summary": "The monitoring stack itself is failing.",
             "description": "Loki, Alloy, or kube-state-metrics is down, Loki has received no log lines for 15 minutes, or Prometheus's storage is above 4.5 GiB (90% of its 5 GiB volume, beyond the 4 GiB its retention allows).",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-monitoring-broken",
-            "__dashboardUid__": "portfolio-workloads"
+            "dashboard": "/d/portfolio-workloads"
           }
         }
       ]
@@ -532,7 +532,7 @@
             "summary": "The Argo CD explorer token expires soon or has expired (P6-05).",
             "description": "Rotate it as P6-05 describes. The API logs this warning daily from 14 days before expiry, and the rule looks back 25 hours, so it stays firing until a day passes without one.",
             "runbook_url": "https://github.com/david4price/developer-portfolio/blob/main/docs/operations/runbooks.md#alert-argocd-token",
-            "__dashboardUid__": "portfolio-logs"
+            "dashboard": "/d/portfolio-logs"
           }
         }
       ]
