@@ -48,9 +48,10 @@ check_metrics() {
     # The API pods labels, to find every NetworkPolicy that applies to them.
     ([.[] | select(.kind == "Deployment" and .metadata.name == "portfolio-api") |
       .spec.template.metadata.labels] | first // {}) as $api_labels
+    # Fails closed: a policy with matchExpressions counts as selecting them.
     | def selects_api: (.spec.podSelector.matchLabels // {}) as $want |
-        ($want | to_entries | all(.value == $api_labels[.key])) and
-        ((.spec.podSelector.matchExpressions // []) | length == 0);
+        ((.spec.podSelector.matchExpressions // []) | length > 0) or
+        ($want | to_entries | all(.value == $api_labels[.key]));
     # Every NetworkPolicy rule that names the metrics port, or a range that could include it.
     [.[] | select(.kind == "NetworkPolicy") as $policy |
       (($policy.spec.ingress // [] | map({dir: "ingress", rule: .})) +
@@ -240,12 +241,17 @@ expect_failure 'monitoring.readers.logs requires namespace and serviceAccount' \
 # check_metrics must refuse widened renders (P9-04): each case edits a passing scrape render.
 echo "== metrics guardrail refusals"
 scrape_render="$(render -f "$chart/ci/metrics-scrape-values.yaml")"
-# expect_metrics_refused <description> <yq edit>: check_metrics must report at least one problem.
+# expect_metrics_refused <description> <yq edit>: check_metrics must report a guardrail problem
+# (its "probe: …" lines), not merely fail to run, which would hide a broken check.
 expect_metrics_refused() {
-  local edited found
+  local edited output
   edited="$(yq "$2" <<<"$scrape_render")" || { fail "metrics refusal case '$1' doesn't apply"; return; }
-  found="$(failures=0; check_metrics probe "$edited" >/dev/null 2>&1; echo "$failures")"
-  ((found > 0)) || fail "check_metrics accepted $1"
+  output="$(check_metrics probe "$edited" 2>&1 >/dev/null; true)"
+  if grep -qE "render isn't YAML|no numeric API_METRICS_PORT|couldn't run" <<<"$output"; then
+    fail "check_metrics couldn't check $1: $output"
+  elif ! grep -q '^FAIL: probe: ' <<<"$output"; then
+    fail "check_metrics accepted $1"
+  fi
 }
 api_policy='select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-api")'
 api_deploy='select(.kind == "Deployment" and .metadata.name == "portfolio-api")'
@@ -262,6 +268,8 @@ expect_metrics_refused "the metrics rule from another namespace" \
   "($api_policy | .spec.ingress[1].from[0].namespaceSelector.matchLabels) = {\"kubernetes.io/metadata.name\": \"default\"}"
 expect_metrics_refused "the metrics rule from any pod in monitoring" \
   "del($api_policy | .spec.ingress[1].from[0].podSelector)"
+expect_metrics_refused "a policy selecting by matchExpressions that admits every port" \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-default-deny") | .spec) |= {"podSelector": {"matchExpressions": [{"key": "app.kubernetes.io/component", "operator": "Exists"}]}, "policyTypes": ["Ingress"], "ingress": [{}]}'
 expect_metrics_refused "a port range" "($api_policy | .spec.ingress[1].ports[0].endPort) = 9500"
 expect_metrics_refused "a namespace-wide policy admitting every port" \
   '(select(.kind == "NetworkPolicy" and .metadata.name == "portfolio-default-deny") | .spec.ingress) = [{}]'

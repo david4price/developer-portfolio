@@ -37,7 +37,8 @@ api:
   metrics:
     # P9-04: listen on every pod interface (0.0.0.0: loopback keeps `kubectl port-forward`
     # working), with one NetworkPolicy rule letting only the Prometheus pods below reach the pod
-    # IP. Requires networkPolicy.enabled.
+    # IP. Requires networkPolicy.enabled. Assumes IPv4 pods (K3s's default): 0.0.0.0 doesn't
+    # listen on an IPv6 pod address.
     scrape:
       enabled: false
       from:

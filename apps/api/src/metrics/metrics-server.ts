@@ -9,8 +9,8 @@ export interface MetricsServerOptions {
 }
 
 /**
- * Serves `GET /metrics` on its own port, apart from the public API: the Service, the tunnel, and
- * by default it listens on loopback only, so it's reached through `kubectl port-forward` (or a
+ * Serves `GET /metrics` on its own port, apart from the public API: the Service and the tunnel
+ * only know the API port. By default it listens on loopback only, so it's reached through `kubectl port-forward` (or a
  * published loopback port in Compose). With scraping on (P9-04) it listens on every pod interface,
  * and one NetworkPolicy rule opens the pod IP to Prometheus alone. Everything else is 404, and
  * nothing a client sends reaches the registry.
