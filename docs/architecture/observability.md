@@ -2,7 +2,7 @@
 
 **Status: Proposed.** The plan for [ADR 0004](adr-0004-observability-stack.md). Each section
 becomes **Confirmed** when the Phase 9 task that builds it is done
-([roadmap](../implementation-roadmap.md#phase-9-observability-19)).
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
 **Confirmed today:** JSON logs with request ids (P2-04), the API's Prometheus metrics on a loopback
 port (P7-01), and the K3s API audit log on the host (P7-06). The audit log stays root-only on the
@@ -98,6 +98,9 @@ on purpose.
   (which reads Loki's own metrics), and other Loki pods (itself, through its Services).
 
 ## Metrics
+
+**Confirmed (P9-04, 2026-11-26):** live and validated
+([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
 - **Scrape path:** the chart gains `api.metrics.scrape.enabled`. When it is on, the API sets
   `API_METRICS_HOST` to `0.0.0.0` (no code change, since the setting is already a host string),

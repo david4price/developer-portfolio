@@ -6,7 +6,8 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-26_
 
-**Current phase:** Phase 9, Observability (P9-03 🔒 in progress: Loki live, Alloy next). Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (logs and metrics live; P9-03's privacy check, then
+P9-05 Grafana). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -15,6 +16,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-04 done** (PR #77, 2026-11-26): Prometheus and kube-state-metrics are live, scraping
+  the API (its metrics opened to Prometheus alone), Loki, and Alloy; isolation and the public
+  404 are verified.
 - **P9-08 done** (PR #76, 2026-11-26):
   - `compose.observability.yaml` runs the cluster's monitoring images beside `compose.full.yaml`.
   - `pnpm check` validates dashboards and alert rules.
@@ -299,18 +303,19 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 1. **P9-03** 🔒: Loki and Alloy are live and validated (2026-11-25); left is the privacy search of
    a day of collected logs, scheduled for 2026-11-27
-   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). Then **P9-04**
-   (metrics).
-2. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
+   ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)).
+2. **P9-05** 🔒 Grafana on the tailnet: needs the owner's `sudo` for `tailscale serve` and the
+   admin SealedSecret.
+3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
-3. Owner content: more projects; then **P5-10**, and
+4. Owner content: more projects; then **P5-10**, and
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
-4. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
+5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-04-metrics` (the API's metrics opened to Prometheus alone, and the
-metrics readers). PRs #65 to #76 are merged; Loki and Alloy are live (2026-11-25), and P9-03's
-privacy check is scheduled for 2026-11-27.
+**Branch in progress:** `docs/p9-04-done` (ticks P9-04). PRs #65 to #77 are merged; Loki, Alloy,
+Prometheus, and kube-state-metrics are live, and P9-03's privacy check is scheduled for
+2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -798,7 +803,7 @@ Read-only inventory of the reference host. Findings:
       local.md, the `add-project` and `db-migration` skills, and the package rules describe the
       new layout. Done 2026-11-22.
 
-## Phase 9: Observability (3/9)
+## Phase 9: Observability (4/9)
 
 Keep logs, keep metric history, and alert the owner, with Grafana's open-source stack in a
 `monitoring` namespace ([ADR 0004](architecture/adr-0004-observability-stack.md),
@@ -845,12 +850,32 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       `kubectl auth can-i` shows the Alloy account can't read Secrets or `exec`, and the API's
       Explorer account still can't read logs; a pod in another namespace can't reach Loki; and a
       day of collected logs holds no client IPs, cookies, tokens, or chat text.
-- [ ] **P9-04** 🔒 Metrics: Prometheus and kube-state-metrics. _Needs:_ P9-02. _Done when:_
+- [x] **P9-04** 🔒 Metrics: Prometheus and kube-state-metrics. _Needs:_ P9-02. _Done when:_
       `api.metrics.scrape.enabled` opens the API's metrics beyond loopback, with ingress on 9464
       from Prometheus only, `check-chart.sh` accepts that render and still fails any other host,
       Service port, or wider rule (tests for both), Prometheus scrapes every API replica and
       kube-state-metrics (limited to `portfolio` and `monitoring`), `/metrics` on the public host
       still returns 404, and a pod in another namespace (cloudflared included) can't reach 9464.
+      Done 2026-11-26 (PR #77):
+
+      - **Live:** kube-state-metrics and Prometheus are Synced/Healthy.
+      - **Targets:** every one is up: the API (1 of 1 replicas), kube-state-metrics, Loki, Alloy,
+        and Prometheus itself. After the release rolled the API, the new pod was scraped within a
+        minute.
+      - **kube-state-metrics** sees only `portfolio` and `monitoring`. Retention is 30d, capped
+        at 4GiB.
+      - **Permissions:** Prometheus can list pods in `portfolio` but not read Secrets, logs, or
+        `kube-system`; kube-state-metrics can list its kinds but not Secrets, `kube-system`, or
+        nodes.
+      - **Isolation:**
+        - A pod in `default` couldn't connect to the API pod's 9464.
+        - A pod labelled as cloudflared got 200 from the API on 3001 (the control) and couldn't
+          connect on 9464.
+        - The public host returns 404 for `/metrics`.
+      - **Found in review:** binding the pod IP alone would have broken `kubectl port-forward`,
+        so the bind is `0.0.0.0` ([ADR 0004](architecture/adr-0004-observability-stack.md),
+        amended).
+
 - [ ] **P9-05** 🔒 Grafana on the tailnet. _Needs:_ P9-03, P9-04. _Done when:_ Grafana runs with
       its admin password from a SealedSecret, anonymous access and sign-up off, usage reporting and
       update checks off; it is published only through `tailscale serve` (no Ingress, tunnel, or
