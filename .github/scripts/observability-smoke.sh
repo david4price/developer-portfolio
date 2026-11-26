@@ -11,10 +11,18 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 compose=(docker compose -f compose.full.yaml -f compose.observability.yaml)
 [[ -f .env ]] || { echo ".env is missing (copy .env.example)" >&2; exit 1; }
-# setting <name> <default>: as Compose resolves it: the shell's value, then .env's, then the default.
+# setting <name> <default>: as Compose resolves it: the exported value, then .env's (without
+# surrounding quotes), then the default.
 setting() {
-  local value="${!1:-}"
-  [[ -n "$value" ]] || value="$(sed -n "s/^$1=//p" .env | tail -1)"
+  local value
+  value="$(printenv "$1" || true)"
+  if [[ -z "$value" ]]; then
+    value="$(sed -n "s/^$1=//p" .env | tail -1)"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+  fi
   echo "${value:-$2}"
 }
 api="http://127.0.0.1:$(setting API_PORT 3001)"
@@ -71,7 +79,7 @@ request_id="$(curl -fsS -D - -o /dev/null "$api/api/v1/health" |
 echo "ok: request $request_id"
 
 wait_for 90 "Grafana healthy" curl -fsS "$grafana/api/health"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:$password" "$grafana/api/user")"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -u "admin:$password" "$grafana/api/user" || true)"
 [[ "$status" == 200 ]] || fail "Grafana answered $status to admin login. The password is set when \
 grafana-data is created; after changing GRAFANA_ADMIN_PASSWORD, run down -v (or reset it in Grafana)"
 
@@ -97,10 +105,11 @@ loki_has_monitoring() {
 wait_for 60 "Loki labels the stack's own logs namespace=monitoring" loki_has_monitoring
 
 # Provisioned files load: data sources are read-only, and every committed dashboard is present.
-grafana_get /api/datasources | jq -e '[.[] | .uid] | sort == ["loki", "prometheus"]' >/dev/null ||
+datasources="$(grafana_get /api/datasources)" || fail "Grafana's data source list didn't load"
+jq -e '[.[] | .uid] | sort == ["loki", "prometheus"]' <<<"$datasources" >/dev/null ||
   fail "Grafana's data sources aren't exactly the provisioned loki and prometheus"
 echo "ok: exactly the two provisioned data sources"
-expected="$(find infrastructure/monitoring/dashboards -name '*.json' | wc -l)"
+expected="$(find infrastructure/monitoring/dashboards -maxdepth 1 -name '*.json' | wc -l)"
 found="$(grafana_get /api/search --data-urlencode type=dash-db | jq length)"
 [[ "$found" == "$expected" ]] || fail "Grafana shows $found dashboard(s), the repository has $expected"
 echo "ok: $found dashboard(s) provisioned"

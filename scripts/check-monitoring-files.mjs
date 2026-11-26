@@ -18,7 +18,9 @@ export const BUILT_IN_UIDS = new Set([
 /** Grafana's server-side expressions (math, reduce, threshold) in alert rules. */
 const EXPRESSION_UID = '__expr__';
 const UID = /^[A-Za-z0-9_-]{1,40}$/;
-const VARIABLE = /^\$\{?([A-Za-z0-9_]+)\}?$/;
+// `$name`, `${name}`, `${name:format}`, and the older `[[name]]`.
+const VARIABLE =
+  /^(?:\$\{([A-Za-z0-9_]+)(?::[A-Za-z]+)?\}|\$([A-Za-z0-9_]+)|\[\[([A-Za-z0-9_]+)\]\])$/;
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -70,11 +72,18 @@ export function dashboardProblems(dashboard) {
       ? dashboard.templating.list
       : []
     )
-      .filter((variable) => isObject(variable) && variable.type === 'datasource')
+      // Only variables that pick one of the provisioned kinds can resolve to a provisioned source.
+      .filter(
+        (variable) =>
+          isObject(variable) &&
+          variable.type === 'datasource' &&
+          DATASOURCE_UIDS.has(variable.query),
+      )
       .map((variable) => variable.name),
   );
   for (const uid of new Set(datasourceUids(dashboard))) {
-    const variable = VARIABLE.exec(uid)?.[1];
+    const match = VARIABLE.exec(uid);
+    const variable = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
     if (variable !== undefined) {
       if (!variables.has(variable)) {
         problems.push(`uses "${uid}", which isn't one of its data source variables`);
@@ -150,13 +159,18 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
     if (first) problems.push(`${file}: ${kind} uid "${uid}" is also used in ${first}`);
     else seen[kind].set(uid, file);
   };
-  // Every file below a directory, as Grafana's dashboard provider walks subdirectories too.
+  // Flat directories only: Grafana's alerting provisioning reads only the top level, and the
+  // cluster ships dashboards as flat ConfigMap keys, so a nested file would never load there.
   const filesIn = (dir) =>
     readdirSync(dir)
       .sort()
       .flatMap((name) => {
         const path = join(dir, name);
-        return statSync(path).isDirectory() ? filesIn(path) : [path];
+        if (statSync(path).isDirectory()) {
+          problems.push(`${path}: subdirectories aren't provisioned; keep files at the top level`);
+          return [];
+        }
+        return [path];
       });
   // Grafana also loads YAML alert rules; this repository keeps them JSON so they are checked.
   for (const file of filesIn(alertsDir).filter((path) => /\.ya?ml$/.test(path))) {

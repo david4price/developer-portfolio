@@ -43,7 +43,12 @@ describe('dashboards', () => {
         dashboard({
           id: null,
           templating: { list: [{ name: 'logs', type: 'datasource', query: 'loki' }] },
-          panels: [{ datasource: { uid: '${logs}' } }, { datasource: { uid: '$logs' } }],
+          panels: [
+            { datasource: { uid: '${logs}' } },
+            { datasource: { uid: '$logs' } },
+            { datasource: { uid: '${logs:raw}' } },
+            { datasource: { uid: '[[logs]]' } },
+          ],
         }),
       ),
       [],
@@ -79,13 +84,19 @@ describe('dashboards', () => {
       dashboardProblems(
         dashboard({
           __inputs: [{ name: 'DS_PROMETHEUS', type: 'datasource' }],
-          panels: [{ datasource: { uid: '${DS_PROMETHEUS}' } }],
-          templating: { list: [{ name: 'DS_PROMETHEUS', type: 'query' }] },
+          panels: [{ datasource: { uid: '${DS_PROMETHEUS}' } }, { datasource: { uid: '$influx' } }],
+          templating: {
+            list: [
+              { name: 'DS_PROMETHEUS', type: 'query' },
+              { name: 'influx', type: 'datasource', query: 'influxdb' },
+            ],
+          },
         }),
       ),
       [
         'is an "export for sharing externally" (__inputs); export it without that option',
         'uses "${DS_PROMETHEUS}", which isn\'t one of its data source variables',
+        'uses "$influx", which isn\'t one of its data source variables',
       ],
     );
   });
@@ -166,21 +177,19 @@ describe('checkMonitoringFiles', () => {
     });
   });
 
-  it('checks dashboards in subdirectories and refuses YAML alert rules', () => {
+  it('refuses subdirectories and YAML alert rules, which would never be provisioned', () => {
     const { dashboardsDir, alertsDir } = dirs('nested');
     mkdirSync(join(dashboardsDir, 'api'));
-    writeFileSync(
-      join(dashboardsDir, 'api', 'overview.json'),
-      JSON.stringify(dashboard({ uid: '' })),
-    );
+    writeFileSync(join(dashboardsDir, 'api', 'overview.json'), JSON.stringify(dashboard()));
     writeFileSync(join(alertsDir, 'rules.yaml'), 'apiVersion: 1');
-    const { problems } = checkMonitoringFiles({ dashboardsDir, alertsDir });
+    const { problems, dashboards } = checkMonitoringFiles({ dashboardsDir, alertsDir });
+    assert.equal(dashboards, 0);
     assert.equal(problems.length, 2);
     assert.match(
       problems[0],
       /alerts\/rules\.yaml: alert rules here are JSON; convert it to \.json$/,
     );
-    assert.match(problems[1], /dashboards\/api\/overview\.json: needs a uid/);
+    assert.match(problems[1], /dashboards\/api: subdirectories aren't provisioned/);
   });
 
   it('counts valid files and reports invalid JSON and duplicate uids by file', () => {
