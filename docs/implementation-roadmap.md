@@ -24,9 +24,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
   - `pnpm check` validates dashboards and alert rules.
   - CI's new `observability` job finds a request's log line in Loki and the API's metrics in
     Prometheus through Grafana. Never started on the reference host.
-- **P9-03 started** (2026-11-25): the `monitoring` namespace, project, default-deny policies,
-  Roles, and Loki are live (Synced/Healthy, 5 GiB volume). Alloy follows once the portfolio
-  chart's log reader Role (`feat/p9-03-logs`) is merged and synced.
+- **P9-03 live** (2026-11-25): the `monitoring` namespace, project, default-deny policies, Roles,
+  Loki (5 GiB volume), and Alloy are live and validated. Only the privacy check of a day of
+  collected logs remains (2026-11-27).
 - **P9-02 done** (2026-11-25, `feat/p9-02-monitoring-manifests`): the monitoring stack's
   Argo CD project, Applications, pinned charts, values, own chart, and a CI check, in Git only.
   Loki's chart would have read every Secret in the cluster; that's off.
@@ -863,7 +863,7 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
         and Prometheus itself. After the release rolled the API, the new pod was scraped within a
         minute.
       - **kube-state-metrics** sees only `portfolio` and `monitoring`. Retention is 30d, capped
-        at 4GiB.
+        at 4GB.
       - **Permissions:** Prometheus can list pods in `portfolio` but not read Secrets, logs, or
         `kube-system`; kube-state-metrics can list its kinds but not Secrets, `kube-system`, or
         nodes.

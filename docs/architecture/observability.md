@@ -4,10 +4,17 @@
 becomes **Confirmed** when the Phase 9 task that builds it is done
 ([roadmap](../implementation-roadmap.md#phase-9-observability-49)).
 
-**Confirmed today:** JSON logs with request ids (P2-04), the API's Prometheus metrics on a loopback
-port (P7-01), and the K3s API audit log on the host (P7-06). The audit log stays root-only on the
-host and is not shipped to Loki. **In Git, not applied (P9-02):** the manifests described under
-[Layout](#layout), checked by `pnpm helm:check`.
+**Confirmed today:**
+
+- **Before Phase 9:** JSON logs with request ids (P2-04), the API's Prometheus metrics (P7-01), and
+  the K3s API audit log on the host (P7-06). The audit log stays root-only on the host and is
+  not shipped to Loki.
+- **Live in the cluster:**
+  - The manifests under [Layout](#layout), checked by `pnpm helm:check` (P9-02).
+  - Loki and Alloy collecting logs (P9-03; its privacy check of a day of logs is pending).
+  - Prometheus and kube-state-metrics, with the API's metrics opened to Prometheus alone (P9-04).
+  - The local stack (P9-08).
+- **Still to come:** Grafana (P9-05) and alerts (P9-06).
 
 ## Shape
 
