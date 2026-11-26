@@ -6,8 +6,8 @@ The single checklist for this project. Start here when you pick the work back up
 
 _Last updated: 2026-11-26_
 
-**Current phase:** Phase 9, Observability (logs, metrics, and Grafana live; P9-03's privacy
-check, then P9-06 alerts). Phases 1–4, 7, and 8 are complete: the site and API are public,
+**Current phase:** Phase 9, Observability (logs, metrics, Grafana, and alerts live; P9-03's
+privacy check, P9-06's quiet week, then P9-07). Phases 1–4, 7, and 8 are complete: the site and API are public,
 hardened, autoscaled, backed up, measured, and proven to degrade gracefully, and a fresh clone
 runs with `pnpm bootstrap`. Still open: Phase 5's retrieval measurement (P5-10, then the
 conditional P5-11) waits for more projects, and Phase 6's P6-05 token rotation is due 2027-02-16.
@@ -16,6 +16,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
 
 **Recently done**
 
+- **P9-06 live and drilled** (PR #82, 2026-11-26): nine alert rules page the owner's chat bot.
+  Every rule fired and resolved once in a drill (18 notifications, none failed); it ticks after a
+  quiet week.
 - **P9-05 live** (PRs #79, #80, 2026-11-26): Grafana on the tailnet (port 8444) with four
   read-only dashboards, request ids that link to their log lines, and its admin password sealed.
   It ticks with P9-03.
@@ -308,7 +311,16 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    a day of collected logs, scheduled for 2026-11-27
    ([steps](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required)). P9-05 ticks
    with it (Grafana is live and validated).
-2. **P9-06** 🔒 Alerts: needs the owner's choice of contact point (chat bot, email, or another).
+2. **P9-06** 🔒 Alerts: live and drilled (2026-11-26); ticks after a quiet week (2026-12-03).
+   **P9-07** (_Needs:_ P9-06) follows, after the quiet week.
+   - **Measurement source first:** Prometheus records no container memory or volume usage (no
+     cAdvisor scrape, by design: it needs `nodes/proxy`), so P9-07 picks its source first, for
+     example metrics-server samples (`kubectl top`) and the volumes' sizes on the host.
+   - **Load test:** P7-02's load stayed far below every alert threshold, but any page or OOM kill
+     during the quiet week would void it, so the k6 run waits too.
+   - **Stop test:** stopping Prometheus fires API down as well as Monitoring broken (API down
+     treats a failed query as firing), so that test must expect both, or API down's
+     `execErrState` changes first.
 3. **P6-05** before 2027-02-16: rotate the Argo CD token. From 2027-02-02 the API warns in its
    logs and the owner's homelab chat bot reminds daily; update the bot's expiry date after
    rotating.
@@ -316,8 +328,8 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `feat/p9-06-alerts` (the nine rules, their wiring, and the chat bot contact
-point). PRs #65 to #81 are merged; P9-03's privacy check is scheduled for 2026-11-27.
+**Branch in progress:** `docs/p9-06-drill` (records the alert drill). PRs #65 to #82 are merged;
+the whole monitoring stack is live, and P9-03's privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -915,6 +927,32 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       fired and resolved once in a drill (scale the API to zero, fail a test backup Job, log a
       test error line, or lower a threshold for a test) and the owner received it; thresholds are
       tuned so a normal week sends nothing.
+      Live 2026-11-26 (PR #82). **Ticks after a quiet week** (no notification until 2026-12-03);
+      a rule that pages without cause is tuned first. Done so far:
+
+      - **Provisioned:** the nine rules in "Portfolio alerts" (eight every minute,
+        `argocd-token` hourly); the `owner` contact point (the owner's chat bot) and its policy
+        come from the `grafana-alerting-1` SealedSecret. A test notification reached the owner.
+      - **Drill, 18:17–18:36 UTC:** Grafana sent 18 notifications (9 firing, 9 resolved, none
+        failed), and the owner counted the same 18.
+        - **Real triggers for three production rules:** a pod in `portfolio` logged seven JSON
+          error lines (Error logs), a Job named like the backup exited 1 (Backup failed), and a
+          pod in `monitoring` crashed on purpose (Crash loop, through its restart count).
+        - **The other six:** copies with their threshold flipped, in a temporary folder through
+          Grafana's API ("lower a threshold for a test"). The production rules for those
+          conditions stayed quiet.
+        - **Cleanup:** the throwaway objects, copies, and folder were deleted, and every rule was
+          inactive again at 18:33.
+      - **Found:**
+        - **Before merge,** CI's smoke test caught Grafana refusing to start on a rule with
+          `__dashboardUid__` but no `__panelId__` (fixed; the file checker now refuses it).
+        - **Resolved messages** come at the notification policy's 5-minute group interval after a
+          rule clears. A rule whose series disappears clears a couple of evaluations after it
+          does: Crash loop up to about 17 minutes after the pod is gone (its 15-minute restart
+          window).
+        - **Grafana 13** retired the old receiver test endpoint (`410 Gone`); the replacement is
+          `/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<uid>/test`.
+
 - [ ] **P9-07** 🔒 Capacity and failure checks. _Needs:_ P9-06. _Done when:_ memory and disk are
       measured over a week and under a k6 run like P7-02's, requests and limits are set from the
       measurements, and stopping Loki or Prometheus leaves the site, API, and chat working (only
