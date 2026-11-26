@@ -68,3 +68,28 @@ datasources:
         access: proxy
         url: http://loki.monitoring.svc:3100
         editable: false
+        jsonData:
+          # Every requestId in a log line links to the Logs dashboard filtered to that request
+          # ($$ keeps Grafana from reading ${…} as an environment variable).
+          derivedFields:
+            - name: requestId
+              matcherRegex: '"requestId":"([A-Za-z0-9._-]+)"'
+              url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}'
+              urlDisplayLabel: All log lines for this request
+# P9-05: the dashboards from infrastructure/helm/monitoring/dashboards, as the monitoring chart's
+# grafana-dashboards ConfigMap; read-only (UI saves disabled, deletion refused).
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: portfolio
+        orgId: 1
+        folder: Portfolio
+        type: file
+        disableDeletion: true
+        allowUiUpdates: false
+        editable: false
+        options:
+          path: /var/lib/grafana/dashboards/portfolio
+dashboardsConfigMaps:
+  portfolio: grafana-dashboards

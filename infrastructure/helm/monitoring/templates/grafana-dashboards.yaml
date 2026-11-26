@@ -1,0 +1,16 @@
+{{- /* P9-05: the dashboards in dashboards/*.json, provisioned read-only by Grafana (its values
+mount this ConfigMap as the "portfolio" provider). The local stack mounts the same folder. */}}
+{{- $dashboards := .Files.Glob "dashboards/*.json" }}
+{{- if $dashboards }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+data:
+  {{- range $path, $content := $dashboards }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- end }}

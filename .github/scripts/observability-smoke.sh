@@ -109,9 +109,47 @@ datasources="$(grafana_get /api/datasources)" || fail "Grafana's data source lis
 jq -e '[.[] | .uid] | sort == ["loki", "prometheus"]' <<<"$datasources" >/dev/null ||
   fail "Grafana's data sources aren't exactly the provisioned loki and prometheus"
 echo "ok: exactly the two provisioned data sources"
-expected="$(find infrastructure/monitoring/dashboards -maxdepth 1 -name '*.json' | wc -l)"
+expected="$(find infrastructure/helm/monitoring/dashboards -maxdepth 1 -name '*.json' | wc -l)"
 found="$(grafana_get /api/search --data-urlencode type=dash-db | jq length)"
 [[ "$found" == "$expected" ]] || fail "Grafana shows $found dashboard(s), the repository has $expected"
 echo "ok: $found dashboard(s) provisioned"
+
+# Read-only and private: provisioned dashboards refuse saves, and nothing answers anonymously.
+api_dashboard="$(grafana_get /api/dashboards/uid/portfolio-api)" ||
+  fail "the Portfolio API dashboard didn't load"
+status="$(jq '{dashboard: .dashboard, overwrite: true}' <<<"$api_dashboard" |
+  curl -sS -o /dev/null -w '%{http_code}' -u "admin:$password" -H 'Content-Type: application/json' \
+    -X POST --data @- "$grafana/api/dashboards/db" || true)"
+[[ "$status" == 400 ]] || fail "saving a provisioned dashboard answered $status, not 400"
+echo "ok: provisioned dashboards refuse saves"
+status="$(curl -sS -o /dev/null -w '%{http_code}' "$grafana/api/search" || true)"
+[[ "$status" == 401 ]] || fail "an anonymous request answered $status, not 401"
+echo "ok: anonymous access refused"
+
+# P9-05: a server error is followed to its log lines. Redis stops for a moment, so readiness
+# answers 503; the API dashboard's own 5xx panel query must find that request's id, and the Loki
+# data source must turn request ids into links to the Logs dashboard.
+"${compose[@]}" stop redis >/dev/null
+response="$(curl -sS -D - -o /dev/null -w 'status: %{http_code}\n' "$api/api/v1/health/ready" |
+  tr -d '\r' || true)"
+error_id="$(awk 'tolower($1) == "x-request-id:" { print $2 }' <<<"$response")"
+error_status="$(awk '$1 == "status:" { print $2 }' <<<"$response")"
+"${compose[@]}" start redis >/dev/null
+[[ -n "$error_id" && "$error_status" == 503 ]] ||
+  fail "readiness with Redis stopped answered $error_status (request id '${error_id}'), not 503"
+echo "ok: a 503 from readiness ($error_id)"
+panel_query="$(jq -r '.dashboard.panels[] | select(.type == "logs") | .targets[0].expr' <<<"$api_dashboard")"
+[[ -n "$panel_query" ]] || fail "the Portfolio API dashboard has no server error logs panel"
+dashboard_finds_error() {
+  grafana_get /api/datasources/proxy/uid/loki/loki/api/v1/query_range \
+    --data-urlencode "query=$panel_query |= \"$error_id\"" \
+    --data-urlencode "start=$(($(date +%s) - 900))000000000" |
+    jq -e '.data.result | length > 0'
+}
+wait_for 90 "the API dashboard's 5xx panel finds the request" dashboard_finds_error
+jq -e '.[] | select(.uid == "loki") | .jsonData.derivedFields[] |
+  select(.name == "requestId" and (.url | contains("/d/portfolio-logs/")))' <<<"$datasources" >/dev/null ||
+  fail "the Loki data source doesn't link request ids to the Logs dashboard"
+echo "ok: request ids link to the Logs dashboard"
 
 echo "observability smoke test passed"

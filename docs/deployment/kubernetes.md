@@ -518,7 +518,31 @@ Argo CD keeps each in sync with `main`.
        kubectl auth can-i get secrets -n portfolio --as=system:serviceaccount:monitoring:kube-state-metrics           # no
        kubectl auth can-i list pods -n kube-system --as=system:serviceaccount:monitoring:kube-state-metrics           # no
        ```
-4. **Grafana** (P9-05), after its admin SealedSecret.
+4. **Grafana (P9-05).**
+   - **In Git:** the `grafana-admin` SealedSecret (in
+     `environments/production/monitoring/secrets/`, synced by the `monitoring` Application) and
+     the dashboards ConfigMap (the `monitoring` chart).
+   - **Apply:** re-apply the `monitoring` Application, which gained the secrets source
+     (Applications aren't synced from Git), then Grafana once the Secret and ConfigMap exist:
+     `kubectl apply -f infrastructure/argocd/monitoring/monitoring.yaml`, then
+     `kubectl apply -f infrastructure/argocd/monitoring/grafana.yaml`.
+   - **Publish on the tailnet** (owner, `sudo`). Like Argo CD, it uses the Service's ClusterIP;
+     re-run this if the Service is ever recreated:
+
+     ```bash
+     ip=$(kubectl -n monitoring get svc grafana -o jsonpath='{.spec.clusterIP}')
+     sudo tailscale serve --bg --https=8444 "http://$ip:80"
+     ```
+
+     Remove it with `sudo tailscale serve --https=8444 off`.
+
+   - **Log in** as `admin`; the password is in the Secret:
+     `kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`.
+   - **Validate:**
+     - The page loads on the tailnet at `https://<tailnet-hostname>:8444`, and nowhere else.
+     - An anonymous `/api/search` answers 401.
+     - The four dashboards are in the Portfolio folder, and a save is refused.
+     - A `requestId` in a log line opens the Logs dashboard filtered to that request.
 
 **Rollback:**
 

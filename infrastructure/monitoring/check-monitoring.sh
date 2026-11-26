@@ -186,6 +186,18 @@ for app in "${app_files[@]}"; do
       "- ../../environments/production/monitoring/$name.yaml" ]] ||
       fail "$name: valueFiles must be ../../environments/production/monitoring/$name.yaml"
     render_and_check "$name" "$name" "$own_chart" -f "$values"
+    # Its other source: the namespace's SealedSecrets, and nothing else (ADR 0001).
+    secrets_path=infrastructure/environments/production/monitoring/secrets
+    [[ "$(yq -o=json '.spec.sources[1:]' "$app" | jq -c 'map({repoURL, targetRevision, path})')" == \
+      "[{\"repoURL\":\"$repository\",\"targetRevision\":\"main\",\"path\":\"$secrets_path\"}]" ]] ||
+      fail "$name: its only other source must be $secrets_path"
+    for secret in "$root/$secrets_path"/*; do
+      [[ "$secret" == *.sealedsecret.yaml ]] || { fail "$secret isn't a .sealedsecret.yaml file"; continue; }
+      [[ "$(yq ea -o=json '[.] | map(select(. != null))' "$secret" |
+        jq -r --arg ns "$namespace" 'map(select(.kind != "SealedSecret" or .metadata.namespace != $ns or
+          (.spec.template.metadata.namespace // $ns) != $ns)) | length')" == 0 ]] ||
+        fail "$secret must hold only SealedSecrets for the $namespace namespace"
+    done
     continue
   fi
 

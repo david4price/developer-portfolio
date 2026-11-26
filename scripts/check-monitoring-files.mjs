@@ -207,8 +207,8 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   const { problems, dashboards, rules } = checkMonitoringFiles({
-    dashboardsDir: join(root, 'infrastructure/monitoring/dashboards'),
-    alertsDir: join(root, 'infrastructure/monitoring/alerts'),
+    dashboardsDir: join(root, 'infrastructure/helm/monitoring/dashboards'),
+    alertsDir: join(root, 'infrastructure/helm/monitoring/alerts'),
   });
   for (const problem of problems) console.error(`FAIL: ${problem}`);
   if (problems.length > 0) process.exit(1);

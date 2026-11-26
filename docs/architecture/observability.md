@@ -44,13 +44,14 @@ runbooks and final documentation (P9-09).
 
 In Git since P9-02, applied by hand from P9-03 (🔒), like the other Argo CD files:
 
-| Path                                                            | Holds                                                                                                         |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `infrastructure/argocd/monitoring-project.yaml`                 | The `monitoring` AppProject.                                                                                  |
-| `infrastructure/argocd/monitoring/<name>.yaml`                  | One Application per release: chart, exact version, and the archive's sha256 (annotation).                     |
-| `infrastructure/environments/production/monitoring/<name>.yaml` | Each release's values, image digests included (multi-source `$values` from `main`).                           |
-| `infrastructure/helm/monitoring/`                               | This repository's chart: default-deny and per-pod NetworkPolicies, and the collectors' Roles in `monitoring`. |
-| `infrastructure/monitoring/check-monitoring.sh`                 | The CI check, run by `pnpm helm:check`.                                                                       |
+| Path                                                            | Holds                                                                                                                                                                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `infrastructure/argocd/monitoring-project.yaml`                 | The `monitoring` AppProject.                                                                                                                                                                                                    |
+| `infrastructure/argocd/monitoring/<name>.yaml`                  | One Application per release: chart, exact version, and the archive's sha256 (annotation).                                                                                                                                       |
+| `infrastructure/environments/production/monitoring/<name>.yaml` | Each release's values, image digests included (multi-source `$values` from `main`).                                                                                                                                             |
+| `infrastructure/helm/monitoring/`                               | This repository's chart: default-deny and per-pod NetworkPolicies, the collectors' Roles in `monitoring`, and Grafana's dashboards (`dashboards/*.json`, as the `grafana-dashboards` ConfigMap; alert rules join in `alerts/`). |
+| `infrastructure/environments/production/monitoring/secrets/`    | The namespace's SealedSecrets (Grafana's admin password), synced by the `monitoring` Application.                                                                                                                               |
+| `infrastructure/monitoring/check-monitoring.sh`                 | The CI check, run by `pnpm helm:check`.                                                                                                                                                                                         |
 
 **Pinned (Confirmed, 2026-11-25).** These are the newest stable releases that were at least a week
 old, in the spirit of pnpm's minimum release age:
@@ -178,25 +179,36 @@ on purpose.
 
 ## Grafana
 
-- **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve`, the same
-  way as Argo CD (a separate HTTPS port). There is no Ingress, tunnel, or public hostname.
-  Anonymous access, sign-up, public dashboards, and external snapshots are off. The admin
-  password comes from the `grafana-admin` SealedSecret (P9-05); until it exists, the pod
-  doesn't start.
+- **Access:** a ClusterIP Service only, published on the tailnet with `tailscale serve` on HTTPS
+  port 8444, the same way as Argo CD on 8443. There is no Ingress, tunnel, or public hostname.
+  Anonymous access, sign-up, public dashboards, and external snapshots are off.
+- **Admin password:** it comes from the `grafana-admin` SealedSecret, generated and sealed
+  without ever being printed. The owner reads it with
+  `kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`.
 - **Storage:** a 1 GiB volume for alert state and sessions. Grafana runs as a single Deployment
   with the `Recreate` strategy (SQLite on a ReadWriteOnce volume), and the claim carries
   `Prune=false` and Helm's `keep`, so Argo CD never deletes it.
 - **No phoning home:** usage reporting, update checks, and plugin update checks are off, and no
   plugins are installed at runtime.
-- **As code:** data sources (in Grafana's values since P9-02: Prometheus and Loki by Service
-  name, not editable), dashboards (`infrastructure/monitoring/dashboards/*.json`), and alert
-  rules are provisioned from ConfigMaps with UI edits disabled. A change made in the UI is
-  exported and committed.
-- **Dashboards:** an API overview (requests, p95 by route, 5xx and errors by code, client
-  disconnects, readiness per dependency), chat and AI (inference time by outcome, queue waiting and
-  wait time, capacity rejections, screening refusals), workloads (restarts, OOM kills, replicas
-  against the HPA, backup Job results), and logs (errors and warnings by component, plus a
-  request-id lookup).
+- **As code:** everything is provisioned from Git with UI edits disabled; a change made in the UI
+  is exported and committed.
+  - **Data sources** (in Grafana's values): Prometheus and Loki by Service name, not editable.
+  - **Dashboards:** `infrastructure/helm/monitoring/dashboards/*.json`, in a "Portfolio" folder;
+    saves are refused.
+  - **Alert rules** (P9-06).
+- **Dashboards** (the local stack mounts the same files):
+  - **Portfolio API:** requests, the 5xx share, p95 overall and by route, errors by code, client
+    disconnects, readiness per dependency, and the server errors' log lines.
+  - **Chat and AI:** inference time and outcomes, the wait queue and its p95, capacity
+    rejections, and screening refusals.
+  - **Workloads:** restarts, OOM kills, available against desired replicas, the HPA, time since
+    the last successful backup, failed Jobs, and Prometheus's storage.
+  - **Logs:** errors and warnings by app, and log lines filtered by namespace, app, request id,
+    and a regex.
+- **From a 5xx to its log lines:** the Loki data source turns every `requestId` in a log line
+  into a link to the Logs dashboard filtered to that request. The API dashboard's server-error
+  panel lists those lines. CI forces a real 503 (Redis stopped) and finds it through that
+  panel's own query.
 
 ## Alerts
 
