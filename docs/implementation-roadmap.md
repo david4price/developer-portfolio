@@ -313,9 +313,9 @@ P7-05 (TypeScript 7) is on the [watch list](#watch-list). Ready for new projects
    **P5-11** only if P5-10 shows keyword search missing paraphrased questions.
 5. [Watch list](#watch-list): **P7-05** (TypeScript 7) once typescript-eslint supports it.
 
-**Branch in progress:** `docs/p9-04-done` (ticks P9-04). PRs #65 to #77 are merged; Loki, Alloy,
-Prometheus, and kube-state-metrics are live, and P9-03's privacy check is scheduled for
-2026-11-27.
+**Branch in progress:** `feat/p9-05-grafana` (dashboards, the request-id link, and the admin
+SealedSecret). PRs #65 to #78 are merged; Loki, Alloy, Prometheus, and kube-state-metrics are
+live, and P9-03's privacy check is scheduled for 2026-11-27.
 A local, unpushed `feat/p5-10-retrieval-eval` holds a parked draft of P5-10's measurement (43
 questions and a test harness), for when real content exists.
 Open every PR against `main`.
@@ -329,8 +329,9 @@ Open every PR against `main`.
 - [x] K3s API audit logging applied with `sudo` (P7-06, 2026-11-19).
 - [ ] Phase 9 alert contact point (P9-06): the owner's chat bot, email, or another Grafana
       contact point. It goes in a SealedSecret; nothing about it is committed.
-- [ ] Phase 9 Grafana access (P9-05): confirm tailnet-only via `tailscale serve` (needs `sudo`),
-      and 30-day retention for logs and metrics.
+- [ ] Phase 9 Grafana access (P9-05): run the `sudo tailscale serve --https=8444` command in the
+      [guide](deployment/kubernetes.md#monitoring-stack-phase-9-approval-required), and confirm
+      30-day retention for logs and metrics.
 
 **Kept outside this repository:** the verified host inventory (private register), the privacy-scan
 denylist (`~/.config/developer-portfolio/`), `.env`, and CLI logins. They exist only on the
@@ -840,8 +841,9 @@ Every 🔒 task states its change, impact, validation, and rollback before it is
       - **Found:** Loki's chart by default gives Loki a ClusterRole that reads every Secret in
         the cluster; turned off. Review found that Prometheus would never apply a synced scrape
         config without the chart's reloader (now on) and that Loki's memberlist needed a policy.
-      - **Unknown, for P9-05:** the address `tailscale serve` reaches Grafana from, so Grafana
-        has no ingress yet.
+      - **Resolved in P9-05:** `tailscale serve` on the node needs no ingress rule, because K3s
+        admits the node's own traffic
+        ([measured](architecture/observability.md#least-privilege)).
 
 - [ ] **P9-03** 🔒 Logs: Loki and Alloy. _Needs:_ P9-02. _Done when:_ the portfolio chart's
       `monitoring.readers` Role (pods and `pods/log` reads in `portfolio`, bound to Alloy) is

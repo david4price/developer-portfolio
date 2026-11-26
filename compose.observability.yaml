@@ -84,8 +84,8 @@ services:
     volumes:
       - ./infrastructure/monitoring/local/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./infrastructure/monitoring/local/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./infrastructure/monitoring/alerts:/etc/grafana/provisioning/alerting:ro
-      - ./infrastructure/monitoring/dashboards:/etc/grafana/dashboards:ro
+      - ./infrastructure/helm/monitoring/alerts:/etc/grafana/provisioning/alerting:ro
+      - ./infrastructure/helm/monitoring/dashboards:/etc/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - loki

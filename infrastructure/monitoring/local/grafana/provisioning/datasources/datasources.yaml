@@ -15,3 +15,11 @@ datasources:
     access: proxy
     url: http://loki:3100
     editable: false
+    jsonData:
+      # Every requestId in a log line links to the Logs dashboard filtered to that request, over
+      # the last 7 days ($$ keeps Grafana from reading ${…} as an environment variable).
+      derivedFields:
+        - name: requestId
+          matcherRegex: '"requestId":"([A-Za-z0-9._-]+)"'
+          url: '/d/portfolio-logs/portfolio-logs?var-request_id=$${__value.raw}&from=now-7d&to=now'
+          urlDisplayLabel: All log lines for this request

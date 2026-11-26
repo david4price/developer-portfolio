@@ -1,10 +1,13 @@
-# Dashboards from infrastructure/monitoring/dashboards (mounted read-only), never saved from the UI.
+# Dashboards from infrastructure/helm/monitoring/dashboards (mounted read-only), never saved from the UI.
 apiVersion: 1
 providers:
   - name: portfolio
+    orgId: 1
+    folder: Portfolio
     type: file
     disableDeletion: true
     allowUiUpdates: false
+    editable: false
     options:
       path: /etc/grafana/dashboards
       foldersFromFilesStructure: false

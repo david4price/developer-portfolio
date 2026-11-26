@@ -233,8 +233,8 @@ docker compose -f compose.full.yaml -f compose.observability.yaml down   # add -
   path, set `DOCKER_SOCKET`.
 - **Not included:** kube-state-metrics (there is no Kubernetes), and so the pod restart and Job
   panels stay empty.
-- **Dashboards and alert rules** live in `infrastructure/monitoring/dashboards/` and
-  `infrastructure/monitoring/alerts/` (JSON). `pnpm check` validates them (`pnpm monitoring:files`);
+- **Dashboards and alert rules** live in `infrastructure/helm/monitoring/dashboards/` and
+  `infrastructure/helm/monitoring/alerts/` (JSON). `pnpm check` validates them (`pnpm monitoring:files`);
   each directory's README lists the rules. Changes made in Grafana's UI aren't saved: export the
   JSON and commit it.
 - **CI** runs `.github/scripts/observability-smoke.sh` on every push. It finds an API request's log

@@ -1,9 +1,9 @@
 // Validates the Grafana dashboards and alert rules that the cluster (P9-05, P9-06) and the local
 // stack (compose.observability.yaml, P9-08) provision from Git, so a broken file fails `pnpm check`
-// instead of a Grafana start. Rules: infrastructure/monitoring/{dashboards,alerts}/README.md.
+// instead of a Grafana start. Rules: infrastructure/helm/monitoring/{dashboards,alerts}/README.md.
 //   node scripts/check-monitoring-files.mjs
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The data sources both Grafanas provision, by uid. */
@@ -18,6 +18,8 @@ export const BUILT_IN_UIDS = new Set([
 /** Grafana's server-side expressions (math, reduce, threshold) in alert rules. */
 const EXPRESSION_UID = '__expr__';
 const UID = /^[A-Za-z0-9_-]{1,40}$/;
+/** File names become ConfigMap keys in the cluster (the monitoring chart's grafana-dashboards). */
+const CONFIGMAP_KEY = /^[-._a-zA-Z0-9]+$/;
 // `$name`, `${name}`, `${name:format}`, and the older `[[name]]`.
 const VARIABLE =
   /^(?:\$\{([A-Za-z0-9_]+)(?::[A-Za-z]+)?\}|\$([A-Za-z0-9_]+)|\[\[([A-Za-z0-9_]+)\]\])$/;
@@ -178,6 +180,11 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
   }
 
   for (const file of filesIn(dashboardsDir).filter((path) => path.endsWith('.json'))) {
+    if (!CONFIGMAP_KEY.test(basename(file)) || basename(file).length > 253) {
+      problems.push(
+        `${file}: file names may use only letters, digits, ".", "-", and "_", at most 253 (ConfigMap keys)`,
+      );
+    }
     const parsed = parseJson(readFileSync(file, 'utf8'));
     if (parsed.error) {
       problems.push(`${file}: ${parsed.error}`);
@@ -207,8 +214,8 @@ export function checkMonitoringFiles({ dashboardsDir, alertsDir }) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   const { problems, dashboards, rules } = checkMonitoringFiles({
-    dashboardsDir: join(root, 'infrastructure/monitoring/dashboards'),
-    alertsDir: join(root, 'infrastructure/monitoring/alerts'),
+    dashboardsDir: join(root, 'infrastructure/helm/monitoring/dashboards'),
+    alertsDir: join(root, 'infrastructure/helm/monitoring/alerts'),
   });
   for (const problem of problems) console.error(`FAIL: ${problem}`);
   if (problems.length > 0) process.exit(1);

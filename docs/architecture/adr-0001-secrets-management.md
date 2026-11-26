@@ -84,6 +84,8 @@ Use **Sealed Secrets** for every Secret the reference deployment needs.
   re-seal every secret, back up the new key, and remove the old key once nothing uses it.
 - **Contributors and forks** can't decrypt the owner's secrets and don't need to. They create the
   same named Secrets with `kubectl`, or run their own controller and commit their own sealed files.
-- Gitleaks may flag `encryptedData` as high-entropy. If it does, allowlist
-  `infrastructure/environments/*/secrets/*.sealedsecret.yaml` in `.gitleaks.toml`, and nothing
-  else.
+- Gitleaks may flag `encryptedData` as high-entropy. If it does, allowlist the sealed files'
+  folders in `.gitleaks.toml`, and nothing else: `infrastructure/environments/*/secrets/` (the
+  `portfolio` namespace) and `infrastructure/environments/*/monitoring/secrets/` (the `monitoring`
+  namespace, P9-05), `*.sealedsecret.yaml` only. Gitleaks skips those files whole, so
+  `pnpm helm:check` refuses any plaintext in them (`stringData`, or `data` in the template).
